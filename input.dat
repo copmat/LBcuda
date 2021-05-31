@@ -1,0 +1,6 @@
+20
+1
+1
+0.01 0.01 0.01	! vx,vy,vz
+0.0 0.0 0.0	! ext_fxx,ext_fyy,ext_fzz
+0.0 0.0 0.0	! ext_tqx,ext_tqy,ext_tqz
