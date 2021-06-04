@@ -216,9 +216,16 @@
       ! rhoR = 1.0
       ! rhoB = 0.0
 
-      u = vx
-      v = vy
-      w = vz
+		if (rhoR > 0.01) then
+		  u = vx
+		  v = vy
+		  w = vz
+		else
+		  u = 0.0
+		  v = 0.0
+		  w = 0.0
+		endif
+		
       ! write(*,*) 'CUDA setup2',rho,i,j,k
   
       rhoR_d(i,j,k) = rhoR
