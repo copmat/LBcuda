@@ -6,10 +6,10 @@
     real        :: debugReal(0:nx+1,0:ny+1,0:nz+1)
  contains
 
- subroutine writeImageDataVTI(fname, step, rhoR, textual)
+ subroutine writeImageDataVTI(fname, step, varname, rhoR, textual)
   use dimensions_m
   implicit none
-  character(len=*),intent(in) :: fname
+  character(len=*),intent(in) :: fname, varname
   integer,intent(in) :: step
   real(4),allocatable,intent(in) :: rhoR(:,:,:)
   logical,intent(in) :: textual
@@ -32,7 +32,7 @@
   write(iotest,*) '   <PointData>'
 
   if (textual) then
-    write(iotest,*) '    <DataArray type="Float32" Name="',trim(fname),'" format="ascii" >'
+    write(iotest,*) '    <DataArray type="Float32" Name="',trim(varname),'" format="ascii" >'
 
     do k=1,nz
       do j=1,ny
@@ -47,7 +47,7 @@
     write(iotest,*) ' </Piece>'
     write(iotest,*) ' </ImageData>'
   else
-    write(iotest,*) '    <DataArray type="Float32" Name="',trim(fname),'" format="appended" offset="0" />'
+    write(iotest,*) '    <DataArray type="Float32" Name="',trim(varname),'" format="appended" offset="0" />'
     write(iotest,*) '   </PointData>'
     write(iotest,*) ' </Piece>'
     write(iotest,*) ' </ImageData>'

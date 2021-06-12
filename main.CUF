@@ -37,14 +37,19 @@ program TestLB
   ! Initial fluid velocity
   real :: vx,vy,vz
   
-  ! DEbug
+  ! Debug
   real :: debugline(numAtoms, 21,4)
 
 
-  call setupGPUgridAndAlloc
   stop_d = 0
   
   call readParameters
+
+  call setupGPUgridAndAlloc
+
+  if (withParticles) then
+	  call SetupParts
+  endif
 
   call makeOutput
   call SetConstants
@@ -63,9 +68,7 @@ program TestLB
   call abortOnLastErrorAndSync("setup",0, 1)
   
 
-  if (withParticles) then
-	  call SetupParts
-  endif
+  
 
   step = 1
 
@@ -88,14 +91,14 @@ program TestLB
       if (withParticles) then
         call init_isfluid_CG<<<dimGrid, dimBlock>>>(step, flipflop)
         call fixPeriodic_isfluid
-        call del_fluid_CG<<<dimGrid, dimBlock>>>(step, flipflop)
+        call del_fluid_CG<<<dimGrid, dimBlock>>>(step, flipflop, lrotate)
       endif
 
       call init_rho_CG<<<dimGrid, dimBlock>>>(step, flipflop)
       call fixPeriodic(.false., .true.)
 
       if (withParticles) then
-        call make_fluid_CG<<<dimGrid, dimBlock>>>(step, flipflop)
+        call make_fluid_CG<<<dimGrid, dimBlock>>>(step, flipflop, lrotate)
         call fixPeriodic(.false., .true.)
       endif
 
@@ -111,21 +114,21 @@ program TestLB
       ! call OutputVTK("cg_",step, flipflop)
 
       call fixPeriodic(.true., .false.)
-      ! call abortOnLastErrorAndSync("fixPeriodic",step, flipflop)
+      call abortOnLastErrorAndSync("fixPeriodic",step, flipflop)
       
       if (withParticles) then
-        call partBB_CG<<<dimGrid, dimBlock>>>(step, flipflop)
-        ! call abortOnLastErrorAndSync("partBB_CG",step, flipflop)
+        call partBB_CG<<<dimGrid, dimBlock>>>(step, flipflop, lrotate)
+        call abortOnLastErrorAndSync("partBB_CG",step, flipflop)
 
 #ifdef DEBUG_N2P
-        ! call dumpTerms(step)
+        call dumpTerms(step)
 #endif        
         ! call OutputVTK("partBB_n2p_",step, flipflop)
 
         call partBB_CG_p2n<<<dimGrid, dimBlock>>>(step, flipflop)          
         ! call OutputVTK("partBB_p2n1_",step, flipflop)
 
-        call partBB_CG_p2n2<<<dimGrid, dimBlock>>>(step, flipflop)          
+        call partBB_CG_p2n2<<<dimGrid, dimBlock>>>(step, flipflop, lrotate)          
         ! call OutputVTK("partBB_",step, flipflop)
 
         call fixPeriodic(.true., .false.)
@@ -143,14 +146,14 @@ program TestLB
       call stream_CG_z<<<dimGridz, dimBlock2>>>(step, flipflop)
       
       if (withParticles) then
-        call time_step_force_particles<<<dimGridAtm, dimBlockAtm>>>(step, flipflop)
+        call time_step_force_particles<<<dimGridAtm, dimBlockAtm>>>(step, flipflop, lrotate, numAtoms)
         
 #ifdef DEBUG_FORCE
-        ! call dumpForces(step)
+        call dumpForces(step)
 #endif
 
 #ifdef DEBUG_ROT
-        ! if (lrotate) call dumpRot(step, flipflop)
+        if (lrotate) call dumpRot(step, flipflop)
 #endif
 
         call updateListAtoms(3 - flipflop)  ! Use new pos
@@ -171,7 +174,6 @@ program TestLB
       ! call OutputVTK("bb_",step, flipflop)
       call init_rho_isfluid_BGK<<<dimGrid, dimBlock>>>(step, flipflop)
       
-
       call time_step_BGK<<<dimGrid, dimBlock>>>(step, flipflop, omega, 1.0 - omega)
       
       ! Boundary Conditions with new flipflop
@@ -180,7 +182,6 @@ program TestLB
       call copy_BGK<<<dimGrid, dimBlock>>>(step, flipflop)
       
       call stream_BGK<<<dimGrid, dimBlock>>>(step, flipflop)
-      
       call stream_BGK_x<<<dimGridx, dimBlock2>>>(step, flipflop)
       call stream_BGK_y<<<dimGridy, dimBlock2>>>(step, flipflop)
       call stream_BGK_z<<<dimGridz, dimBlock2>>>(step, flipflop)
@@ -224,7 +225,7 @@ program TestLB
     subroutine readParameters
       implicit none
       character(len = 120)  :: string
-      integer               :: itest
+      integer               :: itest, found
 
       open(unit=11, file='input.dat', status='old', form='FORMATTED', action='read', iostat=itest)
       if (itest/=0) then
@@ -238,28 +239,73 @@ program TestLB
       nIterOut = 1
       nIterVTK = 100000000 !nIterOut
 
+      found = 0
       ! Header line
       ! read(11, '(a120)', end=120) string
 
       ! Number of iterations
       read(11, *, end=120) nIter
+      found = 1
       
       ! Number of iterations for terminal output
       read(11, *, end=120) nIterOut
+      found = 2
       
       ! Number of iterations for VTK output
       read(11, *, end=120) nIterVTK
+      found = 3
       
       read(11, *, end=120) vx,vy,vz
+      found = 4
 
-      read(11, *, end=120) ext_fxx,ext_fyy,ext_fzz
+      read(11, *, end=120) string, numAtoms
+      found = 5
+      if (string(1:3) == 'YES') then
+        withParticles = .true.
+      else if (string(1:3) == 'NO') then
+        withParticles = .false.
+      else
+        found = 4
+      endif
 
-      if (lrotate) then
-        read(11, *, end=120) ext_tqx,ext_tqy,ext_tqz
+      if (withParticles) then
+        read(11, *, end=120) ext_fxx,ext_fyy,ext_fzz
+        found = 6
+
+        read(11, *, end=120) string
+        found = 7
+        if (string(1:3) == 'YES') then
+          lrotate = .true.
+        else if (string(1:3) == 'NO') then
+          lrotate = .false.
+        else
+          found = 6
+        endif
+
+        if (lrotate) then
+          read(11, *, end=120) ext_tqx,ext_tqy,ext_tqz
+          found = 8
+        endif
       endif
 
       120 continue
       close(11)
+
+      ! write (*,*) 'found',found
+
+      if ((lrotate .and. found /= 8) .or. &
+          (.not. lrotate .and. withParticles .and. found /= 7) .or. &
+          .not. withParticles .and. found /= 5) then        
+        if (found<1) write (*,*) 'Number of iterations not found'
+        if (found<2) write (*,*) 'nIterOut not found'
+        if (found<3) write (*,*) 'nIterVTK not found'
+        if (found<4) write (*,*) 'vx,vy,vz not found'
+        if (found<5) write (*,*) 'withParticles not found'
+        if (withParticles .and. found<6) write (*,*) 'ext_fxx,ext_fyy,ext_fzz not found'
+        if (withParticles .and. found<7) write (*,*) 'lrotate not found'
+        if (lrotate .and. found<8) write (*,*) 'ext_tqx,ext_tqy,ext_tqz not found'
+        stop
+      endif
     end subroutine
 
 
@@ -400,79 +446,12 @@ program TestLB
         stop
       endif
 
-      allocate(x_atm(3, numAtoms), STAT=istat)
-      if (istat /= 0) then
-        write(*,*) 'Allocation of particle positions failed'
-      end if
-
-      allocate(v_atm(3, numAtoms), STAT=istat)
-      if (istat /= 0) then
-        write(*,*) 'Allocation of particle veloc failed'
-      end if
-
-      if(lrotate) then
-        allocate(q(4, numAtoms), STAT=istat)
-        if (istat /= 0) then
-          write(*,*) 'Allocation of particle q failed'
-        endif
-      endif
       
-      allocate(myfluid(0:nx+1,0:ny+1,0:nz+1, 2), STAT=istat)
-      if (istat /= 0) then
-        write(*,*) 'Allocation of particle myfluid failed'
-      end if
       
 
       write(*,*) 'Initial setup of particles...'
 
-      if (atomsFromFile) then
-        call read_input_atom        
-      else
-        dx = nx / real(numAtoms)
-        do l=1,numAtoms
-          x_atm(1,l) = dx*l
-          x_atm(2,l) = 0.0
-          x_atm(3,l) = 0.0
-          v_atm(1,l) = 0.0
-          v_atm(2,l) = 0.0
-          v_atm(3,l) = 0.0
-          write(*,*) 'Atom', l, ':', x_atm(:,l)
-          	
-          do i = 1, 3
-            pos_d(i,l,1) = x_atm(i,l)   ! New & old pos
-            pos_d(i,l,2) = x_atm(i,l)
-            pos_d(3+i,l,1) = v_atm(i,l) ! New & old veloc
-            pos_d(3+i,l,2) = v_atm(i,l)
-          enddo            
-    
-          do i = 7, 13
-            pos_d(i,l,1) = 0.0
-            pos_d(i,l,2) = 0.0
-          enddo
-
-          do i = 1, 12
-            forceAtoms_d(i,l, 1) = 0.0		! zero forces at start
-            forceAtoms_d(i,l, 2) = 0.0
-          enddo
-
-          do i = 1, 3
-            myf_d(i,l) = 0.0
-            myt_d(i,l) = 0.0
-          enddo
-        enddo
-
-        ! findAtoms = 0
-        ! do l=1,numAtoms
-        !   listAtoms(l) = l
-        ! enddo
-
-        ! atomsPergridx = numAtoms / dimGrid%x
-        ! do l=1, dimGrid%x
-        !   findAtoms(1, l, 1,1) = 1 + atomsPergridx*(l-1) 
-        !   findAtoms(2, l, 1,1) = atomsPergridx*l 
-        !   write(*,*) 'st=',1 + atomsPergridx*(l-1), 'end=',atomsPergridx*l
-        ! enddo
-      endif
+      call read_input_atom        
 
       call makeListAtoms(1)
 
@@ -657,9 +636,27 @@ program TestLB
 
       ! Number of atoms
       read(11, *, end=120) i
-      if (i /= numAtoms) then
-          write (*,*) "input.xyz] Wrong number of particles:", i,"vs", numAtoms
-          stop
+      write (*,*) 'input.xyz] Using:', numAtoms, ' particles from a file with:', i
+      if (i < numAtoms) then        
+        write (*,*) 'Input file:input.xyz contains less particles than needed. STOP'
+        stop
+      endif
+
+      allocate(x_atm(3, numAtoms), STAT=istat)
+      if (istat /= 0) then
+        write(*,*) 'Allocation of particle positions failed'
+      end if
+
+      allocate(v_atm(3, numAtoms), STAT=istat)
+      if (istat /= 0) then
+        write(*,*) 'Allocation of particle veloc failed'
+      end if
+
+      if(lrotate) then
+        allocate(q(4, numAtoms), STAT=istat)
+        if (istat /= 0) then
+          write(*,*) 'Allocation of particle q failed'
+        endif
       endif
 
       ! Format line
@@ -786,11 +783,18 @@ program TestLB
         write(*,fmt=100) 'Fluid components', 2
         write(*,fmt=105) 'Color gradient'
         write(*,fmt=104) 'Initial fluid vel', vx,vy,vz
-        write(*,fmt=104) 'External force', ext_fxx,ext_fyy,ext_fzz
-        if (lrotate) then
-          write(*,fmt=104) 'External Torque', ext_tqx,ext_tqy,ext_tqz
+
+        if (withParticles) then
+          write(*,fmt=103) 'With Particles'
+          write(*,fmt=104) 'External force', ext_fxx,ext_fyy,ext_fzz
+          if (lrotate) then
+            write(*,fmt=103) 'With Rotation'
+            write(*,fmt=104) 'External Torque', ext_tqx,ext_tqy,ext_tqz
+          else
+            write(*,fmt=103) 'No Rotation'
+          endif
         else
-          write(*,fmt=103) 'No Rotation'
+          write(*,fmt=103) 'No Particles'
         endif
       else
         write(*,fmt=100) 'Fluid components', 1
@@ -1011,7 +1015,7 @@ program TestLB
       character(len=120) :: mynamefile
       
 
-      if (fname(1:5) /= 'step_' .and. fname(1:4)/= 'Stop') return
+      ! if (fname(1:5) /= 'step_' .and. fname(1:4)/= 'Stop') return
 
       call system_clock(c_start)
 
@@ -1037,11 +1041,12 @@ program TestLB
         
          istat = cudaMemcpy(popB_pinned, popsB_d(:,:,:,:,flip), (nx+2)*(ny+2)*(nz+2)*npops )
          if (istat/=0) write(*,*) 'status after copy B:',istat, 'flipflop',flipflop
-
          status = cudaDeviceSynchronize
          if (istat/=0) write(*,*) 'status after deviceSync B',status
 
-         ! call moments2Fl(pop_pinned,rhoR, popB_pinned,rhoB, vel, phase)
+         myfluid = myfluid_d
+         call moments2Fl(pop_pinned,rhoR, popB_pinned,rhoB, vel, phase, myfluid, flip)
+
          istat = cudaMemcpy(rhoR, rhoR_d(:,:,:), (nx+2)*(ny+2)*(nz+2) )
          if (istat/=0) write(*,*) 'status after rho R:',istat
          status = cudaDeviceSynchronize
@@ -1052,49 +1057,57 @@ program TestLB
          status = cudaDeviceSynchronize
          if (istat/=0) write(*,*) 'status after rho B',status
 
-         myfluid = myfluid_d
-
          call system_clock(c_stop)
          diff_xfer = diff_xfer + c_stop-c_start2
 
          call system_clock(c_start2)
-         ! if (step>=265) call print_rho_pops2(fname,step, flip)
+         ! call print_rho_pops2(fname,step, flip)
          call system_clock(c_stop)
          pops_time = c_stop-c_start2
 
          mynamefile = repeat(' ',120)
-         mynamefile = trim(fname)//'_rhoB'
+         mynamefile = trim(fname)//'rhoB'
 
-         call writeImageDataVTI(mynamefile,step, rhoB, textVTK)
+         ! call writeImageDataVTI(mynamefile,step, 'rhoB', rhoB, textVTK)
          ! call writeImageDataVTI("phase",step, phase, textVTK)
       endif
 
       mynamefile = repeat(' ',120)
-      mynamefile = trim(fname)//'_rho'
-      call writeImageDataVTI(mynamefile,step, rhoR, textVTK)
-      ! call writeImageDataVTI_3d("vel",step, vel, textVTK)
+      if (fname(1:5) == 'step_') then
+        mynamefile = 'rho'
+      else
+        mynamefile = trim(fname)//'rho'
+      endif
+      call writeImageDataVTI(mynamefile,step, 'rho', rhoR, textVTK)
+
+      call writeImageDataVTI_3d("vel",step, vel, textVTK)
 
       if (withParticles) then
         call system_clock(c_start2)
 
         x_atm = pos_d(1:3,:, flip)
         v_atm = pos_d(4:6,:, flip)
+        q = pos_d(10:13,:, flip)
 
         call system_clock(c_stop)
         diff_xfer = diff_xfer + c_stop-c_start2
 
         mynamefile = repeat(' ',120)
-        mynamefile = trim(fname)//'_particle'
+        if (fname(1:5) == 'step_') then
+          mynamefile = 'particle'
+        else
+          mynamefile = trim(fname)//'particle'
+        endif
         call writeParticleVTK(mynamefile,step, x_atm,v_atm,q, textVTK)
 
-        mynamefile = repeat(' ',120)
-        mynamefile = trim(fname)//'_isfluid'
-        if (fname(1:5) == 'step_') then
-          ! After time step, use old value
-          call writeImageDataVTI_islfuid(mynamefile,step, myfluid, 3-flip, textVTK)
-        else
-          call writeImageDataVTI_islfuid(mynamefile,step, myfluid, flip, textVTK)
-        endif
+        ! mynamefile = repeat(' ',120)
+        ! mynamefile = trim(fname)//'_isfluid'
+        ! if (fname(1:5) == 'step_') then
+        !   ! After time step, use old value
+        !   call writeImageDataVTI_islfuid(mynamefile,step, myfluid, 3-flip, textVTK)
+        ! else
+        !   call writeImageDataVTI_islfuid(mynamefile,step, myfluid, flip, textVTK)
+        ! endif
      endif
 
       call system_clock(c_stop)
@@ -1317,6 +1330,11 @@ program TestLB
        write(*,*) 'Allocation of velocity failed'
     end if
 
+    allocate(myfluid(0:nx+1,0:ny+1,0:nz+1, 2), STAT=istat)
+    if (istat /= 0) then
+      write(*,*) 'Allocation of particle myfluid failed'
+    end if
+
     write(*,*) 'Allocation of GPU pops:'
     allocate(popsR_d(0:nx+1,0:ny+1,0:nz+1,0:npops-1, 2), STAT=istat)
     if (istat /= 0) then
@@ -1348,6 +1366,7 @@ program TestLB
     
   
     if (withCG) then
+      write(*,*) 'Allocation of HOST other pops:'
       allocate(popB_pinned(0:nx+1,0:ny+1,0:nz+1,0:npops-1), STAT=istat, PINNED=pinnedFlag)
       if (istat /= 0) then
         write(*,*) 'Allocation of popB_pinned failed'
@@ -1377,6 +1396,56 @@ program TestLB
       if (istat /= 0) then
         write(*,*) 'Allocation of rhoB_d failed'
       end if
+
+      if (withParticles) then
+        write(*,fmt=16) numAtoms
+        16 format('Allocating ', i4, ' particles on GPU...')
+
+        allocate(pos_d(13, numAtoms,2), STAT=istat)
+        if (istat /= 0) then
+          write(*,*) 'Allocation of pos_d failed'
+        end if
+
+        allocate(forceAtoms_d(12, numAtoms,2), STAT=istat)
+        if (istat /= 0) then
+          write(*,*) 'Allocation of forceAtoms_d failed'
+        end if
+
+        allocate(myf_d(3, numAtoms), STAT=istat)
+        if (istat /= 0) then
+          write(*,*) 'Allocation of myf_d failed'
+        end if
+
+        allocate(myf2_d(3, numAtoms), STAT=istat)
+        if (istat /= 0) then
+          write(*,*) 'Allocation of myf2_d failed'
+        end if
+
+        allocate(myt_d(3, numAtoms), STAT=istat)
+        if (istat /= 0) then
+          write(*,*) 'Allocation of myt_d failed'
+        end if
+
+        allocate(myt2_d(3, numAtoms), STAT=istat)
+        if (istat /= 0) then
+          write(*,*) 'Allocation of myt2_d failed'
+        end if
+
+        allocate(listAtoms_d(numAtoms * nx/TILE_DIMx* ny/TILE_DIMy* nz/TILE_DIMz), STAT=istat)
+        if (istat /= 0) then
+          write(*,*) 'Allocation of listAtoms_d failed'
+        end if
+
+        allocate(findAtoms_d(2,nx/TILE_DIMx, ny/TILE_DIMy, nz/TILE_DIMz), STAT=istat)
+        if (istat /= 0) then
+          write(*,*) 'Allocation of findAtoms_d failed'
+        end if
+
+        allocate(debugline_d(numAtoms, 21,4), STAT=istat)
+        if (istat /= 0) then
+          write(*,*) 'Allocation of debugline_d failed'
+        end if
+      endif
     end if
   
     ! output device info and transfer size

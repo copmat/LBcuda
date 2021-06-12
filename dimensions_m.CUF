@@ -31,14 +31,11 @@
     real, parameter :: sigma_CG = 0.1, beta_CG = 0.999
 
     ! Particles
-#ifdef PARTICLES
-    logical, parameter :: withParticles = .true.
-#else
-    logical, parameter :: withParticles = .false.
-#endif    
-    
-    logical, parameter :: lrotate = .true.
-    integer, parameter :: numAtoms = 100
+    logical :: withParticles = .false.
+    logical :: lrotate = .false.
+
+    integer :: numAtoms = 1
+
     logical, parameter :: atomsFromFile = .true.
     real, parameter    :: rdim  = 4.5
     real, parameter    :: rmass = 1.0 / 1500.0   ! 1/mass for particles

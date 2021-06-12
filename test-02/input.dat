@@ -1,6 +1,0 @@
-1000 !niter  number of iterations
-10  !stat print on screen every n
-100  !vtk print every n
-0.01 0.01 0.01	! vx,vy,vz
-0.0 0.0 0.0	! ext_fxx,ext_fyy,ext_fzz
-0.0 0.0 0.0	! ext_tqx,ext_tqy,ext_tqz

@@ -5,19 +5,16 @@
     implicit none
 
     ! device arrays
-    ! real(4), device :: popsR_d(0:nx+1,0:ny+1,0:nz+1, 0:npops-1, 2), popsB_d(0:nx+1,0:ny+1,0:nz+1, 0:npops-1, 2)
-    ! real(4), device :: force_d(3, nx,ny,nz)
-    ! real(4), device :: rhoR_d(1:nx,1:ny,1:nz),rhoB_d(1:nx,1:ny,1:nz)
     real(4), allocatable, device :: popsR_d(:,:,:,:,:), popsB_d(:,:,:,:,:)
     real(4), allocatable, device :: force_d(:, :,:,:)
     real(4), allocatable, device :: rhoR_d(:,:,:),rhoB_d(:,:,:)
 
-    real(4), device :: pos_d(13, numAtoms,2)
-    real(4), device :: forceAtoms_d(12, numAtoms,2)
-    real(8), device :: myf_d(3, numAtoms), myt_d(3, numAtoms)
-    real(8), device :: myf2_d(3, numAtoms), myt2_d(3, numAtoms)
-    integer(2), device :: listAtoms_d(numAtoms * nx/TILE_DIMx* ny/TILE_DIMy* nz/TILE_DIMz)
-    integer(2), device :: findAtoms_d(2,nx/TILE_DIMx, ny/TILE_DIMy, nz/TILE_DIMz)
+    real(4), allocatable, device :: pos_d(:,:,:)
+    real(4), allocatable, device :: forceAtoms_d(:,:,:)
+    real(8), allocatable, device :: myf_d(:,:), myt_d(:,:)
+    real(8), allocatable, device :: myf2_d(:,:), myt2_d(:,:)
+    integer(2), allocatable, device :: listAtoms_d(:)
+    integer(2), allocatable, device :: findAtoms_d(:,:,:,:)
 
     integer(1), allocatable, device :: issub_d(:, :, :)
     integer, device :: rmax_issub_d, sphereMax_d
@@ -32,7 +29,7 @@
     real, device :: minRho = -0.1, minPops = -0.1
 
     ! Debug
-    real, device :: debugline_d(numAtoms, 21,4)
+    real, allocatable, device :: debugline_d(:,:,:)
     real, device :: debugn2pf_d(2000,5)
     real, device :: debugn2pt_d(2000,5)
     integer(2), allocatable, device :: debugfluid_d(:,:,:)
@@ -617,36 +614,35 @@
       j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
       k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
       ! if (step==1 .and. 1==i*j*k) write(*,*) 'CUDA init_rho_isfluid_CG] i,k:',i,j,k
+      
+      atm_i = blockIdx%x
+      atm_j = blockIdx%y
+      atm_k = blockIdx%z
+      atm_st = findAtoms_d(1, atm_i,atm_j,atm_k)
+      atm_en = findAtoms_d(2, atm_i,atm_j,atm_k)
+      ! if (step==1) write(*,*) 'findAtms',linear(i,j,k), atm_st,atm_en, linear(atm_i,atm_j,atm_k)
 
-      ! Set myfluid_d
-      if (withParticles) then
-        atm_i = blockIdx%x
-        atm_j = blockIdx%y
-        atm_k = blockIdx%z
-        atm_st = findAtoms_d(1, atm_i,atm_j,atm_k)
-        atm_en = findAtoms_d(2, atm_i,atm_j,atm_k)
-        ! if (step==1) write(*,*) 'findAtms',linear(i,j,k), atm_st,atm_en, linear(atm_i,atm_j,atm_k)
+      ! Update myfluid_d
+      updated = .false.
+      debugfluid_d(i,j,k) = 0
+      if (atm_st>0) then
+        do i_list = atm_st, atm_en
+          i_atm = listAtoms_d(i_list)
+          ! if (step==1) write(*,*) 'CUDA-init_rho_isfluid_CG',linear(i,j,k), i_atm
 
-        ! Update myfluid_d
-        updated = .false.
-        debugfluid_d(i,j,k) = 0
-        if (atm_st>0) then
-          do i_list = atm_st, atm_en
-            i_atm = listAtoms_d(i_list)
-            ! if (step==1) write(*,*) 'CUDA-init_rho_isfluid_CG',linear(i,j,k), i_atm
-
-            if (.not. updated) then
-              updated = setmyfluid(i,j,k, i_atm, step, flip)
-            endif
-          enddo
-        endif
-        if (.not. updated) myfluid_d(i,j,k, flip) = fluid_fluid
+          if (.not. updated) then
+            updated = setmyfluid(i,j,k, i_atm, step, flip)
+          endif
+        enddo
       endif
+      if (.not. updated) myfluid_d(i,j,k, flip) = fluid_fluid
+    
     end subroutine init_isfluid_CG
 
 
-    attributes(global) subroutine del_fluid_CG(step, flip)
+    attributes(global) subroutine del_fluid_CG(step, flip, lrotate)
       integer, value :: step,flip
+      logical, value :: lrotate
       integer :: i,j,k
       integer :: atm_i,atm_j,atm_k, atm_st,atm_en, i_atm,i_list
   
@@ -654,23 +650,22 @@
       j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
       k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
 
-      if (withParticles) then
-        atm_i = blockIdx%x 
-        atm_j = blockIdx%y 
-        atm_k = blockIdx%z 
-        atm_st = findAtoms_d(1, atm_i,atm_j,atm_k)
-        atm_en = findAtoms_d(2, atm_i,atm_j,atm_k)
+      atm_i = blockIdx%x 
+      atm_j = blockIdx%y 
+      atm_k = blockIdx%z 
+      atm_st = findAtoms_d(1, atm_i,atm_j,atm_k)
+      atm_en = findAtoms_d(2, atm_i,atm_j,atm_k)
 
-        ! del_fluid 1st (old rho), if needed
-        if (atm_st>0) then
-          do i_list = atm_st, atm_en
-            i_atm = listAtoms_d(i_list)
+      ! del_fluid 1st (old rho), if needed
+      if (atm_st>0) then
+        do i_list = atm_st, atm_en
+          i_atm = listAtoms_d(i_list)
 
-            ! Add/delete fluid if particle moved
-            if (particle_moved(i_atm) == 1) call del_fluid(step, flip, i_atm,i,j,k)
-          enddo
-        endif
+          ! Add/delete fluid if particle moved
+          if (particle_moved(i_atm) == 1) call del_fluid(step, flip, i_atm,i,j,k, lrotate)
+        enddo
       endif
+      
     end subroutine del_fluid_CG
 
     attributes(global) subroutine init_rho_CG(step, flip)
@@ -704,8 +699,9 @@
       endif
     end subroutine init_rho_CG
 
-    attributes(global) subroutine make_fluid_CG(step, flip)
+    attributes(global) subroutine make_fluid_CG(step, flip, lrotate)
       integer, value :: step,flip
+      logical, value :: lrotate
       integer :: i,j,k
       integer :: atm_i,atm_j,atm_k, atm_st,atm_en, i_atm,i_list
   
@@ -713,22 +709,20 @@
       j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
       k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
 
-      if (withParticles) then
-        atm_i = blockIdx%x 
-        atm_j = blockIdx%y 
-        atm_k = blockIdx%z 
-        atm_st = findAtoms_d(1, atm_i,atm_j,atm_k)
-        atm_en = findAtoms_d(2, atm_i,atm_j,atm_k)
+      atm_i = blockIdx%x 
+      atm_j = blockIdx%y 
+      atm_k = blockIdx%z 
+      atm_st = findAtoms_d(1, atm_i,atm_j,atm_k)
+      atm_en = findAtoms_d(2, atm_i,atm_j,atm_k)
 
-        ! make_fluid, if needed
-        if (atm_st>0) then
-          do i_list = atm_st, atm_en
-            i_atm = listAtoms_d(i_list)
+      ! make_fluid, if needed
+      if (atm_st>0) then
+        do i_list = atm_st, atm_en
+          i_atm = listAtoms_d(i_list)
 
-            ! Add/delete fluid if particle moved
-            if (particle_moved(i_atm) == 1) call make_fluid(step, flip, i_atm,i,j,k)
-          enddo
-        endif
+          ! Add/delete fluid if particle moved
+          if (particle_moved(i_atm) == 1) call make_fluid(step, flip, i_atm,i,j,k, lrotate)
+        enddo
       endif
     end subroutine make_fluid_CG
 
@@ -874,9 +868,10 @@
     end function particle_moved
 
     
-    attributes(device) subroutine del_fluid(step, flip, iatm, i,j,k )
+    attributes(device) subroutine del_fluid(step, flip, iatm, i,j,k, lrotate )
       integer, value    :: step, flip
       integer, value    :: iatm, i,j,k
+      logical, value    :: lrotate
       logical           :: lmove
       real              :: rtemp(3), ftemp(3),ttemp(3), modr, tempFoo
       real              :: rhoR,rhoB,rhosum,invrho, myu,myv,myw
@@ -1045,9 +1040,10 @@
       endif    
     end subroutine del_fluid
 
-    attributes(device) subroutine make_fluid(step, flip, iatm, i,j,k )
+    attributes(device) subroutine make_fluid(step, flip, iatm, i,j,k, lrotate )
       integer, value    :: step, flip
       integer, value    :: iatm, i,j,k
+      logical, value    :: lrotate
       logical           :: lmove
       real              :: rtemp(3), ftemp(3),ttemp(3), modr, tempFoo
       real              :: rhoR,rhoB,rhosum,invrho, myu,myv,myw, Rsum, Bsum
@@ -1488,8 +1484,9 @@
       endif
     end subroutine time_step_CG
 
-    attributes(global) subroutine partBB_CG(step, flip)
+    attributes(global) subroutine partBB_CG(step, flip, lrotate)
       integer, value :: step,flip
+      logical, value :: lrotate
       integer :: i,j,k, l
       integer :: atm_i,atm_j,atm_k, atm_st,atm_en, i_atm,i_list
       integer :: deltai,deltaj,deltak, atmDist,okDist
@@ -1535,7 +1532,7 @@
                     i_atm+0.001*atmDist, debugfluid_d(i,j,k)+0.001*okDist
                 ! stop_d = __LINE__
               endif
-              call node_to_particle_bounce_back_bc2(step, flip, i_atm, i,j,k)
+              call node_to_particle_bounce_back_bc2(step, flip, i_atm, i,j,k, lrotate)
             endif
           endif
         enddo
@@ -1557,8 +1554,9 @@
       endif
     end subroutine partBB_CG_p2n
 
-    attributes(global) subroutine partBB_CG_p2n2(step, flip)
+    attributes(global) subroutine partBB_CG_p2n2(step, flip, lrotate)
       integer, value :: step,flip
+      logical, value :: lrotate
       integer :: i,j,k, l
       integer :: atm_i,atm_j,atm_k, atm_st,atm_en, i_atm,i_list
       integer :: deltai,deltaj,deltak, atmDist
@@ -1596,7 +1594,7 @@
                     i_atm+0.001*atmDist, debugfluid_d(i,j,k)+0
                 ! stop_d = __LINE__
               endif
-              call particle_to_node_bounce_back_bc2_phase2(step, flip, i_atm, i,j,k)
+              call particle_to_node_bounce_back_bc2_phase2(step, flip, i_atm, i,j,k, lrotate)
             endif
           endif
         enddo
@@ -1787,8 +1785,9 @@
     ! force(7:9) -> tqx,tqy,tqz
     ! force(10:12) -> tqb,tqb,tqb
 
-    attributes(global) subroutine time_step_force_particles(step, flip)
-      integer, value    :: step,flip
+    attributes(global) subroutine time_step_force_particles(step, flip, lrotate, numAtoms)
+      integer, value    :: step,flip,numAtoms
+      logical, value    :: lrotate
       integer           :: i,j
       integer :: flop
   
@@ -1805,8 +1804,8 @@
         enddo
       endif
 
-      call addForce_particle_bounce_back(step, flip, i)
-      call nve_lf(step, flip, i)
+      call addForce_particle_bounce_back(step, flip, i, lrotate)
+      call nve_lf(step, flip, i, lrotate)
 
       ! call zero_force_part(step, flip, i)
       flop = 3 - flip
@@ -1955,8 +1954,9 @@
     end subroutine add_sidewall
 
 
-    attributes(device) subroutine addForce_particle_bounce_back(step, flip, i)
+    attributes(device) subroutine addForce_particle_bounce_back(step, flip, i, lrotate)
       integer, value    :: step, flip, i
+      logical, value    :: lrotate
       integer :: flop
       real :: fxx,fyy,fzz
       real :: fxb,fyb,fzb, fxbo,fybo,fzbo
@@ -2088,7 +2088,7 @@
       mxrsqcut = max(rsrparcut,rsqcut)
       rparcap = rpar + lubric_rcap
 
-      if (1==step) write(*,*) 'Hz]', mxrsqcut, rparcap, gmin
+      if (1==step.and.2==iatm*jatm) write(*,*) 'Hz]', mxrsqcut, rparcap, gmin
 
       xi(1) = pos_d(1, iatm, flip)
       xi(2) = pos_d(2, iatm, flip)
@@ -2132,15 +2132,10 @@
           tempFoo1 = atomicadd( forceAtoms_d(3,iatm,flip), -ftemp(3) )
           tempFoo1 = atomicadd( forceAtoms_d(3,jatm,flip),  ftemp(3) )
 
-          ! forceAtoms_d(1,iatm,flip) = forceAtoms_d(1,iatm,flip) - ggg*xdf/rrr
-          ! forceAtoms_d(1,jatm,flip) = forceAtoms_d(1,jatm,flip) + ggg*xdf/rrr          
-
-          ! forceAtoms_d(2,iatm,flip) = forceAtoms_d(2,iatm,flip) - ggg*ydf/rrr
-          ! forceAtoms_d(2,jatm,flip) = forceAtoms_d(2,jatm,flip) + ggg*ydf/rrr
-
-          ! forceAtoms_d(3,iatm,flip) = forceAtoms_d(3,iatm,flip) - ggg*zdf/rrr
-          ! forceAtoms_d(3,jatm,flip) = forceAtoms_d(3,jatm,flip) + ggg*zdf/rrr
-          write(*,*) 'hz] i:', iatm, ggg*xdf/rrr, ggg*ydf/rrr, ggg*zdf/rrr
+          write(*,*) '<=hz_rmin]', linear(0,iatm,jatm), xdf,ydf,zdf, rrr
+          write(*,*) '<=hz_rmin]', linear(0,iatm,jatm), ftemp(1),ftemp(2),ftemp(3)
+          write(*,*) '<=hz_rmin]', iatm, linear( nint(xi(1)),nint(xi(2)),nint(xi(3)) )
+          write(*,*) '<=hz_rmin]', jatm, linear( nint(xj(1)),nint(xj(2)),nint(xj(3)) )
         endif
 
         if (llubrication) then
@@ -2166,22 +2161,29 @@
             dotuv = ux*(pos_d(4, iatm, flip)-pos_d(4, jatm, flip)) + uy*(pos_d(5, iatm, flip)-pos_d(5, jatm, flip)) &
                 + uz*(pos_d(6, iatm, flip)-pos_d(6, jatm, flip))
 
-            forceAtoms_d(1,iatm,flip) = forceAtoms_d(1,iatm,flip) - visc*lubfactor*ux* dotuv*(ONE/(rrr-rpar)-ONE)
-            forceAtoms_d(1,jatm,flip) = forceAtoms_d(1,jatm,flip) + visc*lubfactor*ux* dotuv*(ONE/(rrr-rpar)-ONE)
-                                                        
-            forceAtoms_d(2,iatm,flip) = forceAtoms_d(2,iatm,flip) - visc*lubfactor*uy* dotuv*(ONE/(rrr-rpar)-ONE)
-            forceAtoms_d(2,jatm,flip) = forceAtoms_d(2,jatm,flip) + visc*lubfactor*uy* dotuv*(ONE/(rrr-rpar)-ONE)
+            ftemp(1) = visc*lubfactor*ux* dotuv*(ONE/(rrr-rpar)-ONE)
+            ftemp(2) = visc*lubfactor*uy* dotuv*(ONE/(rrr-rpar)-ONE)
+            ftemp(3) = visc*lubfactor*uz* dotuv*(ONE/(rrr-rpar)-ONE)
 
-            forceAtoms_d(3,iatm,flip) = forceAtoms_d(3,iatm,flip) - visc*lubfactor*uz* dotuv*(ONE/(rrr-rpar)-ONE)
-            forceAtoms_d(3,jatm,flip) = forceAtoms_d(3,jatm,flip) + visc*lubfactor*uz* dotuv*(ONE/(rrr-rpar)-ONE)
+            forceAtoms_d(1,iatm,flip) = forceAtoms_d(1,iatm,flip) - ftemp(1)
+            forceAtoms_d(1,jatm,flip) = forceAtoms_d(1,jatm,flip) + ftemp(1)
+                                                        
+            forceAtoms_d(2,iatm,flip) = forceAtoms_d(2,iatm,flip) - ftemp(2)
+            forceAtoms_d(2,jatm,flip) = forceAtoms_d(2,jatm,flip) + ftemp(2)
+
+            forceAtoms_d(3,iatm,flip) = forceAtoms_d(3,iatm,flip) - ftemp(3)
+            forceAtoms_d(3,jatm,flip) = forceAtoms_d(3,jatm,flip) + ftemp(3)
+
+            write(*,*) 'hz<=rparcut] i:', iatm, ftemp(1),ftemp(2),ftemp(3)
           endif
         endif
       endif
     end subroutine addHertzian
 
 
-    attributes(device) subroutine nve_lf(step, flip, i)
+    attributes(device) subroutine nve_lf(step, flip, i, lrotate)
       integer, value    :: step,flip, i
+      logical, value    :: lrotate
       integer :: flop
       real :: fxx,fyy,fzz
       real :: bxx,byy,bzz, vxx,vyy,vzz
@@ -2539,9 +2541,10 @@
     end function qtrimult
 
 
-    attributes(device) subroutine node_to_particle_bounce_back_bc2(step, flip, iatm, i,j,k)
+    attributes(device) subroutine node_to_particle_bounce_back_bc2(step, flip, iatm, i,j,k, lrotate)
       integer, value    :: step, flip
       integer, value    :: iatm, i,j,k
+      logical, value    :: lrotate
       real              :: rtemp(3), ftemp(3),ttemp(3), rversor(3), otemp(3), modr, f2p,f2pR,f2pB
       real              :: qtemp(0:3),qversor(0:3),tempconj(0:3), oat(0:3)
       real              :: vx,vy,vz, vxs,vys,vzs, tempFoo1,tempFoo2,tempFoo3
@@ -2846,9 +2849,10 @@
       enddo
     end subroutine particle_to_node_bounce_back_bc2_phase1
     
-    attributes(device) subroutine particle_to_node_bounce_back_bc2_phase2(step, flip, iatm, i,j,k)
+    attributes(device) subroutine particle_to_node_bounce_back_bc2_phase2(step, flip, iatm, i,j,k, lrotate)
       integer, value    :: step, flip
       integer, value    :: iatm, i,j,k
+      logical, value    :: lrotate
       real              :: rtemp(3), ftemp(3),ttemp(3), rversor(3), otemp(3), modr, f2pR,f2pB
       real              :: qtemp(0:3),qversor(0:3),tempconj(0:3), oat(0:3)
       real              :: vx,vy,vz, vxs,vys,vzs
