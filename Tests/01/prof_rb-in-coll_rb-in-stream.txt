@@ -1,0 +1,102 @@
+[a08trb51@login01 01]$ nvprof ./lbCUDA 
+==101544== NVPROF is profiling process 101544, command: ./lbCUDA
+ 
+Matrix size:  128  128  128   19
+dimGrid:  32  32  32,   dimBlock:   4   4   4
+dimGridx:  17  17   1,   dimBlock2:   8   8   1
+dimGridy:  17  17   1
+dimGridz:  17  17   1
+dimGridAtm:   0,   dimBlockAtm:  16
+ Mem size:    159.2369     MB
+ Allocation of HOST pops array, pinned:  T
+ Allocation of GPU pops:
+ Allocation of HOST other pops:
+ Allocation of GPU other pops:
+ 
+ Device: Tesla V100-SXM2-16GB
+ ************************
+ Transfer size (MB):     159.2369    
+   Device to Host bandwidth (GiB/s):     60.26122    
+ 
+ spherical_template] rmin,rmax=            4            5 sqrcut in 
+    20.25000               25
+ nsphere,nspheredead=          242          146
+ Initial setup...
+ Initial setup red & blue pops...
+Time for VTK:  0.26     secs (tranfer time:  0.13     secs, pops:   0.0    )
+ ************************
+         Lattice box     128     128     128
+              nIters:    1000
+            nIterOut:     100
+    Fluid components:       2
+              Method:      Color gradient
+   Initial fluid vel:          0.01000000          0.00000000          0.00000000
+        No Particles
+  X axis is periodic: T
+  Y axis is periodic: T
+  Z axis is periodic: T
+           Fluid tau:          1.00000000
+     Fluid viscosity:          0.16666667
+ Constant omega mode: T
+               Omega:          1.00000000
+              Forced: F
+          VTK output: T
+           VTK every:  100000
+           VTK ASCII: F
+ ************************
+ ************************
+ 
+ Run...
+Iter:       100   Time(s):0.5714       ms/it: 5.71       Mlup/s:    385.
+Iter:       200   Time(s):0.5513       ms/it: 5.51       Mlup/s:    398.
+Iter:       300   Time(s):0.5523       ms/it: 5.52       Mlup/s:    398.
+Iter:       400   Time(s):0.5512       ms/it: 5.51       Mlup/s:    399.
+Iter:       500   Time(s):0.5509       ms/it: 5.51       Mlup/s:    399.
+Iter:       600   Time(s):0.5507       ms/it: 5.51       Mlup/s:    399.
+Iter:       700   Time(s):0.5502       ms/it: 5.50       Mlup/s:    399.
+Iter:       800   Time(s):0.5506       ms/it: 5.51       Mlup/s:    399.
+Iter:       900   Time(s):0.5512       ms/it: 5.51       Mlup/s:    399.
+Iter:      1000   Time(s):0.5528       ms/it: 5.53       Mlup/s:    397.
+==101544== Profiling application: ./lbCUDA
+==101544== Profiling result:
+            Type  Time(%)      Time     Calls       Avg       Min       Max  Name
+ GPU activities:   39.52%  2.13128s      1000  2.1313ms  2.0969ms  2.4475ms  kernels_fluid_time_step_cg_
+                   32.73%  1.76507s      1000  1.7651ms  1.6792ms  1.9084ms  kernels_fluid_stream_cg_
+                   12.38%  667.53ms      1000  667.53us  614.11us  716.70us  kernels_fluid_init_rho_cg_
+                    6.97%  375.91ms      2000  187.95us  8.7000us  385.98us  kernels_fluid_bc_per_x2_
+                    2.63%  142.04ms      1000  142.04us  137.18us  148.70us  kernels_fluid_stream_cg_x_
+                    1.20%  64.973ms      2000  32.486us  2.3960us  68.603us  kernels_fluid_bc_edge_z2_
+                    0.95%  51.148ms      2000  25.573us  3.6760us  52.540us  kernels_fluid_bc_per_y2_
+                    0.86%  46.449ms      2000  23.224us  2.5870us  49.564us  kernels_fluid_bc_edge_y2_
+                    0.85%  45.740ms      2000  22.869us  3.1960us  46.235us  kernels_fluid_bc_per_z2_
+                    0.68%  36.684ms      2000  18.342us  2.1720us  40.060us  kernels_fluid_bc_edge_x2_
+                    0.31%  16.701ms      1000  16.701us  15.996us  19.644us  kernels_fluid_stream_cg_y_
+                    0.30%  15.938ms      1000  15.937us  15.292us  18.396us  kernels_fluid_stream_cg_z_
+                    0.29%  15.609ms         1  15.609ms  15.609ms  15.609ms  kernels_fluid_setup2_
+                    0.25%  13.721ms      2437  5.6300us  1.6630us  2.5450ms  [CUDA memcpy DtoH]
+                    0.06%  3.1874ms      2000  1.5930us  1.4670us  1.9160us  kernels_fluid_bc_corners_
+                    0.01%  653.15us       455  1.4350us  1.3760us  2.1760us  [CUDA memcpy HtoD]
+      API calls:   86.99%  5.22351s      2005  2.6052ms  6.5800us  15.612ms  cudaDeviceSynchronize
+                    6.27%  376.46ms       160  2.3529ms  10.734us  374.44ms  cudaMemcpyToSymbol
+                    3.75%  225.09ms     20001  11.253us  7.8410us  1.5112ms  cudaLaunchKernel
+                    1.04%  62.332ms      2137  29.167us  22.525us  126.40us  cudaMemcpyFromSymbol
+                    0.64%  38.605ms         2  19.302ms  19.203ms  19.402ms  cudaMallocHost
+                    0.33%  19.732ms       595  33.163us  9.8060us  2.5646ms  cudaMemcpy
+                    0.26%  15.873ms        10  1.5873ms  9.8900us  6.7259ms  cudaMalloc
+                    0.22%  13.463ms         2  6.7315ms  6.6210ms  6.8421ms  cudaFreeHost
+                    0.14%  8.5389ms      1001  8.5300us  6.6210us  38.854us  cudaEventSynchronize
+                    0.13%  7.9904ms      1001  7.9820us  6.7190us  45.870us  cudaEventElapsedTime
+                    0.09%  5.6827ms      1013  5.6090us  4.4490us  36.438us  cudaEventRecord
+                    0.05%  3.2840ms         4  821.01us  813.46us  835.75us  cuDeviceTotalMem
+                    0.04%  2.3298ms       404  5.7660us     207ns  268.70us  cuDeviceGetAttribute
+                    0.01%  869.92us      2002     434ns     313ns  3.5840us  cudaGetLastError
+                    0.01%  554.44us         1  554.44us  554.44us  554.44us  cudaGetDeviceProperties
+                    0.00%  216.51us         4  54.126us  50.070us  58.211us  cuDeviceGetName
+                    0.00%  11.387us         2  5.6930us  2.1100us  9.2770us  cudaEventCreate
+                    0.00%  10.816us         4  2.7040us  1.0310us  4.6430us  cuDeviceGetPCIBusId
+                    0.00%  9.7180us         2  4.8590us  4.1010us  5.6170us  cudaPointerGetAttributes
+                    0.00%  6.5080us         2  3.2540us  2.9710us  3.5370us  cudaGetDevice
+                    0.00%  2.7840us         8     348ns     242ns     588ns  cuDeviceGet
+                    0.00%  1.7710us         4     442ns     320ns     625ns  cuDeviceGetUuid
+                    0.00%  1.2570us         3     419ns     331ns     590ns  cuDeviceGetCount
+                    0.00%  1.1100us         2     555ns     319ns     791ns  cudaRuntimeGetVersion

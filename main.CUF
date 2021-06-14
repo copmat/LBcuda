@@ -4,6 +4,7 @@ program TestLB
   use cudafor
   use dimensions_m
   use kernels_fluid
+  use kernels_fluid_cg
   use write_output
   implicit none
 
@@ -88,15 +89,18 @@ program TestLB
   do step=1, nIter
 
     if (withCG) then
+#ifdef PARTICLES
       if (withParticles) then
         call init_isfluid_CG<<<dimGrid, dimBlock>>>(step, flipflop)
         call fixPeriodic_isfluid
         call del_fluid_CG<<<dimGrid, dimBlock>>>(step, flipflop, lrotate)
       endif
+#endif
 
       call init_rho_CG<<<dimGrid, dimBlock>>>(step, flipflop)
       call fixPeriodic(.false., .true.)
 
+#ifdef PARTICLES
       if (withParticles) then
         call make_fluid_CG<<<dimGrid, dimBlock>>>(step, flipflop, lrotate)
         call fixPeriodic(.false., .true.)
@@ -109,6 +113,7 @@ program TestLB
         call fixPeriodic(.false., .true.)
         ! call OutputVTK("wall_",step, flipflop)
       endif
+#endif
 
       call time_step_CG<<<dimGrid, dimBlock>>>(step, flipflop)
       ! call OutputVTK("cg_",step, flipflop)
@@ -116,6 +121,7 @@ program TestLB
       call fixPeriodic(.true., .false.)
       call abortOnLastErrorAndSync("fixPeriodic",step, flipflop)
       
+#ifdef PARTICLES
       if (withParticles) then
         call partBB_CG<<<dimGrid, dimBlock>>>(step, flipflop, lrotate)
         call abortOnLastErrorAndSync("partBB_CG",step, flipflop)
@@ -133,6 +139,7 @@ program TestLB
 
         call fixPeriodic(.true., .false.)
       endif
+#endif
 
       ! Boundary Conditions with new flipflop
       call doBoundary
@@ -145,6 +152,7 @@ program TestLB
       call stream_CG_y<<<dimGridy, dimBlock2>>>(step, flipflop)
       call stream_CG_z<<<dimGridz, dimBlock2>>>(step, flipflop)
       
+#ifdef PARTICLES
       if (withParticles) then
         call time_step_force_particles<<<dimGridAtm, dimBlockAtm>>>(step, flipflop, lrotate, numAtoms)
         
@@ -158,7 +166,9 @@ program TestLB
 
         call updateListAtoms(3 - flipflop)  ! Use new pos
       endif
+#endif
     else
+#ifdef BGKn
       ! if (forced) then
       !   if (const_forced) then
       !     call time_step_force_cost<<<dimGrid, dimBlock>>>(step, flipflop, omega, 1.0 - omega)
@@ -185,6 +195,7 @@ program TestLB
       call stream_BGK_x<<<dimGridx, dimBlock2>>>(step, flipflop)
       call stream_BGK_y<<<dimGridy, dimBlock2>>>(step, flipflop)
       call stream_BGK_z<<<dimGridz, dimBlock2>>>(step, flipflop)
+#endif
     endif
 
     call abortOnLastErrorAndSync("time step",step, flipflop)

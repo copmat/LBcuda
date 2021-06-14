@@ -1,0 +1,407 @@
+#include "defines.h"
+
+  module kernels_bgk
+    use dimensions_m
+    use kernel_fluid
+    implicit none
+
+  contains
+    
+    ! Setup
+    attributes(global) subroutine setup(vx,vy,vz)
+      real, value :: vx,vy,vz
+      integer :: i,j,k, l
+      real    :: rho, u,v,w, eq, x,y,z
+  
+      i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
+      j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
+      k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
+
+      ! if (k>nz/2) then
+      !   rho = 1.01
+      ! else
+      !   rho = 0.99
+      ! endif
+
+      x = 3.14159265358979 / nx * i
+      y = 3.14159265358979 / ny * j
+      z = 3.14159265358979 / nz * k
+      rho = 1 + 0.1*sin(x)*sin(x) * sin(y)*sin(y) * sin(z)*sin(z)
+
+      u = vx
+      v = vy
+      w = vz
+      ! write(*,*) 'CUDA setup',rho,i,j,k
+  
+      rhoR_d(i,j,k) = rho
+      do l = 0, npops-1
+        eq = equil(rho, u,v,w, l)
+        popsR_d(i,j,k, l, 1) = eq
+      end do
+
+      myfluid_d(i,j,k, 1) = fluid_fluid
+      myfluid_d(i,j,k, 2) = fluid_fluid
+    end subroutine setup
+
+
+#ifdef BGK
+    ! Compute forces on lattice
+    attributes(global) subroutine lb_force()
+      integer :: i,j,k, l
+  
+      i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
+      j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
+      k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
+
+      force_d(1, i,j,k) = 0.0
+      force_d(2, i,j,k) = 0.0
+      force_d(3, i,j,k) = 0.0
+    end subroutine
+
+
+    ! Time Step
+    attributes(global) subroutine time_step(step, flip, omega,oneminusomega)
+      integer, value :: step,flip
+      real, value :: omega,oneminusomega
+      real    :: rho,invrho, u,v,w
+      integer :: i,j,k, l, flop
+      integer :: i1,j1,k1
+  
+      i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
+      j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
+      k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
+      ! if (step==1 .and. 1==i*j*k) write(*,*) 'CUDA time_step] i,k:',i,j,k
+
+      rho = compute_rho(popsR_d,i,j,k,flip)
+      if (rho < 1.0E-7) then
+       write(*,*) 'Rho error:',rho,i,j,k
+       stop_d = __LINE__
+      endif
+
+      invrho = 1.0 / rho
+      u   = compute_u_1fl(popsR_d,i,j,k,flip, invrho)
+      v   = compute_v_1fl(popsR_d,i,j,k,flip, invrho)
+      w   = compute_w_1fl(popsR_d,i,j,k,flip, invrho)
+  
+      flop = 3 - flip
+      do l = 0, npops-1
+        i1 = i + ex_d(l)
+        j1 = j + ey_d(l)
+        k1 = k + ez_d(l)
+        popsR_d(i1,j1,k1, l, flop) = popsR_d(i,j,k, l, flip)*oneminusomega + equil(rho, u,v,w, l)*omega
+      end do
+    end subroutine time_step
+
+    attributes(global) subroutine time_step_force_cost(step, flip, omega,oneminusomega)
+      integer, value :: step,flip
+      real, value :: omega,oneminusomega
+      real    :: rho,invrho, u,v,w, fx,fy,fz
+      real    :: oldflu,feq,feqshift
+      integer :: i,j,k, l, flop
+      integer :: i1,j1,k1
+  
+      i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
+      j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
+      k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
+      ! if (1==step.and.1==i*j*k) write(*,*) 'CUDA time_step_force_cost] i,k:',i,j,k
+
+      rho = compute_rho(popsR_d,i,j,k,flip)
+      if (rho < 1.0E-7) then
+       write(*,*) 'Rho error:',rho,i,j,k
+       stop_d = __LINE__
+      endif
+
+      invrho = 1.0 / rho
+      u   = compute_u_1fl(popsR_d,i,j,k,flip, invrho)
+      v   = compute_v_1fl(popsR_d,i,j,k,flip, invrho)
+      w   = compute_w_1fl(popsR_d,i,j,k,flip, invrho)
+
+      fx = fx_d * invrho
+      fy = fy_d * invrho
+      fz = fz_d * invrho
+      if (abs(fx) > 5.0E-1 .or. abs(fy) > 5.0E-1 .or. abs(fz) > 5.0E-1) then
+       write(*,*) 'Big fx,fy,fz:',fx,fy,fz
+       stop_d = __LINE__
+      endif
+  
+      flop = 3 - flip
+      do l = 0, npops-1
+        i1 = i + ex_d(l)
+        j1 = j + ey_d(l)
+        k1 = k + ez_d(l)
+      
+        !!!!!
+        ! THIS is not like Krueger...same as ML
+        !!!!!
+        oldflu   = popsR_d(i,j,k, l, flip)
+        feq      = equil(rho, u,   v,   w, l)
+        feqshift = equil(rho, u+fx,v+fy,w+fz, l)
+
+        popsR_d(i1,j1,k1, l, flop) = oldflu*oneminusomega  - feq*oneminusomega + feqshift
+      end do
+    end subroutine time_step_force_cost
+
+    attributes(global) subroutine time_step_force(step, flip, omega,oneminusomega)
+      integer, value :: step,flip
+      real, value :: omega,oneminusomega
+      real    :: rho,invrho, u,v,w, fx,fy,fz
+      real    :: oldflu,feq,feqshift
+      integer :: i,j,k, l, flop
+      integer :: i1,j1,k1
+  
+      i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
+      j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
+      k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
+      ! if (1==step.and.1==i*j*k) write(*,*) 'CUDA time_step_force] i,k:',i,j,k
+
+      rho = compute_rho(popsR_d,i,j,k,flip)
+      if (rho < 1.0E-7) then
+       write(*,*) 'Rho error:',rho,i,j,k
+       stop_d = __LINE__
+      endif
+
+      invrho = 1.0 / rho
+      u   = compute_u_1fl(popsR_d,i,j,k,flip, invrho)
+      v   = compute_v_1fl(popsR_d,i,j,k,flip, invrho)
+      w   = compute_w_1fl(popsR_d,i,j,k,flip, invrho)
+
+      fx = force_d(1, i,j,k) * invrho
+      fy = force_d(2, i,j,k) * invrho
+      fz = force_d(3, i,j,k) * invrho
+      if (abs(fx) > 5.0E-1 .or. abs(fy) > 5.0E-1 .or. abs(fz) > 5.0E-1) then
+       write(*,*) 'Big fx,fy,fz:',fx,fy,fz
+       stop_d = __LINE__
+      endif
+  
+      flop = 3 - flip
+      do l = 0, npops-1
+        i1 = i + ex_d(l)
+        j1 = j + ey_d(l)
+        k1 = k + ez_d(l)
+      
+        !!!!!
+        ! THIS is not like Kruger...same as ML
+        !!!!!
+        oldflu   = popsR_d(i,j,k, l, flip)
+        feq      = equil(rho, u,   v,   w, l)
+        feqshift = equil(rho, u+fx,v+fy,w+fz, l)
+        popsR_d(i1,j1,k1, l, flop) = oldflu*oneminusomega - feq*oneminusomega + feqshift
+      end do
+    end subroutine time_step_force
+#endif
+
+    attributes(global) subroutine init_rho_isfluid_BGK(step, flip)
+    integer, value :: step,flip
+    real    :: rhoR
+    integer :: i,j,k, l
+
+    i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
+    j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
+    k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
+    ! if (step==1 .and. 1==i*j*k) write(*,*) 'CUDA init_rho_isfluid_BGK] i,k:',i,j,k
+
+    ! Only on fluid nodes
+    if (myfluid_d(i,j,k, flip) == fluid_fluid) then
+      rhoR = compute_rho(popsR_d,i,j,k,flip)
+
+      if (rhoR<minRho .or. rhoR>10) then
+        ! write(*,*) 'init_rho_isfluid_BGK]Range error rhoR', step, linear(i,j,k), rhoR
+        stop_d = __LINE__
+      endif
+
+      rhoR_d(i,j,k) = rhoR
+    else
+      rhoR_d(i,j,k) = MINDENS
+    endif
+    end subroutine init_rho_isfluid_BGK
+
+
+    attributes(global) subroutine time_step_BGK(step, flip, omega,oneminusomega)
+      integer, value :: step,flip
+      real, value :: omega,oneminusomega
+      real    :: rhoR, invrho, u,v,w  
+      integer :: i,j,k, l
+      
+  
+      i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
+      j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
+      k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
+      ! if (step==1 .and. 1==i*j*k) write(*,*) 'CUDA time_step_CG] i,k:',i,j,k
+
+      if (myfluid_d(i,j,k, flip) == fluid_fluid) then
+        rhoR = rhoR_d(i,j,k)
+
+        invrho = 1.0 / rhoR
+        u   = compute_u_1fl(popsR_d,i,j,k,flip, invrho)
+        v   = compute_v_1fl(popsR_d,i,j,k,flip, invrho)
+        w   = compute_w_1fl(popsR_d,i,j,k,flip, invrho)
+
+        !bgk step
+        do l = 0, npops-1
+          popsR_d(i,j,k,l, flip) = popsR_d(i,j,k, l, flip)*oneminusomega + equil(rhoR,u,v,w, l)*omega
+        enddo
+      endif
+    end subroutine time_step_BGK
+
+    attributes(global) subroutine copy_BGK(step, flip)
+      integer, value :: step,flip
+      integer :: i,j,k, l, flop
+
+      i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
+      j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
+      k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
+      ! if (step==1 .and. 1==i*j*k) write(*,*) 'CUDA copy_BGK] i,k:',i,j,k
+
+      flop = 3 - flip
+      
+      do l = 0, npops-1
+        popsR_d(i,j,k,l, flop) = popsR_d(i,j,k,l, flip)
+      enddo
+    end subroutine copy_BGK
+
+
+    attributes(global) subroutine stream_BGK(step, flip)
+      integer, value :: step,flip
+      integer :: i,j,k, l, flop
+      integer :: i1,j1,k1
+
+
+      i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
+      j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
+      k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
+      ! if (step==1 .and. 1==i*j*k) write(*,*) 'CUDA stream_BGK] i,k:',i,j,k
+
+      flop = 3 - flip
+
+      ! Streaming      
+      if (myfluid_d(i,j,k, flip) /= fluid_spheredead) then
+        do l = 1, npops-1
+          i1 = i + ex_d(l)
+          j1 = j + ey_d(l)
+          k1 = k + ez_d(l)
+          popsR_d(i1,j1,k1,l, flop) = popsR_d(i,j,k,l, flip)
+        enddo
+      endif    
+    end subroutine stream_BGK
+
+    attributes(global) subroutine stream_BGK_x(step, flip)
+      integer, value :: step,flip
+      integer :: i,j,k, l, flop
+      integer :: i1,j1,k1
+  
+      j = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
+      k = (blockIdx%y-1) * TILE_DIM + threadIdx%y - 1
+
+      if (j>ny+1) return
+      if (k>nz+1) return
+
+      flop = 3 - flip
+
+      ! Stream x=0
+      i = 0
+      if (myfluid_d(i,j,k, flip) /= fluid_spheredead) then
+        do l = 1, npops-1
+          i1 = i + ex_d(l)
+          j1 = j + ey_d(l)
+          k1 = k + ez_d(l)
+          if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz) then
+            popsR_d(i1,j1,k1,l, flop) = popsR_d(i,j,k,l, flip)
+          endif
+        end do
+      endif
+
+      ! Stream x=nx+1
+      i = nx+1
+      if (myfluid_d(i,j,k, flip) /= fluid_spheredead) then
+        do l = 1, npops-1
+          i1 = i + ex_d(l)
+          j1 = j + ey_d(l)
+          k1 = k + ez_d(l)
+          if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz) then
+            popsR_d(i1,j1,k1,l, flop) = popsR_d(i,j,k,l, flip)
+          endif
+        end do
+      endif
+    end subroutine stream_BGK_x
+
+    attributes(global) subroutine stream_BGK_y(step, flip)
+    integer, value :: step,flip
+    integer :: i,j,k, l, flop
+    integer :: i1,j1,k1
+
+    i = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
+    k = (blockIdx%y-1) * TILE_DIM + threadIdx%y - 1
+    
+    if (i>nx+1) return
+    if (k>nz+1) return
+
+    flop = 3 - flip
+
+    ! Stream y=0
+    j = 0
+    if (myfluid_d(i,j,k, flip) /= fluid_spheredead) then
+      do l = 1, npops-1
+        i1 = i + ex_d(l)
+        j1 = j + ey_d(l)
+        k1 = k + ez_d(l)
+        if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz) then
+          popsR_d(i1,j1,k1,l, flop) = popsR_d(i,j,k,l, flip)
+        endif
+      end do
+    endif
+
+    ! Stream y=ny+1
+    j = ny+1
+    if (myfluid_d(i,j,k, flip) /= fluid_spheredead) then
+      do l = 1, npops-1
+        i1 = i + ex_d(l)
+        j1 = j + ey_d(l)
+        k1 = k + ez_d(l)
+        if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz) then
+          popsR_d(i1,j1,k1,l, flop) = popsR_d(i,j,k,l, flip)
+        endif
+      end do
+    endif
+  end subroutine stream_BGK_y
+
+  attributes(global) subroutine stream_BGK_z(step, flip)
+    integer, value :: step,flip
+    integer :: i,j,k, l, flop
+    integer :: i1,j1,k1
+
+    i = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
+    j = (blockIdx%y-1) * TILE_DIM + threadIdx%y - 1
+    
+    if (i>nx+1) return
+    if (j>ny+1) return
+
+    flop = 3 - flip
+
+    ! Stream z=0
+    k = 0
+    if (myfluid_d(i,j,k, flip) /= fluid_spheredead) then
+      do l = 1, npops-1
+        i1 = i + ex_d(l)
+        j1 = j + ey_d(l)
+        k1 = k + ez_d(l)
+        if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz) then
+          popsR_d(i1,j1,k1,l, flop) = popsR_d(i,j,k,l, flip)
+        endif
+      end do
+    endif
+
+    ! Stream z=nz+1
+    k = nz+1
+    if (myfluid_d(i,j,k, flip) /= fluid_spheredead) then
+      do l = 1, npops-1
+        i1 = i + ex_d(l)
+        j1 = j + ey_d(l)
+        k1 = k + ez_d(l)
+        if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz) then
+          popsR_d(i1,j1,k1,l, flop) = popsR_d(i,j,k,l, flip)
+        endif
+      end do
+    endif
+  end subroutine stream_BGK_z    
+
+  end module kernels_bgk
