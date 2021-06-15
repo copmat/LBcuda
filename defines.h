@@ -1,6 +1,6 @@
-#define BGK
+#define noBGK
 #define CG
-#define noPARTICLES
+#define PARTICLES
 
 #define noDEBUG_FORCE
 #define noDEBUG_ROT

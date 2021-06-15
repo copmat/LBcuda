@@ -5,6 +5,7 @@ program TestLB
   use dimensions_m
   use kernels_fluid
   use kernels_fluid_cg
+  use kernels_fluid_part
   use write_output
   implicit none
 
@@ -168,7 +169,7 @@ program TestLB
       endif
 #endif
     else
-#ifdef BGKn
+#ifdef BGK
       ! if (forced) then
       !   if (const_forced) then
       !     call time_step_force_cost<<<dimGrid, dimBlock>>>(step, flipflop, omega, 1.0 - omega)
