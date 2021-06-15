@@ -4,6 +4,7 @@ program TestLB
   use cudafor
   use dimensions_m
   use kernels_fluid
+  use kernels_fluid_subs
   use write_output
   implicit none
 
