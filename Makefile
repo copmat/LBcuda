@@ -1,6 +1,6 @@
 CUDAFLAGS = -cuda -gpu=cc70 -O0 -g -Mbounds -Mchkptr -Mchkstk
 CUDAFLAGS = -cuda -gpu=cc70,keepptx -O0 -g
-CUDAFLAGS = -cuda -gpu=cc70
+CUDAFLAGS = -cuda -gpu=cc70 -fast
 
 lbCUDA: main.o dimensions_m.o kernels_fluid.o write_output.o
 	pgfortran $(CUDAFLAGS) $(F90FLAGS) -o $@ main.o dimensions_m.o kernels_fluid.o write_output.o

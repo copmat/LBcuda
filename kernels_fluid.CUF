@@ -1418,6 +1418,9 @@
         !bgk step
         do l = 0, npops-1
             tempR(l) = popsR_d(i,j,k, l, flip)*oneminusomega + equil(rhoR,u,v,w, l)*omega
+        enddo
+
+        do l = 0, npops-1
             tempB(l) = popsB_d(i,j,k, l, flip)*oneminusomega + equil(rhoB,u,v,w, l)*omega
         enddo
 
@@ -1478,6 +1481,9 @@
         ! Store to mem
         do l = 0, npops-1
           popsR_d(i,j,k,l, flip) = tempR(l)
+        enddo
+
+        do l = 0, npops-1
           popsB_d(i,j,k,l, flip) = tempB(l)
         enddo
         
@@ -1641,10 +1647,17 @@
           j1 = j + ey_d(l)
           k1 = k + ez_d(l)
           popsR_d(i1,j1,k1,l, flop) = popsR_d(i,j,k,l, flip)
+        enddo
+    
+        do l = 1, npops-1
+          i1 = i + ex_d(l)
+          j1 = j + ey_d(l)
+          k1 = k + ez_d(l)
           popsB_d(i1,j1,k1,l, flop) = popsB_d(i,j,k,l, flip)
         enddo
       endif
-    
+
+
     end subroutine stream_CG
 
     attributes(global) subroutine stream_CG_x(step, flip)
