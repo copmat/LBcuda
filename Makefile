@@ -7,7 +7,7 @@ CUDAFLAGS = -cuda -fast -gpu=cc70,cuda11.0,lineinfo
 lbCUDA: main.o dimensions_m.o kernels_fluid.o kernels_fluid_CG.o kernels_fluid_PART.o write_output.o
 	pgfortran $(CUDAFLAGS) $(F90FLAGS) -o $@ main.o dimensions_m.o kernels_fluid.o write_output.o kernels_fluid_CG.o kernels_fluid_PART.o
 
-main.o: dimensions_m.mod kernels_fluid.o kernels_fluid_CG.o write_output.o main.CUF 
+main.o: dimensions_m.mod kernels_fluid.o kernels_fluid_CG.o kernels_fluid_PART.o write_output.o main.CUF 
 	pgfortran $(CUDAFLAGS) $(F90FLAGS) -c main.CUF
 
 dimensions_m.o: defines.h dimensions_m.CUF

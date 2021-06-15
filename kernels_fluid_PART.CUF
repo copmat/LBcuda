@@ -857,6 +857,7 @@
             atmDist = deltai*deltai + deltaj*deltaj + deltak*deltak
             ! only call n2p_bb if near THIS atom...
             if (atmDist < sphereMax_d) then
+#ifdef CHECK_WRONGATOM
               if (debugfluid_d(i,j,k) /= i_atm) then
                 xxx = nint(pos_d(1,debugfluid_d(i,j,k), flip))
                 yyy = nint(pos_d(2,debugfluid_d(i,j,k), flip))
@@ -866,10 +867,10 @@
                 deltaj = getDeltaj(j, yyy)
                 deltak = getDeltak(k, zzz)
                 okDist = deltai*deltai + deltaj*deltaj + deltak*deltak
-                write(*,*) 'partBB_CG]Wrong atom', linear(i,j,k), &
-                    i_atm+0.001*atmDist, debugfluid_d(i,j,k)+0.001*okDist
+                write(*,*) 'partBB_CG]Wrong atom', linear(i,j,k), i_atm+0.001*atmDist, debugfluid_d(i,j,k)+0.001*okDist
                 ! stop_d = __LINE__
               endif
+#endif
               call node_to_particle_bounce_back_bc2(step, flip, i_atm, i,j,k, lrotate)
             endif
           endif
@@ -927,11 +928,13 @@
             atmDist = deltai*deltai + deltaj*deltaj + deltak*deltak
             ! only call P2N_bb if near THIS atom...
             if (atmDist < sphereMax_d) then
+#ifdef CHECK_WRONGATOM
               if (debugfluid_d(i,j,k) /= i_atm) then
                 write(*,*) 'partBB_CG_p2n2]Wrong atom', linear(i,j,k), &
                     i_atm+0.001*atmDist, debugfluid_d(i,j,k)+0
                 ! stop_d = __LINE__
               endif
+#endif
               call particle_to_node_bounce_back_bc2_phase2(step, flip, i_atm, i,j,k, lrotate)
             endif
           endif
@@ -1030,7 +1033,7 @@
 
         if (oldpartVol_d>0 .and. partVol_d /= oldpartVol_d) then        
           write(*,*) 'partVol_d /= oldpartVol_d ->', partVol_d, oldpartVol_d
-          stop_d = __LINE__      
+          ! stop_d = __LINE__      
         endif
         
         countmk_d = 0
@@ -1314,10 +1317,10 @@
           tempFoo1 = atomicadd( forceAtoms_d(3,iatm,flip), -ftemp(3) )
           tempFoo1 = atomicadd( forceAtoms_d(3,jatm,flip),  ftemp(3) )
 
-          write(*,*) '<=hz_rmin]', linear(0,iatm,jatm), xdf,ydf,zdf, rrr
-          write(*,*) '<=hz_rmin]', linear(0,iatm,jatm), ftemp(1),ftemp(2),ftemp(3)
-          write(*,*) '<=hz_rmin]', iatm, linear( nint(xi(1)),nint(xi(2)),nint(xi(3)) )
-          write(*,*) '<=hz_rmin]', jatm, linear( nint(xj(1)),nint(xj(2)),nint(xj(3)) )
+          ! write(*,*) '<=hz_rmin]', linear(0,iatm,jatm), xdf,ydf,zdf, rrr
+          ! write(*,*) '<=hz_rmin]', linear(0,iatm,jatm), ftemp(1),ftemp(2),ftemp(3)
+          ! write(*,*) '<=hz_rmin]', iatm, linear( nint(xi(1)),nint(xi(2)),nint(xi(3)) )
+          ! write(*,*) '<=hz_rmin]', jatm, linear( nint(xj(1)),nint(xj(2)),nint(xj(3)) )
         endif
 
         if (llubrication) then

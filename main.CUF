@@ -24,7 +24,7 @@ program TestLB
 
   ! events for timing
   type (cudaEvent) :: startEvent, stopEvent
-  integer(8)	   :: clock_rate
+  integer(8)	   :: clock_rate, c_stopAtom,c_startAtom, diff_listatom
 
   ! misc
   type (dim3) :: dimGrid, dimBlock, dimGridx,dimGridy,dimGridz, dimBlock2
@@ -165,7 +165,10 @@ program TestLB
         if (lrotate) call dumpRot(step, flipflop)
 #endif
 
+         call system_clock(c_startAtom)
         call updateListAtoms(3 - flipflop)  ! Use new pos
+         call system_clock(c_stopAtom)
+         diff_listatom = diff_listatom + c_stopAtom-c_startAtom
       endif
 #endif
     else
@@ -213,6 +216,10 @@ program TestLB
     if (mod(step,niterOut)==0) then
        write(*,fmt=100)  step, time*0.001, time/niterOut, lup * niterOut / time / 1000.
 100    format('Iter:',I10,'   Time(s):', G10.4, '   ms/it:',G9.3, '   Mlup/s:',F8.0)
+
+       write(*,fmt=101)  step, diff_listatom/real(clock_rate)
+101    format('Iter:',I10,'   ListAtom Time(s):', F10.3)
+       diff_listatom = 0
 
        istat = cudaEventRecord(startEvent, 0)
     endif
@@ -610,12 +617,16 @@ program TestLB
               if (n1st == 0) then
                 n1st = n
                 findAtoms(1, i,j,k) = n
+              	if (n>=256**2 / 2 -1) then
+              	  write(*,*) "findAtoms at:",i,j,k, "=", n, " > max int(2). STOP"
+		  stop
+		endif
               endif
             
             enddo
             if (n1st /= 0) then
               findAtoms(2, i,j,k) = n
-              ! write(*,*) step, "findAtoms at:",i,j,k, "=", findAtoms(1, i,j,k), findAtoms(2, i,j,k)
+              ! if (step<1) write(*,*) "findAtoms at:",i,j,k, "=", findAtoms(1, i,j,k), findAtoms(2, i,j,k)
             endif
 
           enddo
