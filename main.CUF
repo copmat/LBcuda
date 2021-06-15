@@ -5,6 +5,7 @@ program TestLB
   use dimensions_m
   use kernels_fluid
   use kernels_fluid_subs
+  use kernels_particles
   use write_output
   implicit none
 
