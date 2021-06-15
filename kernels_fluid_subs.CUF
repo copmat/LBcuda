@@ -25,36 +25,6 @@
        pops(i,j,k,17, flip) + pops(i,j,k,18, flip)
     end function compute_rho
   
-    attributes(global) subroutine debug_issub
-      integer :: i,j,k, id, val
-
-      id = threadIdx%x
-
-      do k = -rmax_issub_d,rmax_issub_d
-        do j = -rmax_issub_d,rmax_issub_d
-          do i = -rmax_issub_d,rmax_issub_d
-            val = issub_d(i,j,k)
-            write(*,*) 'CUDA-issub', i,j,k, val
-          enddo
-        enddo
-      enddo
-
-    end subroutine debug_issub
-
-    attributes(device) pure function linear(i,j,k)
-      integer, intent(in) :: i,j,k
-      integer :: linear
-
-      linear = i*1000**2 + j*1000 + k
-    end function linear
-
-    attributes(device) pure function linear2(i,j,k)
-      integer, intent(in) :: i,j,k      
-      integer :: linear2
-
-      linear2 = (50+i)*1000**2 + (50+j)*1000 + (50+k)
-    end function linear2
-    
     attributes(device) function equil(rho,u,v,w, l)
      real, intent(in) :: rho,u,v,w
      integer, intent(in) :: l
