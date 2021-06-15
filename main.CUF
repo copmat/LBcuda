@@ -135,7 +135,7 @@ program TestLB
       endif
 
       ! Boundary Conditions with new flipflop
-      call doBoundary
+      !call doBoundary
       ! call OutputVTK("bb_",step, flipflop)
 
       ! call copy_CG<<<dimGrid, dimBlock>>>(step, flipflop)
