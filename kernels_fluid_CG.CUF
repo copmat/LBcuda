@@ -4,7 +4,11 @@
     use dimensions_m
     use kernels_fluid
     implicit none
-
+    
+   private :: equil
+   private :: linear,linear2
+   private :: compute_rho
+   private :: compute_u_1fl,compute_v_1fl,compute_w_1fl 
   contains
 
     attributes(device) pure function linear(i,j,k)

@@ -4,9 +4,21 @@
     use dimensions_m
     use kernel_fluid
     implicit none
-
-  contains
     
+    private :: equil
+ 
+  contains
+   
+    attributes(device) function equil(rho,u,v,w, l)
+     real, intent(in) :: rho,u,v,w
+     integer, intent(in) :: l
+     real :: equil
+     real :: uv
+
+     uv = (1.0/cssq) * (u*ex_d(l) + v*ey_d(l) + w*ez_d(l))
+     equil = rho * p_d(l)*(ONE+uv+HALF*(uv*uv)-(HALF/cssq) * (u*u + v*v + w*w))
+    end function equil
+ 
     ! Setup
     attributes(global) subroutine setup(vx,vy,vz)
       real, value :: vx,vy,vz

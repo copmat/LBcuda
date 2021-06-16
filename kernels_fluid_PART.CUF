@@ -4,7 +4,13 @@
     use dimensions_m
     use kernels_fluid
     implicit none
-
+    
+    private :: linear
+    private :: equil
+    private :: compute_rho
+    private :: compute_u_1fl
+    private :: compute_v_1fl
+    private :: compute_w_1fl
     contains
 
 
