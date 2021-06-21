@@ -205,14 +205,6 @@
       endif
     end subroutine init_rho_CG
 
-#define manual_u(pops)   invrho * ( pops(li,lj,lk,1) - pops(li,lj,lk,2) + pops(li,lj,lk,7) - pops(li,lj,lk,8) - pops(li,lj,lk,9) + \
-       pops(li,lj,lk,10) + pops(li,lj,lk,11) - pops(li,lj,lk,12) - pops(li,lj,lk,13) + pops(li,lj,lk,14) )
-
-#define manual_v(pops)   invrho * ( pops(li,lj,lk,3) - pops(li,lj,lk,4) + pops(li,lj,lk,7) - pops(li,lj,lk,8) + pops(li,lj,lk,9) - \
-       pops(li,lj,lk,10) + pops(li,lj,lk,15) - pops(li,lj,lk,16) - pops(li,lj,lk,17) + pops(li,lj,lk,18) )
-
-#define manual_w(pops)   invrho * ( pops(li,lj,lk,5) - pops(li,lj,lk,6) + pops(li,lj,lk,11) - pops(li,lj,lk,12) + pops(li,lj,lk,13) - \
-       pops(li,lj,lk,14) + pops(li,lj,lk,15) - pops(li,lj,lk,16) + pops(li,lj,lk,17) - pops(li,lj,lk,18) )
 
     attributes(global) subroutine time_step_CG(step, flip)
       integer, value :: step,flip
@@ -224,15 +216,7 @@
       real    :: psix,psiy,psiz,psinorm_sq,psinorm,acoeff,e_dot_psi
       real    :: temp,temp1, cosphi, feq
       real, parameter :: mylimit=1.e-20
-
-      real,shared    :: loc_tempR(TILE_DIMx,TILE_DIMy,TILE_DIMz,0:npops-1)
-      real,shared    :: loc_tempB(TILE_DIMx,TILE_DIMy,TILE_DIMz,0:npops-1)
-      real,shared    :: loc_fdum(TILE_DIMx,TILE_DIMy,TILE_DIMz,0:npops-1)
-
-      real,shared    :: loc_popsR(TILE_DIMx,TILE_DIMy,TILE_DIMz, 0:18)
-      real,shared    :: loc_popsB(TILE_DIMx,TILE_DIMy,TILE_DIMz, 0:18)
-      real,shared    :: loc_rhoR(0:TILE_DIMx+1,0:TILE_DIMy+1,0:TILE_DIMz+1)
-      real,shared    :: loc_rhoB(0:TILE_DIMx+1,0:TILE_DIMy+1,0:TILE_DIMz+1)
+      real,shared    :: tempR(TILE_DIMx,TILE_DIMy,TILE_DIMz,0:npops-1), tempB(TILE_DIMx,TILE_DIMy,TILE_DIMz,0:npops-1), fdum(TILE_DIMx,TILE_DIMy,TILE_DIMz,0:npops-1)
 
       integer :: i,j,k, i1,j1,k1,l
       integer :: li,lj,lk
@@ -246,103 +230,11 @@
       lj = threadIdx%y
       lk = threadIdx%z
 
-      loc_rhoR(li,lj,lk) = rhoR_d(i,j,k)
-
-      ! Halo Faces
-      if (li==1) then
-	loc_rhoR(li-1,lj,lk) = rhoR_d(i-1,j,k)
-      endif
-      if (li==TILE_DIMx) then
-	loc_rhoR(li+1,lj,lk) = rhoR_d(i+1,j,k)
-      endif
-
-      if (lj==1) then
-	loc_rhoR(li,lj-1,lk) = rhoR_d(i,j-1,k)
-      endif
-      if (lj==TILE_DIMy) then
-	loc_rhoR(li,lj+1,lk) = rhoR_d(i,j+1,k)
-      endif
-
-      if (lk==1) then
-	loc_rhoR(li,lj,lk-1) = rhoR_d(i,j,k-1)
-      endif
-      if (lk==TILE_DIMz) then
-	loc_rhoR(li,lj,lk+1) = rhoR_d(i,j,k+1)
-      endif
-
-      ! Halo edges
-      if (li==1 .and. lj==1) loc_rhoR(li-1,lj-1,lk) = rhoR_d(i-1,j-1,k)
-      if (li==1 .and. lj==TILE_DIMy) loc_rhoR(li-1,lj+1,lk) = rhoR_d(i-1,j+1,k)
-
-      if (li==1 .and. lk==1) loc_rhoR(li-1,lj,lk-1) = rhoR_d(i-1,j,k-1)
-      if (li==1 .and. lk==TILE_DIMz) loc_rhoR(li-1,lj,lk+1) = rhoR_d(i-1,j,k+1)
-
-      if (li==TILE_DIMx .and. lj==1) loc_rhoR(li+1,lj-1,lk) = rhoR_d(i+1,j-1,k)
-      if (li==TILE_DIMx .and. lj==TILE_DIMy) loc_rhoR(li+1,lj+1,lk) = rhoR_d(i+1,j+1,k)
-
-      if (li==TILE_DIMx .and. lk==1) loc_rhoR(li+1,lj,lk-1) = rhoR_d(i+1,j,k-1)
-      if (li==TILE_DIMx .and. lk==TILE_DIMz) loc_rhoR(li+1,lj,lk+1) = rhoR_d(i+1,j,k+1)
-
-      if (lj==1 .and. lk==1) loc_rhoR(li,lj-1,lk-1) = rhoR_d(i,j-1,k-1)
-      if (lj==1 .and. lk==TILE_DIMz) loc_rhoR(li,lj-1,lk+1) = rhoR_d(i,j-1,k+1)
-
-      if (lj==TILE_DIMy .and. lk==1) loc_rhoR(li,lj+1,lk-1) = rhoR_d(i,j+1,k-1)
-      if (lj==TILE_DIMy .and. lk==TILE_DIMz) loc_rhoR(li,lj+1,lk+1) = rhoR_d(i,j+1,k+1)
-
-      ! Ripeto per il blue
-      loc_rhoB(li,lj,lk) = rhoB_d(i,j,k)
-
-      ! Halo Faces
-      if (li==1) then
-	loc_rhoB(li-1,lj,lk) = rhoB_d(i-1,j,k)
-      endif
-      if (li==TILE_DIMx) then
-	loc_rhoB(li+1,lj,lk) = rhoB_d(i+1,j,k)
-      endif
-
-      if (lj==1) then
-	loc_rhoB(li,lj-1,lk) = rhoB_d(i,j-1,k)
-      endif
-      if (lj==TILE_DIMy) then
-	loc_rhoB(li,lj+1,lk) = rhoB_d(i,j+1,k)
-      endif
-
-      if (lk==1) then
-	loc_rhoB(li,lj,lk-1) = rhoB_d(i,j,k-1)
-      endif
-      if (lk==TILE_DIMz) then
-	loc_rhoB(li,lj,lk+1) = rhoB_d(i,j,k+1)
-      endif
-
-      ! Halo edges
-      if (li==1 .and. lj==1) loc_rhoB(li-1,lj-1,lk) = rhoB_d(i-1,j-1,k)
-      if (li==1 .and. lj==TILE_DIMy) loc_rhoB(li-1,lj+1,lk) = rhoB_d(i-1,j+1,k)
-
-      if (li==1 .and. lk==1) loc_rhoB(li-1,lj,lk-1) = rhoB_d(i-1,j,k-1)
-      if (li==1 .and. lk==TILE_DIMz) loc_rhoB(li-1,lj,lk+1) = rhoB_d(i-1,j,k+1)
-
-      if (li==TILE_DIMx .and. lj==1) loc_rhoB(li+1,lj-1,lk) = rhoB_d(i+1,j-1,k)
-      if (li==TILE_DIMx .and. lj==TILE_DIMy) loc_rhoB(li+1,lj+1,lk) = rhoB_d(i+1,j+1,k)
-
-      if (li==TILE_DIMx .and. lk==1) loc_rhoB(li+1,lj,lk-1) = rhoB_d(i+1,j,k-1)
-      if (li==TILE_DIMx .and. lk==TILE_DIMz) loc_rhoB(li+1,lj,lk+1) = rhoB_d(i+1,j,k+1)
-
-      if (lj==1 .and. lk==1) loc_rhoB(li,lj-1,lk-1) = rhoB_d(i,j-1,k-1)
-      if (lj==1 .and. lk==TILE_DIMz) loc_rhoB(li,lj-1,lk+1) = rhoB_d(i,j-1,k+1)
-
-      if (lj==TILE_DIMy .and. lk==1) loc_rhoB(li,lj+1,lk-1) = rhoB_d(i,j+1,k-1)
-      if (lj==TILE_DIMy .and. lk==TILE_DIMz) loc_rhoB(li,lj+1,lk+1) = rhoB_d(i,j+1,k+1)
-
-      ! Non serve halo
-      do l = 0, npops-1
-        loc_popsR(li,lj,lk, l) = popsR_d(i,j,k, l,flip)
-        loc_popsB(li,lj,lk, l) = popsB_d(i,j,k, l,flip)
-      enddo
-      call syncthreads
+      ! if (step==1 .and. 1==i*j*k) write(*,*) 'CUDA time_step_CG] i,k:',i,j,k
 
       if (myfluid_d(i,j,k, flip) == fluid_fluid) then
-        rhoR = loc_rhoR(li,lj,lk)
-        rhoB = loc_rhoB(li,lj,lk)
+        rhoR = rhoR_d(i,j,k)
+        rhoB = rhoB_d(i,j,k)
         rhosum = rhoR + rhoB
 
         rhoavg = rhoR/rhosum*viscR + rhoB/rhosum*viscB
@@ -350,18 +242,20 @@
         oneminusomega = 1.0 - omega
 
         invrho = 1.0 / rhosum
-        u   = manual_u(loc_popsR) + manual_u(loc_popsB)
-        v   = manual_v(loc_popsR) + manual_v(loc_popsB)
-        w   = manual_w(loc_popsR) + manual_w(loc_popsB)
+        u   = compute_u_1fl(popsR_d,i,j,k,flip, invrho) + compute_u_1fl(popsB_d,i,j,k,flip, invrho)
+        v   = compute_v_1fl(popsR_d,i,j,k,flip, invrho) + compute_v_1fl(popsB_d,i,j,k,flip, invrho)
+        w   = compute_w_1fl(popsR_d,i,j,k,flip, invrho) + compute_w_1fl(popsB_d,i,j,k,flip, invrho)
 
 
         !bgk step
         do l = 0, npops-1
-            loc_tempR(li,lj,lk, l) = loc_popsR(li,lj,lk, l)*oneminusomega + equil(rhoR,u,v,w, l)*omega
+            tempR(li,lj,lk,l) = popsR_d(i,j,k, l, flip)*oneminusomega + equil(rhoR,u,v,w, l)*omega
         enddo
         do l = 0, npops-1
-            loc_tempB(li,lj,lk, l) = loc_popsB(li,lj,lk, l)*oneminusomega + equil(rhoB,u,v,w, l)*omega
+            tempB(li,lj,lk,l) = popsB_d(i,j,k, l, flip)*oneminusomega + equil(rhoB,u,v,w, l)*omega
         enddo
+
+	! call syncthreads
 
 
         ! Psi calc
@@ -369,15 +263,15 @@
         psiy = ZERO
         psiz = ZERO
         do l = 1, npops-1
-          i1 = li + ex_d(l)
-          j1 = lj + ey_d(l)
-          k1 = lk + ez_d(l)
-          ! if (i1<1 .or. i1>nx .or. j1<1 .or. j1>ny .or.k1<1 .or. k1>nz) then
-          !   stop_d = __LINE__
-          ! endif
+          i1 = mod(i + ex_d(l) +nx-1, nx) + 1
+          j1 = mod(j + ey_d(l) +ny-1, ny) + 1
+          k1 = mod(k + ez_d(l) +nz-1, nz) + 1
+          if (i1<1 .or. i1>nx .or. j1<1 .or. j1>ny .or.k1<1 .or. k1>nz) then
+            stop_d = __LINE__
+          endif
 
-          rhoR_shifted = loc_rhoR(i1,j1,k1)
-          rhoB_shifted = loc_rhoB(i1,j1,k1)
+          rhoR_shifted = rhoR_d(i1,j1,k1)
+          rhoB_shifted = rhoB_d(i1,j1,k1)
           psi_shifted = (rhoR_shifted - rhoB_shifted) / (rhoR_shifted + rhoB_shifted)
           psix = psix + a_d(l)*ex_d(l)* psi_shifted
           psiy = psiy + a_d(l)*ey_d(l)* psi_shifted
@@ -395,7 +289,7 @@
               temp = psinorm*(p_d(l)*(e_dot_psi*e_dot_psi)/psinorm_sq - b_l_d(l))
               !if(isnan(temp)) temp=ZERO
 
-              loc_fdum(li,lj,lk, l) = loc_tempR(li,lj,lk, l) + loc_tempB(li,lj,lk, l) + acoeff*temp
+              fdum(li,lj,lk,l) = tempR(li,lj,lk,l) + tempB(li,lj,lk,l) + acoeff*temp
           enddo
 
           !recoloring step
@@ -412,17 +306,19 @@
 
               temp = beta_CG * rhoR * rhoB * cosphi/(rhosum*rhosum)
 
-              loc_tempR(li,lj,lk, l) = loc_fdum(li,lj,lk, l)*rhoR/rhosum + temp*feq
-              loc_tempB(li,lj,lk, l) = loc_fdum(li,lj,lk, l)*rhoB/rhosum - temp*feq
+              tempR(li,lj,lk,l) = fdum(li,lj,lk,l)*rhoR/rhosum + temp*feq
+              tempB(li,lj,lk,l) = fdum(li,lj,lk,l)*rhoB/rhosum - temp*feq
           enddo
         endif
 
+	! call syncthreads
+
         ! Store to mem
         do l = 0, npops-1
-          popsR_d(i,j,k,l, flip) = loc_tempR(li,lj,lk, l)
+          popsR_d(i,j,k,l, flip) = tempR(li,lj,lk,l)
         enddo
         do l = 0, npops-1
-          popsB_d(i,j,k,l, flip) = loc_tempB(li,lj,lk, l)
+          popsB_d(i,j,k,l, flip) = tempB(li,lj,lk,l)
         enddo
         
       endif
