@@ -169,7 +169,7 @@
 
     !!!!!!!!!!!!!!!!!!! Color gradient !!!!!!!!!!!!!!!!!!!
 
-#define manual_rho(pops) pops(i,j,k,0, flip) + pops(i,j,k,1, flip) + pops(i,j,k,2, flip) +   \
+#define manual_rho(pops) pops(i,j,k,0,flip) + pops(i,j,k,1,flip) + pops(i,j,k,2, flip) +   \
        pops(i,j,k,3, flip) + pops(i,j,k,4, flip) + pops(i,j,k,5, flip) + pops(i,j,k,6, flip) + pops(i,j,k,7, flip) +                     \
        pops(i,j,k,8, flip) + pops(i,j,k,9, flip) + pops(i,j,k,10, flip) + pops(i,j,k,11, flip) + pops(i,j,k,12, flip) +                  \
        pops(i,j,k,13, flip) + pops(i,j,k,14, flip) + pops(i,j,k,15, flip) + pops(i,j,k,16, flip) + pops(i,j,k,17, flip) + pops(i,j,k,18, flip)
@@ -205,14 +205,14 @@
       endif
     end subroutine init_rho_CG
 
-#define manual_u(pops)   invrho * ( pops(li,lj,lk,1) - pops(li,lj,lk,2) + pops(li,lj,lk,7) - pops(li,lj,lk,8) - pops(li,lj,lk,9) + \
-       pops(li,lj,lk,10) + pops(li,lj,lk,11) - pops(li,lj,lk,12) - pops(li,lj,lk,13) + pops(li,lj,lk,14) )
+#define manual_u(pops)   invrho * ( pops(1) - pops(2) + pops(7) - pops(8) - pops(9) + \
+       pops(10) + pops(11) - pops(12) - pops(13) + pops(14) )
 
-#define manual_v(pops)   invrho * ( pops(li,lj,lk,3) - pops(li,lj,lk,4) + pops(li,lj,lk,7) - pops(li,lj,lk,8) + pops(li,lj,lk,9) - \
-       pops(li,lj,lk,10) + pops(li,lj,lk,15) - pops(li,lj,lk,16) - pops(li,lj,lk,17) + pops(li,lj,lk,18) )
+#define manual_v(pops)   invrho * ( pops(3) - pops(4) + pops(7) - pops(8) + pops(9) - \
+       pops(10) + pops(15) - pops(16) - pops(17) + pops(18) )
 
-#define manual_w(pops)   invrho * ( pops(li,lj,lk,5) - pops(li,lj,lk,6) + pops(li,lj,lk,11) - pops(li,lj,lk,12) + pops(li,lj,lk,13) - \
-       pops(li,lj,lk,14) + pops(li,lj,lk,15) - pops(li,lj,lk,16) + pops(li,lj,lk,17) - pops(li,lj,lk,18) )
+#define manual_w(pops)   invrho * ( pops(5) - pops(6) + pops(11) - pops(12) + pops(13) - \
+       pops(14) + pops(15) - pops(16) + pops(17) - pops(18) )
 
     attributes(global) subroutine time_step_CG(step, flip)
       integer, value :: step,flip
@@ -225,15 +225,16 @@
       real    :: temp,temp1, cosphi, feq
       real, parameter :: mylimit=1.e-20
 
-      real,shared    :: loc_tempR(TILE_DIMx,TILE_DIMy,TILE_DIMz,0:npops-1)
-      real,shared    :: loc_tempB(TILE_DIMx,TILE_DIMy,TILE_DIMz,0:npops-1)
-      real,shared    :: loc_fdum(TILE_DIMx,TILE_DIMy,TILE_DIMz,0:npops-1)
+!      real,shared    :: loc_tempR(TILE_DIMx,TILE_DIMy,TILE_DIMz,0:npops-1)
+!      real,shared    :: loc_tempB(TILE_DIMx,TILE_DIMy,TILE_DIMz,0:npops-1)
+!      real,shared    :: loc_fdum(TILE_DIMx,TILE_DIMy,TILE_DIMz,0:npops-1)
 
-      real,shared    :: loc_popsR(TILE_DIMx,TILE_DIMy,TILE_DIMz, 0:18)
-      real,shared    :: loc_popsB(TILE_DIMx,TILE_DIMy,TILE_DIMz, 0:18)
+!      real,shared    :: loc_popsR(TILE_DIMx,TILE_DIMy,TILE_DIMz, 0:18)
+!      real,shared    :: loc_popsB(TILE_DIMx,TILE_DIMy,TILE_DIMz, 0:18)
       real,shared    :: loc_rhoR(0:TILE_DIMx+1,0:TILE_DIMy+1,0:TILE_DIMz+1)
       real,shared    :: loc_rhoB(0:TILE_DIMx+1,0:TILE_DIMy+1,0:TILE_DIMz+1)
-
+      
+      real :: loc_tempR(0:18),loc_tempB(0:18),loc_fdum(0:18)
       integer :: i,j,k, i1,j1,k1,l
       integer :: li,lj,lk
       
@@ -335,8 +336,8 @@
 
       ! Non serve halo
       do l = 0, npops-1
-        loc_popsR(li,lj,lk, l) = popsR_d(i,j,k, l,flip)
-        loc_popsB(li,lj,lk, l) = popsB_d(i,j,k, l,flip)
+        loc_tempR(l) = popsR_d(i,j,k, l,flip)
+        loc_tempB(l) = popsB_d(i,j,k, l,flip)
       enddo
       call syncthreads
 
@@ -350,17 +351,17 @@
         oneminusomega = 1.0 - omega
 
         invrho = 1.0 / rhosum
-        u   = manual_u(loc_popsR) + manual_u(loc_popsB)
-        v   = manual_v(loc_popsR) + manual_v(loc_popsB)
-        w   = manual_w(loc_popsR) + manual_w(loc_popsB)
+        u   = manual_u(loc_tempR) + manual_u(loc_tempB)
+        v   = manual_v(loc_tempR) + manual_v(loc_tempB)
+        w   = manual_w(loc_tempR) + manual_w(loc_tempB)
 
 
         !bgk step
         do l = 0, npops-1
-            loc_tempR(li,lj,lk, l) = loc_popsR(li,lj,lk, l)*oneminusomega + equil(rhoR,u,v,w, l)*omega
+            loc_tempR(l) = loc_tempR(l)*oneminusomega + equil(rhoR,u,v,w, l)*omega
         enddo
         do l = 0, npops-1
-            loc_tempB(li,lj,lk, l) = loc_popsB(li,lj,lk, l)*oneminusomega + equil(rhoB,u,v,w, l)*omega
+            loc_tempB(l) = loc_tempB(l)*oneminusomega + equil(rhoB,u,v,w, l)*omega
         enddo
 
 
@@ -395,7 +396,7 @@
               temp = psinorm*(p_d(l)*(e_dot_psi*e_dot_psi)/psinorm_sq - b_l_d(l))
               !if(isnan(temp)) temp=ZERO
 
-              loc_fdum(li,lj,lk, l) = loc_tempR(li,lj,lk, l) + loc_tempB(li,lj,lk, l) + acoeff*temp
+              loc_fdum(l) = loc_tempR(l) + loc_tempB(l) + acoeff*temp
           enddo
 
           !recoloring step
@@ -412,18 +413,18 @@
 
               temp = beta_CG * rhoR * rhoB * cosphi/(rhosum*rhosum)
 
-              loc_tempR(li,lj,lk, l) = loc_fdum(li,lj,lk, l)*rhoR/rhosum + temp*feq
-              loc_tempB(li,lj,lk, l) = loc_fdum(li,lj,lk, l)*rhoB/rhosum - temp*feq
+              popsR_d(i,j,k,l, flip) = loc_fdum(l)*rhoR/rhosum + temp*feq
+              popsB_d(i,j,k,l, flip) = loc_fdum(l)*rhoB/rhosum - temp*feq
           enddo
         endif
 
         ! Store to mem
-        do l = 0, npops-1
-          popsR_d(i,j,k,l, flip) = loc_tempR(li,lj,lk, l)
-        enddo
-        do l = 0, npops-1
-          popsB_d(i,j,k,l, flip) = loc_tempB(li,lj,lk, l)
-        enddo
+      !  do l = 0, npops-1
+      !    popsR_d(i,j,k,l, flip) = loc_tempR(li,lj,lk, l)
+      !  enddo
+      !  do l = 0, npops-1
+      !    popsB_d(i,j,k,l, flip) = loc_tempB(li,lj,lk, l)
+      !  enddo
         
       endif
     end subroutine time_step_CG

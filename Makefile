@@ -1,6 +1,6 @@
 CUDAFLAGS = -cuda -gpu=cc70 -O0 -g -Mbounds -Mchkptr -Mchkstk
 CUDAFLAGS = -cuda -gpu=cc70,keepptx -O0 -g
-CUDAFLAGS = -cuda -fast -gpu=cc70,cuda11.0,lineinfo
+CUDAFLAGS = -cuda -fast -gpu=cc70,cuda11.0,lineinfo -Minfo=accel
 
 
 
