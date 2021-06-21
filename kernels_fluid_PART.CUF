@@ -2141,4 +2141,111 @@
     end subroutine particle_to_node_bounce_back_bc2_phase2
 #endif    
 
+    attributes(global) subroutine makeListAtoms(step, flip, numAtoms)
+      integer, value    :: step,flip,numAtoms
+      integer           :: i,j,k
+      integer :: flop
+  
+      l = (blockIdx%x-1) * TILE_DIMPART + threadIdx%x
+      if (l>numAtoms) return
+
+        i = ceiling( x_atm(1,l) )
+        j = ceiling( x_atm(2,l) )
+        k = ceiling( x_atm(3,l) )
+        x = x_atm(1,l)
+        y = x_atm(2,l)
+        z = x_atm(3,l)
+        boxatom(:,1) = (/ x-rdim, y-rdim, z-rdim /)
+        boxatom(:,2) = (/ x+rdim, y+rdim, z+rdim /)
+
+        ! x-component
+        if (xperiodic .and. boxatom(1,1)< 1) then 
+          splitted(1) = .true.
+          boxatom(1,1) = 1
+          boxatom(1,2) = i+rdim
+          boxatom(1,3) = i-rdim + nx
+          boxatom(1,4) = nx
+        elseif (xperiodic .and. boxatom(1, 2) > nx) then 
+          splitted(1) = .true.
+          boxatom(1,1) = 1
+          boxatom(1,2) = i+rdim - nx
+          boxatom(1,3) = i-rdim
+          boxatom(1,4) = nx
+        else
+          splitted(1) = .false.
+          boxatom(1,3) = 0
+          boxatom(1,4) = 0
+        endif
+
+        ! y-component
+        if (yperiodic .and. boxatom(2,1)< 1) then 
+          splitted(2) = .true.
+          boxatom(2,1) = 1
+          boxatom(2,2) = j+rdim
+          boxatom(2,3) = j-rdim + ny
+          boxatom(2,4) = ny
+        elseif (yperiodic .and. boxatom(2, 2) > ny) then 
+          splitted(2) = .true.
+          boxatom(2,1) = 1
+          boxatom(2,2) = j+rdim - ny
+          boxatom(2,3) = j-rdim
+          boxatom(2,4) = ny
+        else
+          splitted(2) = .false.
+          boxatom(2,3) = 0
+          boxatom(2,4) = 0
+        endif
+
+        ! z-component
+        if (zperiodic .and. boxatom(3,1)< 1) then 
+          splitted(3) = .true.
+          boxatom(3,1) = 1
+          boxatom(3,2) = k+rdim
+          boxatom(3,3) = k-rdim + nz
+          boxatom(3,4) = nz
+        elseif (zperiodic .and. boxatom(3, 2) > nz) then 
+          splitted(3) = .true.
+          boxatom(3,1) = 1
+          boxatom(3,2) = k+rdim - nz
+          boxatom(3,3) = k-rdim
+          boxatom(3,4) = nz
+        else
+          splitted(3) = .false.
+          boxatom(3,3) = 0
+          boxatom(3,4) = 0
+        endif
+
+
+        ! write(*,fmt=100) l, boxatom(:,1,l),boxatom(:,2,l), boxatom(:,3,l),boxatom(:,4,l)
+        100 format("boxatom minimax at:", I4, "]", 3I4, "->", 3I4, "  U", 3I4, "->", 3I4)
+      enddo
+
+ 
+      if (.not. splitted(3)) then
+	mink = boxatom(3,1) / TILE_DIMz
+	maxk = boxatom(3,2) / TILE_DIMz
+
+	do k = mink, maxk
+      	  if (.not. splitted(2)) then
+      	    minj = boxatom(2,1) / TILE_DIMy
+      	    maxj = boxatom(2,2) / TILE_DIMy
+
+      	    do j = minj, maxj
+      	      if (.not. splitted(1)) then
+      	        mini = boxatom(1,1) / TILE_DIMx
+      	        maxi = boxatom(1,2) / TILE_DIMx
+
+      	        do i = mini, maxi
+      	          ! put atom l in list(i,j,k)
+		  size = atomic_add( len(i,j,k), 1)
+
+		  listAtoms_d(size, i,j,k) = l
+      	        enddo
+      	      endif
+      	    enddo
+      	  endif
+	enddo
+      endif
+
+    end subroutine makeListAtoms
   end module kernels_fluid_part
