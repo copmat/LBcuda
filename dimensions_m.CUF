@@ -4,7 +4,7 @@
     implicit none
 
     ! integer(4), parameter :: nx = 32, ny = nx, nz = nx
-    integer(4), parameter :: nx = 256, ny = nx, nz = nx
+    integer(4), parameter :: nx = 128, ny = nx, nz = nx
     logical, parameter :: xperiodic = .true.
     logical, parameter :: yperiodic = .true.
     logical, parameter :: zperiodic = .true.

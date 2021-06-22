@@ -1,6 +1,6 @@
 1000		!niter  number of iterations
 100		!stat print on screen every n
-100000		!vtk print every n
+100		!vtk print every n
 0.01 0.0 0.0	! vx,vy,vz
 NO 0		! with PARTICLES
 0.0 0.0 0.0	! ext_fxx,ext_fyy,ext_fzz
