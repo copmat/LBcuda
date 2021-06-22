@@ -24,7 +24,7 @@ program TestLB
 
   ! events for timing
   type (cudaEvent) :: startEvent, stopEvent
-  integer(8)	   :: clock_rate, c_stopAtom,c_startAtom, diff_listatom
+  integer(8)	   :: clock_rate, c_stopAtom,c_startAtom, diff_listatom, diff_listatomGPU
 
   ! misc
   type (dim3) :: dimGrid, dimBlock, dimGridx,dimGridy,dimGridz, dimBlock2
@@ -165,10 +165,7 @@ program TestLB
         if (lrotate) call dumpRot(step, flipflop)
 #endif
 
-         call system_clock(c_startAtom)
         call updateListAtoms(3 - flipflop)  ! Use new pos
-         call system_clock(c_stopAtom)
-         diff_listatom = diff_listatom + c_stopAtom-c_startAtom
       endif
 #endif
     else
@@ -217,9 +214,10 @@ program TestLB
        write(*,fmt=100)  step, time*0.001, time/niterOut, lup * niterOut / time / 1000.
 100    format('Iter:',I10,'   Time(s):', G10.4, '   ms/it:',G9.3, '   Mlup/s:',F8.0)
 
-       write(*,fmt=101)  step, diff_listatom/real(clock_rate)
-101    format('Iter:',I10,'   ListAtom Time(s):', F10.3)
+       write(*,fmt=101)  step, diff_listatom/real(clock_rate), diff_listatomGPU/real(clock_rate)
+101    format('Iter:',I10,'   ListAtom Time(s):', F10.3,'   ListAtomGPU Time(s):', F10.3)
        diff_listatom = 0
+       diff_listatomGPU = 0
 
        istat = cudaEventRecord(startEvent, 0)
     endif
@@ -473,6 +471,8 @@ program TestLB
       call read_input_atom        
 
       call makeListAtoms(1)
+      dim_matAtm_d(:,:,:) = 0
+      call makeListAtomsGPU<<<dimGridAtm, dimBlockAtm>>>(1, 1, numAtoms)
 
       ! Sanity checks...
       do i=1,numAtoms    
@@ -788,8 +788,21 @@ program TestLB
       implicit none
       integer, intent(in)   :: flip
 
+      call system_clock(c_startAtom)
+
       x_atm = pos_d(1:3,:, flip)
       call makeListAtoms(flip)
+
+      call system_clock(c_stopAtom)
+      diff_listatom = diff_listatom + c_stopAtom-c_startAtom
+
+      call system_clock(c_startAtom)
+
+      dim_matAtm_d(:,:,:) = 0
+      call makeListAtomsGPU<<<dimGridAtm, dimBlockAtm>>>(1, flip, numAtoms)
+
+      call system_clock(c_stopAtom)
+      diff_listatomGPU = diff_listatomGPU + c_stopAtom-c_startAtom
     end subroutine updateListAtoms
 
     subroutine printParams
@@ -1123,14 +1136,14 @@ program TestLB
         endif
         call writeParticleVTK(mynamefile,step, x_atm,v_atm,q, textVTK)
 
-        ! mynamefile = repeat(' ',120)
-        ! mynamefile = trim(fname)//'_isfluid'
-        ! if (fname(1:5) == 'step_') then
-        !   ! After time step, use old value
-        !   call writeImageDataVTI_islfuid(mynamefile,step, myfluid, 3-flip, textVTK)
-        ! else
-        !   call writeImageDataVTI_islfuid(mynamefile,step, myfluid, flip, textVTK)
-        ! endif
+        mynamefile = repeat(' ',120)
+        mynamefile = trim(fname)//'_isfluid'
+        if (fname(1:5) == 'step_' .and. step/=0) then
+          ! After time step, use old value
+          call writeImageDataVTI_islfuid(mynamefile,step, myfluid, 3-flip, textVTK)
+        else
+          call writeImageDataVTI_islfuid(mynamefile,step, myfluid, flip, textVTK)
+        endif
      endif
 
       call system_clock(c_stop)
@@ -1460,6 +1473,16 @@ program TestLB
         end if
 
         allocate(findAtoms_d(2,nx/TILE_DIMx, ny/TILE_DIMy, nz/TILE_DIMz), STAT=istat)
+        if (istat /= 0) then
+          write(*,*) 'Allocation of findAtoms_d failed'
+        end if
+
+        allocate(matrixAtoms_d(maxAtomInBlock, nx/TILE_DIMx, ny/TILE_DIMy, nz/TILE_DIMz), STAT=istat)
+        if (istat /= 0) then
+          write(*,*) 'Allocation of listAtoms_d failed'
+        end if
+
+        allocate(dim_matAtm_d(nx/TILE_DIMx, ny/TILE_DIMy, nz/TILE_DIMz), STAT=istat)
         if (istat /= 0) then
           write(*,*) 'Allocation of findAtoms_d failed'
         end if

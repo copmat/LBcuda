@@ -14,6 +14,10 @@
     integer(2), allocatable, device :: listAtoms_d(:)
     integer(2), allocatable, device :: findAtoms_d(:,:,:,:)
 
+    integer, allocatable, device :: matrixAtoms_d(:,:,:,:)
+    integer, allocatable, device :: dim_matAtm_d(:,:,:)
+    integer, parameter :: maxAtomInBlock = 200
+
     integer(1), allocatable, device :: issub_d(:, :, :)
     integer, device :: rmax_issub_d, sphereMax_d
     integer(1), allocatable, device :: myfluid_d(:,:,:, :)
