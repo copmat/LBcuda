@@ -98,8 +98,6 @@
       atm_k = blockIdx%z
       ! atm_st = findAtoms_d(1, atm_i,atm_j,atm_k)
       ! atm_en = findAtoms_d(2, atm_i,atm_j,atm_k)
-      ! if (step==1) write(*,*) 'findAtms',linear(i,j,k), atm_st,atm_en, linear(atm_i,atm_j,atm_k)
-
       atm_st = 1
       atm_en = dim_matAtm_d(atm_i,atm_j,atm_k)
 
@@ -110,7 +108,6 @@
         do i_list = atm_st, atm_en
           ! i_atm = listAtoms_d(i_list)
           i_atm = matrixAtoms_d(i_list, atm_i,atm_j,atm_k)
-          ! if (step==1) write(*,*) 'CUDA-init_rho_isfluid_CG',linear(i,j,k), i_atm
 
           if (.not. updated) then
             updated = setmyfluid(i,j,k, i_atm, step, flip)
@@ -135,13 +132,16 @@
       atm_i = blockIdx%x 
       atm_j = blockIdx%y 
       atm_k = blockIdx%z 
-      atm_st = findAtoms_d(1, atm_i,atm_j,atm_k)
-      atm_en = findAtoms_d(2, atm_i,atm_j,atm_k)
+      ! atm_st = findAtoms_d(1, atm_i,atm_j,atm_k)
+      ! atm_en = findAtoms_d(2, atm_i,atm_j,atm_k)
+      atm_st = 1
+      atm_en = dim_matAtm_d(atm_i,atm_j,atm_k)
 
       ! del_fluid 1st (old rho), if needed
       if (atm_st>0) then
         do i_list = atm_st, atm_en
-          i_atm = listAtoms_d(i_list)
+          ! i_atm = listAtoms_d(i_list)
+          i_atm = matrixAtoms_d(i_list, atm_i,atm_j,atm_k)
 
           ! Add/delete fluid if particle moved
           if (particle_moved(i_atm) == 1) call del_fluid(step, flip, i_atm,i,j,k, lrotate)
@@ -164,13 +164,16 @@
       atm_i = blockIdx%x 
       atm_j = blockIdx%y 
       atm_k = blockIdx%z 
-      atm_st = findAtoms_d(1, atm_i,atm_j,atm_k)
-      atm_en = findAtoms_d(2, atm_i,atm_j,atm_k)
+      ! atm_st = findAtoms_d(1, atm_i,atm_j,atm_k)
+      ! atm_en = findAtoms_d(2, atm_i,atm_j,atm_k)
+      atm_st = 1
+      atm_en = dim_matAtm_d(atm_i,atm_j,atm_k)
 
       ! make_fluid, if needed
       if (atm_st>0) then
         do i_list = atm_st, atm_en
-          i_atm = listAtoms_d(i_list)
+          ! i_atm = listAtoms_d(i_list)
+          i_atm = matrixAtoms_d(i_list, atm_i,atm_j,atm_k)
 
           ! Add/delete fluid if particle moved
           if (particle_moved(i_atm) == 1) call make_fluid(step, flip, i_atm,i,j,k, lrotate)
@@ -849,11 +852,14 @@
       atm_i = blockIdx%x 
       atm_j = blockIdx%y 
       atm_k = blockIdx%z 
-      atm_st = findAtoms_d(1, atm_i,atm_j,atm_k)
-      atm_en = findAtoms_d(2, atm_i,atm_j,atm_k)
+      ! atm_st = findAtoms_d(1, atm_i,atm_j,atm_k)
+      ! atm_en = findAtoms_d(2, atm_i,atm_j,atm_k)
+      atm_st = 1
+      atm_en = dim_matAtm_d(atm_i,atm_j,atm_k)
       if (atm_st>0) then
         do i_list = atm_st, atm_en
-          i_atm = listAtoms_d(i_list)
+          ! i_atm = listAtoms_d(i_list)
+          i_atm = matrixAtoms_d(i_list, atm_i,atm_j,atm_k)
           
           if ( myfluid_d(i,j,k, flip)==fluid_spherelist ) then
             xxx = nint(pos_d(1,i_atm, flip))
@@ -920,11 +926,14 @@
       atm_i = blockIdx%x 
       atm_j = blockIdx%y 
       atm_k = blockIdx%z 
-      atm_st = findAtoms_d(1, atm_i,atm_j,atm_k)
-      atm_en = findAtoms_d(2, atm_i,atm_j,atm_k)
+      ! atm_st = findAtoms_d(1, atm_i,atm_j,atm_k)
+      ! atm_en = findAtoms_d(2, atm_i,atm_j,atm_k)
+      atm_st = 1
+      atm_en = dim_matAtm_d(atm_i,atm_j,atm_k)
       if (atm_st>0) then
         do i_list = atm_st, atm_en
-          i_atm = listAtoms_d(i_list)
+          ! i_atm = listAtoms_d(i_list)
+          i_atm = matrixAtoms_d(i_list, atm_i,atm_j,atm_k)
           
           if ( myfluid_d(i,j,k, flip)==fluid_spherelist ) then
             xxx = nint(pos_d(1,i_atm, flip))
@@ -2145,6 +2154,22 @@
     end subroutine particle_to_node_bounce_back_bc2_phase2
 #endif    
 
+    attributes(global) subroutine zeroListAtomsGPU(step, flip)
+      integer, value    :: step,flip
+      integer           :: i,j,k
+
+
+      i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
+      j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
+      k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
+      
+      if (i>nx/TILE_DIMx) return
+      if (j>ny/TILE_DIMy) return
+      if (k>nz/TILE_DIMz) return
+
+      dim_matAtm_d(i,j,k) = 0
+    end subroutine zeroListAtomsGPU
+
     attributes(global) subroutine makeListAtomsGPU(step, flip, numAtoms)
       integer, value    :: step,flip,numAtoms
       real           :: x,y,z
@@ -2230,20 +2255,22 @@
 	maxk = boxatom(3,2*loopk+2) / TILE_DIMz + 1
 	do k = mink, maxk
 	  ! write(*,*) "atom",l," k:", k, "loopk:",loopk
+	  if (k > nz/TILE_DIMz) cycle
 
       	  do loopj=0, 1
       	    minj = boxatom(2,2*loopj+1) / TILE_DIMy + 1
       	    maxj = boxatom(2,2*loopj+2) / TILE_DIMy + 1
       	    do j = minj, maxj
+	      if (j > ny/TILE_DIMy) cycle
 
       	      do loopi=0, 1
       	        mini = boxatom(1,2*loopi+1) / TILE_DIMx + 1
       	        maxi = boxatom(1,2*loopi+2) / TILE_DIMx + 1
       	        do i = mini, maxi
-      	          ! put atom l in list(i,j,k)
+	          if (i > nx/TILE_DIMx) cycle
 
+      	          ! put atom l in list(i,j,k)
 		  tempInt = 1 + atomicadd( dim_matAtm_d(i,j,k), 1)
-		  ! write(*,*) linear(i,j,k), "tempInt:",tempInt
 
 		  if (tempInt > maxAtomInBlock) then
             	     write(*,*) 'Too many atoms in CUDA block:', linear(i,j,k), tempInt, maxAtomInBlock

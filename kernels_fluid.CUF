@@ -11,8 +11,8 @@
     real(4), allocatable, device :: forceAtoms_d(:,:,:)
     real(8), allocatable, device :: myf_d(:,:), myt_d(:,:)
     real(8), allocatable, device :: myf2_d(:,:), myt2_d(:,:)
-    integer(2), allocatable, device :: listAtoms_d(:)
-    integer(2), allocatable, device :: findAtoms_d(:,:,:,:)
+    ! integer(2), allocatable, device :: listAtoms_d(:)
+    ! integer(2), allocatable, device :: findAtoms_d(:,:,:,:)
 
     integer, allocatable, device :: matrixAtoms_d(:,:,:,:)
     integer, allocatable, device :: dim_matAtm_d(:,:,:)

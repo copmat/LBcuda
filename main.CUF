@@ -29,8 +29,9 @@ program TestLB
   ! misc
   type (dim3) :: dimGrid, dimBlock, dimGridx,dimGridy,dimGridz, dimBlock2
   integer     :: dimGridAtm, dimBlockAtm
+  type (dim3) :: dimGridSubd, dimBlockSubd
   type (cudaDeviceProp) :: prop
-  real(4) :: time
+  real(4) :: mytime
   integer :: istat, flipflop, nIter,nIterOut,nIterVTK, step
   logical :: pinnedFlag = .true.
 
@@ -207,11 +208,11 @@ program TestLB
 
     istat = cudaEventRecord(stopEvent, 0)
     istat = cudaEventSynchronize(stopEvent)
-    istat = cudaEventElapsedTime(time, startEvent, stopEvent)
+    istat = cudaEventElapsedTime(mytime, startEvent, stopEvent)
 
 
     if (mod(step,niterOut)==0) then
-       write(*,fmt=100)  step, time*0.001, time/niterOut, lup * niterOut / time / 1000.
+       write(*,fmt=100)  step, mytime*0.001, mytime/niterOut, lup * niterOut / mytime / 1000.
 100    format('Iter:',I10,'   Time(s):', G10.4, '   ms/it:',G9.3, '   Mlup/s:',F8.0)
 
        write(*,fmt=101)  step, diff_listatom/real(clock_rate), diff_listatomGPU/real(clock_rate)
@@ -470,8 +471,9 @@ program TestLB
 
       call read_input_atom        
 
-      call makeListAtoms(1)
-      dim_matAtm_d(:,:,:) = 0
+      ! call makeListAtoms(1)
+
+      call zeroListAtomsGPU<<<dimGridSubd, dimBlockSubd>>>(1, 1)
       call makeListAtomsGPU<<<dimGridAtm, dimBlockAtm>>>(1, 1, numAtoms)
 
       ! Sanity checks...
@@ -493,156 +495,156 @@ program TestLB
       enddo
     end subroutine SetupParts
 
-    subroutine makeListAtoms(flip)
-      implicit none
-      integer, intent(in)   :: flip
-      real                  :: x,y,z
-      integer               :: i,j,k, l,n, n1st
-      integer               :: mini,minj,mink, maxi,maxj,maxk
-      integer               :: boxatom(3, 4, numAtoms)
-      logical               :: splitted(3, numAtoms)
+    ! subroutine makeListAtoms(flip)
+    !   implicit none
+    !   integer, intent(in)   :: flip
+    !   real                  :: x,y,z
+    !   integer               :: i,j,k, l,n, n1st
+    !   integer               :: mini,minj,mink, maxi,maxj,maxk
+    !   integer               :: boxatom(3, 4, numAtoms)
+    !   logical               :: splitted(3, numAtoms)
 
 
-      do l = 1, numAtoms
-        i = ceiling( x_atm(1,l) )
-        j = ceiling( x_atm(2,l) )
-        k = ceiling( x_atm(3,l) )
-        x = x_atm(1,l)
-        y = x_atm(2,l)
-        z = x_atm(3,l)
-        boxatom(:,1, l) = (/ x-rdim, y-rdim, z-rdim /)
-        boxatom(:,2, l) = (/ x+rdim, y+rdim, z+rdim /)
+    !   do l = 1, numAtoms
+    !     i = ceiling( x_atm(1,l) )
+    !     j = ceiling( x_atm(2,l) )
+    !     k = ceiling( x_atm(3,l) )
+    !     x = x_atm(1,l)
+    !     y = x_atm(2,l)
+    !     z = x_atm(3,l)
+    !     boxatom(:,1, l) = (/ x-rdim, y-rdim, z-rdim /)
+    !     boxatom(:,2, l) = (/ x+rdim, y+rdim, z+rdim /)
 
-        ! x-component
-        if (xperiodic .and. boxatom(1,1, l)< 1) then 
-          splitted(1, l) = .true.
-          boxatom(1,1, l) = 1
-          boxatom(1,2, l) = i+rdim
-          boxatom(1,3, l) = i-rdim + nx
-          boxatom(1,4, l) = nx
-        elseif (xperiodic .and. boxatom(1, 2, l) > nx) then 
-          splitted(1, l) = .true.
-          boxatom(1,1, l) = 1
-          boxatom(1,2, l) = i+rdim - nx
-          boxatom(1,3, l) = i-rdim
-          boxatom(1,4, l) = nx
-        else
-          splitted(1, l) = .false.
-          boxatom(1,3, l) = 0
-          boxatom(1,4, l) = 0
-        endif
+    !     ! x-component
+    !     if (xperiodic .and. boxatom(1,1, l)< 1) then 
+    !       splitted(1, l) = .true.
+    !       boxatom(1,1, l) = 1
+    !       boxatom(1,2, l) = i+rdim
+    !       boxatom(1,3, l) = i-rdim + nx
+    !       boxatom(1,4, l) = nx
+    !     elseif (xperiodic .and. boxatom(1, 2, l) > nx) then 
+    !       splitted(1, l) = .true.
+    !       boxatom(1,1, l) = 1
+    !       boxatom(1,2, l) = i+rdim - nx
+    !       boxatom(1,3, l) = i-rdim
+    !       boxatom(1,4, l) = nx
+    !     else
+    !       splitted(1, l) = .false.
+    !       boxatom(1,3, l) = 0
+    !       boxatom(1,4, l) = 0
+    !     endif
 
-        ! y-component
-        if (yperiodic .and. boxatom(2,1, l)< 1) then 
-          splitted(2, l) = .true.
-          boxatom(2,1, l) = 1
-          boxatom(2,2, l) = j+rdim
-          boxatom(2,3, l) = j-rdim + ny
-          boxatom(2,4, l) = ny
-        elseif (yperiodic .and. boxatom(2, 2, l) > ny) then 
-          splitted(2, l) = .true.
-          boxatom(2,1, l) = 1
-          boxatom(2,2, l) = j+rdim - ny
-          boxatom(2,3, l) = j-rdim
-          boxatom(2,4, l) = ny
-        else
-          splitted(2, l) = .false.
-          boxatom(2,3, l) = 0
-          boxatom(2,4, l) = 0
-        endif
+    !     ! y-component
+    !     if (yperiodic .and. boxatom(2,1, l)< 1) then 
+    !       splitted(2, l) = .true.
+    !       boxatom(2,1, l) = 1
+    !       boxatom(2,2, l) = j+rdim
+    !       boxatom(2,3, l) = j-rdim + ny
+    !       boxatom(2,4, l) = ny
+    !     elseif (yperiodic .and. boxatom(2, 2, l) > ny) then 
+    !       splitted(2, l) = .true.
+    !       boxatom(2,1, l) = 1
+    !       boxatom(2,2, l) = j+rdim - ny
+    !       boxatom(2,3, l) = j-rdim
+    !       boxatom(2,4, l) = ny
+    !     else
+    !       splitted(2, l) = .false.
+    !       boxatom(2,3, l) = 0
+    !       boxatom(2,4, l) = 0
+    !     endif
 
-        ! z-component
-        if (zperiodic .and. boxatom(3,1, l)< 1) then 
-          splitted(3, l) = .true.
-          boxatom(3,1, l) = 1
-          boxatom(3,2, l) = k+rdim
-          boxatom(3,3, l) = k-rdim + nz
-          boxatom(3,4, l) = nz
-        elseif (zperiodic .and. boxatom(3, 2, l) > nz) then 
-          splitted(3, l) = .true.
-          boxatom(3,1, l) = 1
-          boxatom(3,2, l) = k+rdim - nz
-          boxatom(3,3, l) = k-rdim
-          boxatom(3,4, l) = nz
-        else
-          splitted(3, l) = .false.
-          boxatom(3,3, l) = 0
-          boxatom(3,4, l) = 0
-        endif
+    !     ! z-component
+    !     if (zperiodic .and. boxatom(3,1, l)< 1) then 
+    !       splitted(3, l) = .true.
+    !       boxatom(3,1, l) = 1
+    !       boxatom(3,2, l) = k+rdim
+    !       boxatom(3,3, l) = k-rdim + nz
+    !       boxatom(3,4, l) = nz
+    !     elseif (zperiodic .and. boxatom(3, 2, l) > nz) then 
+    !       splitted(3, l) = .true.
+    !       boxatom(3,1, l) = 1
+    !       boxatom(3,2, l) = k+rdim - nz
+    !       boxatom(3,3, l) = k-rdim
+    !       boxatom(3,4, l) = nz
+    !     else
+    !       splitted(3, l) = .false.
+    !       boxatom(3,3, l) = 0
+    !       boxatom(3,4, l) = 0
+    !     endif
 
 
-        ! write(*,fmt=100) l, boxatom(:,1,l),boxatom(:,2,l), boxatom(:,3,l),boxatom(:,4,l)
-        100 format("boxatom minimax at:", I4, "]", 3I4, "->", 3I4, "  U", 3I4, "->", 3I4)
-      enddo
+    !     ! write(*,fmt=100) l, boxatom(:,1,l),boxatom(:,2,l), boxatom(:,3,l),boxatom(:,4,l)
+    !     100 format("boxatom minimax at:", I4, "]", 3I4, "->", 3I4, "  U", 3I4, "->", 3I4)
+    !   enddo
 
-      n = 0
-      do k = 1, dimGrid%z
-        mink = TILE_DIMz*(k-1) + 1
-        maxk = TILE_DIMz*k
+    !   n = 0
+    !   do k = 1, dimGrid%z
+    !     mink = TILE_DIMz*(k-1) + 1
+    !     maxk = TILE_DIMz*k
 
-        do j = 1, dimGrid%y
-          minj = TILE_DIMy*(j-1) + 1
-          maxj = TILE_DIMy*j
+    !     do j = 1, dimGrid%y
+    !       minj = TILE_DIMy*(j-1) + 1
+    !       maxj = TILE_DIMy*j
 
-          do i = 1, dimGrid%x
-            mini = TILE_DIMx*(i-1) + 1
-            maxi = TILE_DIMx*i
-            
-            n1st = 0
-            do l = 1, numAtoms
-              ! write(*,fmt=101) mini,minj,mink, maxk,maxj,maxi, l, boxatom(:,1,l), boxatom(:,2,l)
-              101 format("We are at", 3I4,"->", 3I4, " Atm ", I3, " at:", 3I4, "->", 3I4)
+    !       do i = 1, dimGrid%x
+    !         mini = TILE_DIMx*(i-1) + 1
+    !         maxi = TILE_DIMx*i
+    !         
+    !         n1st = 0
+    !         do l = 1, numAtoms
+    !           ! write(*,fmt=101) mini,minj,mink, maxk,maxj,maxi, l, boxatom(:,1,l), boxatom(:,2,l)
+    !           101 format("We are at", 3I4,"->", 3I4, " Atm ", I3, " at:", 3I4, "->", 3I4)
 
-              if (splitted(1, l)) then
-                if (boxatom(1,2, l)<mini .and. maxi < boxatom(1,3, l)) cycle
-              else
-                if (boxatom(1,2, l)<mini .or. maxi < boxatom(1,1, l)) cycle
-              endif
+    !           if (splitted(1, l)) then
+    !             if (boxatom(1,2, l)<mini .and. maxi < boxatom(1,3, l)) cycle
+    !           else
+    !             if (boxatom(1,2, l)<mini .or. maxi < boxatom(1,1, l)) cycle
+    !           endif
 
-              if (splitted(2, l)) then
-                if (boxatom(2,2, l)<minj .and. maxj < boxatom(2,3, l)) cycle
-              else
-                if (boxatom(2,2, l)<minj .or. maxj < boxatom(2,1, l)) cycle
-              endif
+    !           if (splitted(2, l)) then
+    !             if (boxatom(2,2, l)<minj .and. maxj < boxatom(2,3, l)) cycle
+    !           else
+    !             if (boxatom(2,2, l)<minj .or. maxj < boxatom(2,1, l)) cycle
+    !           endif
 
-              if (splitted(3, l)) then
-                if (boxatom(3,2, l)<mink .and. maxk < boxatom(3,3, l)) cycle
-              else
-                if (boxatom(3,2, l)<mink .or. maxk < boxatom(3,1, l)) cycle
-              endif
+    !           if (splitted(3, l)) then
+    !             if (boxatom(3,2, l)<mink .and. maxk < boxatom(3,3, l)) cycle
+    !           else
+    !             if (boxatom(3,2, l)<mink .or. maxk < boxatom(3,1, l)) cycle
+    !           endif
 
-              n = n + 1
-              listAtoms(n) = l
+    !           n = n + 1
+    !           listAtoms(n) = l
 
-              if (n1st == 0) then
-                n1st = n
-                findAtoms(1, i,j,k) = n
-              	if (n>=256**2 / 2 -1) then
-              	  write(*,*) "findAtoms at:",i,j,k, "=", n, " > max int(2). STOP"
-		  stop
-		endif
-              endif
-            
-            enddo
-            if (n1st /= 0) then
-              findAtoms(2, i,j,k) = n
-              ! if (step<1) write(*,*) "findAtoms at:",i,j,k, "=", findAtoms(1, i,j,k), findAtoms(2, i,j,k)
-            endif
+    !           if (n1st == 0) then
+    !             n1st = n
+    !             findAtoms(1, i,j,k) = n
+    !           	if (n>=256**2 / 2 -1) then
+    !           	  write(*,*) "findAtoms at:",i,j,k, "=", n, " > max int(2). STOP"
+    !     	  stop
+    !     	endif
+    !           endif
+    !         
+    !         enddo
+    !         if (n1st /= 0) then
+    !           findAtoms(2, i,j,k) = n
+    !           ! if (step<1) write(*,*) "findAtoms at:",i,j,k, "=", findAtoms(1, i,j,k), findAtoms(2, i,j,k)
+    !         endif
 
-          enddo
-        enddo
-      enddo
+    !       enddo
+    !     enddo
+    !   enddo
 
-      ! do i = 1, n
-      !   write(*,*) "listAtoms at:",i, "=", listAtoms(i)
-      ! enddo
+    !   ! do i = 1, n
+    !   !   write(*,*) "listAtoms at:",i, "=", listAtoms(i)
+    !   ! enddo
 
-      istat = cudaMemcpy(findAtoms_d, findAtoms, 2 * dimGrid%x*dimGrid%y*dimGrid%z)
-      if (istat/=0) write(*,*) 'status after copy findAtoms:',istat
+    !   istat = cudaMemcpy(findAtoms_d, findAtoms, 2 * dimGrid%x*dimGrid%y*dimGrid%z)
+    !   if (istat/=0) write(*,*) 'status after copy findAtoms:',istat
 
-      istat = cudaMemcpy(listAtoms_d, listAtoms, numAtoms * dimGrid%x*dimGrid%y*dimGrid%z)
-      if (istat/=0) write(*,*) 'status after copy findAtoms:',istat
-    end subroutine makeListAtoms
+    !   istat = cudaMemcpy(listAtoms_d, listAtoms, numAtoms * dimGrid%x*dimGrid%y*dimGrid%z)
+    !   if (istat/=0) write(*,*) 'status after copy findAtoms:',istat
+    ! end subroutine makeListAtoms
 
 
     subroutine read_input_atom
@@ -788,17 +790,20 @@ program TestLB
       implicit none
       integer, intent(in)   :: flip
 
+      ! On th CPU
       call system_clock(c_startAtom)
 
-      x_atm = pos_d(1:3,:, flip)
-      call makeListAtoms(flip)
+      ! x_atm = pos_d(1:3,:, flip)
+      ! call makeListAtoms(flip)
 
       call system_clock(c_stopAtom)
       diff_listatom = diff_listatom + c_stopAtom-c_startAtom
 
+
+      ! On th GPU
       call system_clock(c_startAtom)
 
-      dim_matAtm_d(:,:,:) = 0
+      call zeroListAtomsGPU<<<dimGridSubd, dimBlockSubd>>>(1, flip)
       call makeListAtomsGPU<<<dimGridAtm, dimBlockAtm>>>(1, flip, numAtoms)
 
       call system_clock(c_stopAtom)
@@ -857,8 +862,8 @@ program TestLB
         write(*,fmt=100) 'Particles', numAtoms
         write(*,fmt=101) 'Radius', rdim
         write(*,fmt=101) 'Weight', atmWeight
-        write(*,fmt=100) 'Size of findAtoms_d', dimGrid%x*dimGrid%y*dimGrid%z
-        write(*,fmt=100) 'Size of listAtoms_d', numAtoms* dimGrid%x*dimGrid%y*dimGrid%z
+        ! write(*,fmt=100) 'Size of findAtoms_d', dimGrid%x*dimGrid%y*dimGrid%z
+        ! write(*,fmt=100) 'Size of listAtoms_d', numAtoms* dimGrid%x*dimGrid%y*dimGrid%z
         volatms = 4.0/3.0 * Pi * rdim**THREE
         write(*,fmt=106) 'Vol. fraction (%)', 100*volatms*numAtoms / real(nx*ny*nz)
       endif
@@ -1324,6 +1329,9 @@ program TestLB
   
     dimGridAtm  = (numAtoms+TILE_DIMPART-1)/TILE_DIMPART
     dimBlockAtm = TILE_DIMPART
+
+    dimGridSubd  = dim3(dimGrid%x / TILE_DIMx, dimGrid%y / TILE_DIMy, dimGrid%z / TILE_DIMz)
+    dimBlockSubd = dim3(TILE_DIMx, TILE_DIMy, TILE_DIMz)
   
     ! For timing
     istat = cudaEventCreate(startEvent)
@@ -1339,6 +1347,7 @@ program TestLB
     write(*,fmt=13) dimGridy%x, dimGridy%y, dimGridy%z
     write(*,fmt=14) dimGridz%x, dimGridz%y, dimGridz%z
     write(*,fmt=15) dimGridAtm, dimBlockAtm
+    write(*,fmt=20) dimGridSubd%x,dimGridSubd%y,dimGridSubd%z, dimBlockSubd%x,dimBlockSubd%y,dimBlockSubd%z
   
     10 format('Matrix size:', 4i5)
     11 format('dimGrid:', 3i4, ',   dimBlock:', 3i4)
@@ -1346,6 +1355,7 @@ program TestLB
     13 format('dimGridy:', 3i4)
     14 format('dimGridz:', 3i4)
     15 format('dimGridAtm:', i4, ',   dimBlockAtm:', i4)
+    20 format('dimGridSubd:', 3i4, ',   dimBlockSubd:', 3i4)
 
     write(*,*) 'Mem size:', dataSz/1024./1024.0, 'MB'
 
@@ -1467,15 +1477,15 @@ program TestLB
           write(*,*) 'Allocation of myt2_d failed'
         end if
 
-        allocate(listAtoms_d(numAtoms * nx/TILE_DIMx* ny/TILE_DIMy* nz/TILE_DIMz), STAT=istat)
-        if (istat /= 0) then
-          write(*,*) 'Allocation of listAtoms_d failed'
-        end if
+        ! allocate(listAtoms_d(numAtoms * nx/TILE_DIMx* ny/TILE_DIMy* nz/TILE_DIMz), STAT=istat)
+        ! if (istat /= 0) then
+        !   write(*,*) 'Allocation of listAtoms_d failed'
+        ! end if
 
-        allocate(findAtoms_d(2,nx/TILE_DIMx, ny/TILE_DIMy, nz/TILE_DIMz), STAT=istat)
-        if (istat /= 0) then
-          write(*,*) 'Allocation of findAtoms_d failed'
-        end if
+        ! allocate(findAtoms_d(2,nx/TILE_DIMx, ny/TILE_DIMy, nz/TILE_DIMz), STAT=istat)
+        ! if (istat /= 0) then
+        !   write(*,*) 'Allocation of findAtoms_d failed'
+        ! end if
 
         allocate(matrixAtoms_d(maxAtomInBlock, nx/TILE_DIMx, ny/TILE_DIMy, nz/TILE_DIMz), STAT=istat)
         if (istat /= 0) then
@@ -1514,8 +1524,8 @@ program TestLB
     istat = cudaEventRecord(stopEvent, 0)
     istat = cudaEventSynchronize(stopEvent)
     
-    istat = cudaEventElapsedTime(time, startEvent, stopEvent)
-    write(*,*) '  Device to Host bandwidth (GiB/s): ', dataSz/time*(1.e+3/1024**3)
+    istat = cudaEventElapsedTime(mytime, startEvent, stopEvent)
+    write(*,*) '  Device to Host bandwidth (GiB/s): ', dataSz/mytime*(1.e+3/1024**3)
     write(*,*)
    end subroutine setupGPUgridAndAlloc
 
