@@ -112,8 +112,8 @@ program TestLB
 
 !GA      call init_rho_CG<<<dimGrid, dimBlock>>>(step, flipflop)
 #ifdef CUDASTREAM
-      call init_rhoB_CG<<<dimGrid, dimBlock, 0, streams(1) >>>(step, flipflop)
-      call init_rhoR_CG<<<dimGrid, dimBlock, 0, streams(2) >>>(step, flipflop)
+      call init_rhoB_CG<<<dimGrid, dimBlock, streams(1) >>>(step, flipflop)
+      call init_rhoR_CG<<<dimGrid, dimBlock, streams(2) >>>(step, flipflop)
 #else
 #ifdef FLUIDSPLIT
       call init_rhoB_CG<<<dimGrid, dimBlock>>>(step, flipflop)
@@ -175,8 +175,8 @@ call fixPeriodic(.false., .true.)
 !
 #ifdef CUDASTREAM
 !
-      call streamR_CG<<<dimGrid, dimBlock, 0, streams(1)>>>(step, flipflop)
-      call streamB_CG<<<dimGrid, dimBlock, 0, streams(2)>>>(step, flipflop)
+      call streamR_CG<<<dimGrid, dimBlock, streams(1)>>>(step, flipflop)
+      call streamB_CG<<<dimGrid, dimBlock, streams(2)>>>(step, flipflop)
       error_code = cudaDeviceSynchronize()
 !
 #else
