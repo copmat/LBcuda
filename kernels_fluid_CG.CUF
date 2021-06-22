@@ -204,6 +204,58 @@
         rhoB_d(i,j,k) = MINDENS
       endif
     end subroutine init_rho_CG
+    
+    attributes(global) subroutine init_rhoR_CG(step, flip)
+      integer, value :: step,flip
+      integer :: i,j,k
+
+      i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
+      j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
+      k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
+
+      ! Only on fluid nodes
+      if (myfluid_d(i,j,k, flip) == fluid_fluid) then
+        rhoR_d(i,j,k) = popsR_d(i,j,k,0, flip) + popsR_d(i,j,k,1, flip) + &
+               popsR_d(i,j,k,2, flip) + popsR_d(i,j,k,3, flip) + &
+               popsR_d(i,j,k,4, flip) + popsR_d(i,j,k,5, flip) + &
+               popsR_d(i,j,k,6, flip) + popsR_d(i,j,k,7, flip) + &
+               popsR_d(i,j,k,8, flip) + popsR_d(i,j,k,9, flip) + &
+               popsR_d(i,j,k,10,flip) + popsR_d(i,j,k,11,flip) + &
+               popsR_d(i,j,k,12,flip) + popsR_d(i,j,k,13,flip) + &
+               popsR_d(i,j,k,14,flip) + popsR_d(i,j,k,15,flip) + &
+               popsR_d(i,j,k,16,flip) + popsR_d(i,j,k,17,flip) + &
+               popsR_d(i,j,k,18,flip)
+      else
+        rhoR_d(i,j,k) = MINDENS
+      endif
+
+    end subroutine init_rhoR_CG
+    
+    attributes(global) subroutine init_rhoB_CG(step, flip)
+      integer, value :: step,flip
+      integer :: i,j,k
+
+      i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
+      j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
+      k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
+
+      ! Only on fluid nodes
+      if (myfluid_d(i,j,k, flip) == fluid_fluid) then
+        rhoB_d(i,j,k) = popsB_d(i,j,k,0, flip) + popsB_d(i,j,k,1, flip) + &
+               popsB_d(i,j,k,2, flip) + popsB_d(i,j,k,3, flip) + &
+               popsB_d(i,j,k,4, flip) + popsB_d(i,j,k,5, flip) + &
+               popsB_d(i,j,k,6, flip) + popsB_d(i,j,k,7, flip) + &
+               popsB_d(i,j,k,8, flip) + popsB_d(i,j,k,9, flip) + &
+               popsB_d(i,j,k,10,flip) + popsB_d(i,j,k,11,flip) + &
+               popsB_d(i,j,k,12,flip) + popsB_d(i,j,k,13,flip) + &
+               popsB_d(i,j,k,14,flip) + popsB_d(i,j,k,15,flip) + &
+               popsB_d(i,j,k,16,flip) + popsB_d(i,j,k,17,flip) + &
+               popsB_d(i,j,k,18,flip)
+      else
+        rhoB_d(i,j,k) = MINDENS
+      endif
+
+    end subroutine init_rhoB_CG
 
 #define manual_u(pops)   invrho * ( pops(1) - pops(2) + pops(7) - pops(8) - pops(9) + \
        pops(10) + pops(11) - pops(12) - pops(13) + pops(14) )
@@ -481,6 +533,74 @@
       endif
     
     end subroutine stream_CG
+    
+    attributes(global) subroutine streamR_CG(step, flip)
+      integer, value :: step,flip
+      integer :: i,j,k,flop
+
+      i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
+      j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
+      k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
+      ! if (step==1 .and. 1==i*j*k) write(*,*) 'CUDA stream_CG] i,k:',i,j,k
+
+      flop = 3 - flip
+
+      ! Streaming
+      if (myfluid_d(i,j,k, flip) /= fluid_spheredead) then
+          popsR_d(i+1,j+0,k+0,01, flop) = popsR_d(i,j,k,01,flip)
+          popsR_d(i-1,j+0,k+0,02, flop) = popsR_d(i,j,k,02,flip)
+          popsR_d(i+0,j+1,k+0,03, flop) = popsR_d(i,j,k,03,flip)
+          popsR_d(i+0,j-1,k+0,04, flop) = popsR_d(i,j,k,04,flip)
+          popsR_d(i+0,j+0,k+1,05, flop) = popsR_d(i,j,k,05,flip)
+          popsR_d(i+0,j+0,k-1,06, flop) = popsR_d(i,j,k,06,flip)
+          popsR_d(i+1,j+1,k+0,07, flop) = popsR_d(i,j,k,07,flip)
+          popsR_d(i-1,j-1,k+0,08, flop) = popsR_d(i,j,k,08,flip)
+          popsR_d(i-1,j+1,k+0,09, flop) = popsR_d(i,j,k,09,flip)
+          popsR_d(i+1,j-1,k+0,10, flop) = popsR_d(i,j,k,10,flip)
+          popsR_d(i+1,j+0,k+1,11, flop) = popsR_d(i,j,k,11,flip)
+          popsR_d(i-1,j+0,k-1,12, flop) = popsR_d(i,j,k,12,flip)
+          popsR_d(i-1,j+0,k+1,13, flop) = popsR_d(i,j,k,13,flip)
+          popsR_d(i+1,j+0,k-1,14, flop) = popsR_d(i,j,k,14,flip)
+          popsR_d(i+0,j+1,k+1,15, flop) = popsR_d(i,j,k,15,flip)
+          popsR_d(i+0,j-1,k-1,16, flop) = popsR_d(i,j,k,16,flip)
+          popsR_d(i+0,j-1,k+1,17, flop) = popsR_d(i,j,k,17,flip)
+          popsR_d(i+0,j+1,k-1,18, flop) = popsR_d(i,j,k,18,flip)
+      endif
+    end subroutine streamR_CG
+
+    attributes(global) subroutine streamB_CG(step, flip)
+      integer, value :: step,flip
+      integer :: i,j,k,flop
+
+      i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
+      j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
+      k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
+      ! if (step==1 .and. 1==i*j*k) write(*,*) 'CUDA stream_CG] i,k:',i,j,k
+
+      flop = 3 - flip
+
+      ! Streaming
+      if (myfluid_d(i,j,k, flip) /= fluid_spheredead) then
+          popsB_d(i+1,j+0,k+0,01, flop) = popsB_d(i,j,k,01,flip)
+          popsB_d(i-1,j+0,k+0,02, flop) = popsB_d(i,j,k,02,flip)
+          popsB_d(i+0,j+1,k+0,03, flop) = popsB_d(i,j,k,03,flip)
+          popsB_d(i+0,j-1,k+0,04, flop) = popsB_d(i,j,k,04,flip)
+          popsB_d(i+0,j+0,k+1,05, flop) = popsB_d(i,j,k,05,flip)
+          popsB_d(i+0,j+0,k-1,06, flop) = popsB_d(i,j,k,06,flip)
+          popsB_d(i+1,j+1,k+0,07, flop) = popsB_d(i,j,k,07,flip)
+          popsB_d(i-1,j-1,k+0,08, flop) = popsB_d(i,j,k,08,flip)
+          popsB_d(i-1,j+1,k+0,09, flop) = popsB_d(i,j,k,09,flip)
+          popsB_d(i+1,j-1,k+0,10, flop) = popsB_d(i,j,k,10,flip)
+          popsB_d(i+1,j+0,k+1,11, flop) = popsB_d(i,j,k,11,flip)
+          popsB_d(i-1,j+0,k-1,12, flop) = popsB_d(i,j,k,12,flip)
+          popsB_d(i-1,j+0,k+1,13, flop) = popsB_d(i,j,k,13,flip)
+          popsB_d(i+1,j+0,k-1,14, flop) = popsB_d(i,j,k,14,flip)
+          popsB_d(i+0,j+1,k+1,15, flop) = popsB_d(i,j,k,15,flip)
+          popsB_d(i+0,j-1,k-1,16, flop) = popsB_d(i,j,k,16,flip)
+          popsB_d(i+0,j-1,k+1,17, flop) = popsB_d(i,j,k,17,flip)
+          popsB_d(i+0,j+1,k-1,18, flop) = popsB_d(i,j,k,18,flip)
+      endif
+    end subroutine streamB_CG
 
     attributes(global) subroutine stream_CG_x(step, flip)
       integer, value :: step,flip

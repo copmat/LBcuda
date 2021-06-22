@@ -1,7 +1,8 @@
 #define noBGK
 #define CG
 #define PARTICLES
-
+#define FLUIDSPLIT
+#define CUDASTREAM
 #define noDEBUG_FORCE
 #define noDEBUG_ROT
 #define noDEBUG_MKRM

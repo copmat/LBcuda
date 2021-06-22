@@ -4,7 +4,7 @@
     implicit none
 
     ! integer(4), parameter :: nx = 32, ny = nx, nz = nx
-    integer(4), parameter :: nx = 128, ny = nx, nz = nx
+    integer(4), parameter :: nx = 256, ny = nx, nz = nx
     logical, parameter :: xperiodic = .true.
     logical, parameter :: yperiodic = .true.
     logical, parameter :: zperiodic = .true.
@@ -167,9 +167,9 @@
     real, constant    :: ext_tqx_d, ext_tqy_d, ext_tqz_d
 
     integer, parameter :: TILE_DIM = 8
-    integer, parameter :: TILE_DIMx = 4
-    integer, parameter :: TILE_DIMy = 4
-    integer, parameter :: TILE_DIMz = 4
+    integer, parameter :: TILE_DIMx = 128
+    integer, parameter :: TILE_DIMy = 1
+    integer, parameter :: TILE_DIMz = 1
     integer, parameter :: TILE_DIMPART = 16
 
     ! MPI
