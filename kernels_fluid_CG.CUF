@@ -468,16 +468,15 @@
               popsR_d(i,j,k,l, flip) = loc_fdum(l)*rhoR/rhosum + temp*feq
               popsB_d(i,j,k,l, flip) = loc_fdum(l)*rhoB/rhosum - temp*feq
           enddo
+        else
+        ! Store to mem if not at the interface
+          do l = 0, npops-1
+            popsR_d(i,j,k,l, flip) = loc_tempR(l)
+          enddo
+          do l = 0, npops-1
+            popsB_d(i,j,k,l, flip) = loc_tempB(l)
+          enddo
         endif
-
-        ! Store to mem
-      !  do l = 0, npops-1
-      !    popsR_d(i,j,k,l, flip) = loc_tempR(li,lj,lk, l)
-      !  enddo
-      !  do l = 0, npops-1
-      !    popsB_d(i,j,k,l, flip) = loc_tempB(li,lj,lk, l)
-      !  enddo
-        
       endif
     end subroutine time_step_CG
 
