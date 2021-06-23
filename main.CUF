@@ -33,6 +33,11 @@ program TestLB
   type (cudaDeviceProp) :: prop
   real(4) :: mytime
   integer :: istat, flipflop, nIter,nIterOut,nIterVTK, step
+#ifdef CUDASTREAM
+  integer :: is         !GA
+  integer :: streams(2) !GA
+  integer :: error_code !GA
+#endif
   logical :: pinnedFlag = .true.
 
   ! Phys params
@@ -103,6 +108,13 @@ program TestLB
   write(*,*) 'Run...'
   istat = cudaEventRecord(startEvent, 0)
 
+#ifdef CUDASTREAM
+!     streams creation
+      do is = 1, 2
+         error_code = cudaStreamCreate(streams(is))
+      end do
+#endif
+
   do step=1, nIter
 
     if (withCG) then
@@ -118,7 +130,18 @@ program TestLB
       endif
 #endif
 
+!GA      call init_rho_CG<<<dimGrid, dimBlock>>>(step, flipflop) 
+#ifdef CUDASTREAM 
+      call init_rhoB_CG<<<dimGrid, dimBlock, 0, streams(1) >>>(step, flipflop) 
+      call init_rhoR_CG<<<dimGrid, dimBlock, 0, streams(2) >>>(step, flipflop) 
+#else 
+#ifdef FLUIDSPLIT 
+      call init_rhoB_CG<<<dimGrid, dimBlock>>>(step, flipflop) 
+      call init_rhoR_CG<<<dimGrid, dimBlock>>>(step, flipflop) 
+#else
       call init_rho_CG<<<dimGrid, dimBlock>>>(step, flipflop)
+#endif
+#endif
       call fixPeriodic(.false., .true.)
 
 #ifdef PARTICLES
@@ -168,7 +191,23 @@ program TestLB
 
       ! call copy_CG<<<dimGrid, dimBlock>>>(step, flipflop)
 
-      call stream_CG<<<dimGrid, dimBlock>>>(step, flipflop)
+      !GA call stream_CG<<<dimGrid, dimBlock>>>(step, flipflop)
+! 
+#ifdef CUDASTREAM 
+! 
+      call streamR_CG<<<dimGrid, dimBlock, 0, streams(1)>>>(step, flipflop) 
+      call streamB_CG<<<dimGrid, dimBlock, 0, streams(2)>>>(step, flipflop) 
+      error_code = cudaDeviceSynchronize() 
+! 
+#else 
+#ifdef FLUIDSPLIT 
+      call streamR_CG<<<dimGrid, dimBlock >>>(step, flipflop) 
+      call streamB_CG<<<dimGrid, dimBlock >>>(step, flipflop) 
+! 
+#else 
+      call stream_CG<<<dimGrid, dimBlock>>>(step, flipflop) 
+#endif 
+#endif
       call stream_CG_x<<<dimGridx, dimBlock2>>>(step, flipflop)
       call stream_CG_y<<<dimGridy, dimBlock2>>>(step, flipflop)
       call stream_CG_z<<<dimGridz, dimBlock2>>>(step, flipflop)
@@ -247,6 +286,12 @@ program TestLB
     endif
     
   enddo
+
+#ifdef CUDASTREAM
+  do is = 1, 2
+     error_code = cudaStreamDestroy(streams(is))
+  end do
+#endif
 
   contains
     pure function viscosity_to_omega(visc)

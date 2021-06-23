@@ -167,7 +167,7 @@
 
     !!!!!!!!!!!!!!!!!!! Color gradient !!!!!!!!!!!!!!!!!!!
 
-#define manual_rho(pops) pops(i,j,k,0, flip) + pops(i,j,k,1, flip) + pops(i,j,k,2, flip) +   \
+#define manual_rho(pops) pops(i,j,k,0,flip) + pops(i,j,k,1,flip) + pops(i,j,k,2, flip) +   \
        pops(i,j,k,3, flip) + pops(i,j,k,4, flip) + pops(i,j,k,5, flip) + pops(i,j,k,6, flip) + pops(i,j,k,7, flip) +                     \
        pops(i,j,k,8, flip) + pops(i,j,k,9, flip) + pops(i,j,k,10, flip) + pops(i,j,k,11, flip) + pops(i,j,k,12, flip) +                  \
        pops(i,j,k,13, flip) + pops(i,j,k,14, flip) + pops(i,j,k,15, flip) + pops(i,j,k,16, flip) + pops(i,j,k,17, flip) + pops(i,j,k,18, flip)
@@ -202,7 +202,67 @@
         rhoB_d(i,j,k) = MINDENS
       endif
     end subroutine init_rho_CG
+    
+    attributes(global) subroutine init_rhoR_CG(step, flip)
+      integer, value :: step,flip
+      integer :: i,j,k
 
+      i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
+      j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
+      k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
+
+      ! Only on fluid nodes
+      if (myfluid_d(i,j,k, flip) == fluid_fluid) then
+        rhoR_d(i,j,k) = popsR_d(i,j,k,0, flip) + popsR_d(i,j,k,1, flip) + &
+               popsR_d(i,j,k,2, flip) + popsR_d(i,j,k,3, flip) + &
+               popsR_d(i,j,k,4, flip) + popsR_d(i,j,k,5, flip) + &
+               popsR_d(i,j,k,6, flip) + popsR_d(i,j,k,7, flip) + &
+               popsR_d(i,j,k,8, flip) + popsR_d(i,j,k,9, flip) + &
+               popsR_d(i,j,k,10,flip) + popsR_d(i,j,k,11,flip) + &
+               popsR_d(i,j,k,12,flip) + popsR_d(i,j,k,13,flip) + &
+               popsR_d(i,j,k,14,flip) + popsR_d(i,j,k,15,flip) + &
+               popsR_d(i,j,k,16,flip) + popsR_d(i,j,k,17,flip) + &
+               popsR_d(i,j,k,18,flip)
+      else
+        rhoR_d(i,j,k) = MINDENS
+      endif
+
+    end subroutine init_rhoR_CG
+    
+    attributes(global) subroutine init_rhoB_CG(step, flip)
+      integer, value :: step,flip
+      integer :: i,j,k
+
+      i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
+      j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
+      k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
+
+      ! Only on fluid nodes
+      if (myfluid_d(i,j,k, flip) == fluid_fluid) then
+        rhoB_d(i,j,k) = popsB_d(i,j,k,0, flip) + popsB_d(i,j,k,1, flip) + &
+               popsB_d(i,j,k,2, flip) + popsB_d(i,j,k,3, flip) + &
+               popsB_d(i,j,k,4, flip) + popsB_d(i,j,k,5, flip) + &
+               popsB_d(i,j,k,6, flip) + popsB_d(i,j,k,7, flip) + &
+               popsB_d(i,j,k,8, flip) + popsB_d(i,j,k,9, flip) + &
+               popsB_d(i,j,k,10,flip) + popsB_d(i,j,k,11,flip) + &
+               popsB_d(i,j,k,12,flip) + popsB_d(i,j,k,13,flip) + &
+               popsB_d(i,j,k,14,flip) + popsB_d(i,j,k,15,flip) + &
+               popsB_d(i,j,k,16,flip) + popsB_d(i,j,k,17,flip) + &
+               popsB_d(i,j,k,18,flip)
+      else
+        rhoB_d(i,j,k) = MINDENS
+      endif
+
+    end subroutine init_rhoB_CG
+
+#define manual_u(pops)   invrho * ( pops(1) - pops(2) + pops(7) - pops(8) - pops(9) + \
+       pops(10) + pops(11) - pops(12) - pops(13) + pops(14) )
+
+#define manual_v(pops)   invrho * ( pops(3) - pops(4) + pops(7) - pops(8) + pops(9) - \
+       pops(10) + pops(15) - pops(16) - pops(17) + pops(18) )
+
+#define manual_w(pops)   invrho * ( pops(5) - pops(6) + pops(11) - pops(12) + pops(13) - \
+       pops(14) + pops(15) - pops(16) + pops(17) - pops(18) )
 
     attributes(global) subroutine time_step_CG(step, flip)
       integer, value :: step,flip
@@ -214,19 +274,126 @@
       real    :: psix,psiy,psiz,psinorm_sq,psinorm,acoeff,e_dot_psi
       real    :: temp,temp1, cosphi, feq
       real, parameter :: mylimit=1.e-20
-      real    :: tempR(0:npops-1), tempB(0:npops-1), fdum(0:npops-1)
 
+!      real,shared    :: loc_tempR(TILE_DIMx,TILE_DIMy,TILE_DIMz,0:npops-1)
+!      real,shared    :: loc_tempB(TILE_DIMx,TILE_DIMy,TILE_DIMz,0:npops-1)
+!      real,shared    :: loc_fdum(TILE_DIMx,TILE_DIMy,TILE_DIMz,0:npops-1)
+
+!      real,shared    :: loc_popsR(TILE_DIMx,TILE_DIMy,TILE_DIMz, 0:18)
+!      real,shared    :: loc_popsB(TILE_DIMx,TILE_DIMy,TILE_DIMz, 0:18)
+      real,shared    :: loc_rhoR(0:TILE_DIMx+1,0:TILE_DIMy+1,0:TILE_DIMz+1)
+      real,shared    :: loc_rhoB(0:TILE_DIMx+1,0:TILE_DIMy+1,0:TILE_DIMz+1)
+      
+      real :: loc_tempR(0:18),loc_tempB(0:18),loc_fdum(0:18)
       integer :: i,j,k, i1,j1,k1,l
+      integer :: li,lj,lk
       
   
       i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
       j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
       k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
-      ! if (step==1 .and. 1==i*j*k) write(*,*) 'CUDA time_step_CG] i,k:',i,j,k
+
+      li = threadIdx%x
+      lj = threadIdx%y
+      lk = threadIdx%z
+
+      loc_rhoR(li,lj,lk) = rhoR_d(i,j,k)
+
+      ! Halo Faces
+      if (li==1) then
+	loc_rhoR(li-1,lj,lk) = rhoR_d(i-1,j,k)
+      endif
+      if (li==TILE_DIMx) then
+	loc_rhoR(li+1,lj,lk) = rhoR_d(i+1,j,k)
+      endif
+
+      if (lj==1) then
+	loc_rhoR(li,lj-1,lk) = rhoR_d(i,j-1,k)
+      endif
+      if (lj==TILE_DIMy) then
+	loc_rhoR(li,lj+1,lk) = rhoR_d(i,j+1,k)
+      endif
+
+      if (lk==1) then
+	loc_rhoR(li,lj,lk-1) = rhoR_d(i,j,k-1)
+      endif
+      if (lk==TILE_DIMz) then
+	loc_rhoR(li,lj,lk+1) = rhoR_d(i,j,k+1)
+      endif
+
+      ! Halo edges
+      if (li==1 .and. lj==1) loc_rhoR(li-1,lj-1,lk) = rhoR_d(i-1,j-1,k)
+      if (li==1 .and. lj==TILE_DIMy) loc_rhoR(li-1,lj+1,lk) = rhoR_d(i-1,j+1,k)
+
+      if (li==1 .and. lk==1) loc_rhoR(li-1,lj,lk-1) = rhoR_d(i-1,j,k-1)
+      if (li==1 .and. lk==TILE_DIMz) loc_rhoR(li-1,lj,lk+1) = rhoR_d(i-1,j,k+1)
+
+      if (li==TILE_DIMx .and. lj==1) loc_rhoR(li+1,lj-1,lk) = rhoR_d(i+1,j-1,k)
+      if (li==TILE_DIMx .and. lj==TILE_DIMy) loc_rhoR(li+1,lj+1,lk) = rhoR_d(i+1,j+1,k)
+
+      if (li==TILE_DIMx .and. lk==1) loc_rhoR(li+1,lj,lk-1) = rhoR_d(i+1,j,k-1)
+      if (li==TILE_DIMx .and. lk==TILE_DIMz) loc_rhoR(li+1,lj,lk+1) = rhoR_d(i+1,j,k+1)
+
+      if (lj==1 .and. lk==1) loc_rhoR(li,lj-1,lk-1) = rhoR_d(i,j-1,k-1)
+      if (lj==1 .and. lk==TILE_DIMz) loc_rhoR(li,lj-1,lk+1) = rhoR_d(i,j-1,k+1)
+
+      if (lj==TILE_DIMy .and. lk==1) loc_rhoR(li,lj+1,lk-1) = rhoR_d(i,j+1,k-1)
+      if (lj==TILE_DIMy .and. lk==TILE_DIMz) loc_rhoR(li,lj+1,lk+1) = rhoR_d(i,j+1,k+1)
+
+      ! Ripeto per il blue
+      loc_rhoB(li,lj,lk) = rhoB_d(i,j,k)
+
+      ! Halo Faces
+      if (li==1) then
+	loc_rhoB(li-1,lj,lk) = rhoB_d(i-1,j,k)
+      endif
+      if (li==TILE_DIMx) then
+	loc_rhoB(li+1,lj,lk) = rhoB_d(i+1,j,k)
+      endif
+
+      if (lj==1) then
+	loc_rhoB(li,lj-1,lk) = rhoB_d(i,j-1,k)
+      endif
+      if (lj==TILE_DIMy) then
+	loc_rhoB(li,lj+1,lk) = rhoB_d(i,j+1,k)
+      endif
+
+      if (lk==1) then
+	loc_rhoB(li,lj,lk-1) = rhoB_d(i,j,k-1)
+      endif
+      if (lk==TILE_DIMz) then
+	loc_rhoB(li,lj,lk+1) = rhoB_d(i,j,k+1)
+      endif
+
+      ! Halo edges
+      if (li==1 .and. lj==1) loc_rhoB(li-1,lj-1,lk) = rhoB_d(i-1,j-1,k)
+      if (li==1 .and. lj==TILE_DIMy) loc_rhoB(li-1,lj+1,lk) = rhoB_d(i-1,j+1,k)
+
+      if (li==1 .and. lk==1) loc_rhoB(li-1,lj,lk-1) = rhoB_d(i-1,j,k-1)
+      if (li==1 .and. lk==TILE_DIMz) loc_rhoB(li-1,lj,lk+1) = rhoB_d(i-1,j,k+1)
+
+      if (li==TILE_DIMx .and. lj==1) loc_rhoB(li+1,lj-1,lk) = rhoB_d(i+1,j-1,k)
+      if (li==TILE_DIMx .and. lj==TILE_DIMy) loc_rhoB(li+1,lj+1,lk) = rhoB_d(i+1,j+1,k)
+
+      if (li==TILE_DIMx .and. lk==1) loc_rhoB(li+1,lj,lk-1) = rhoB_d(i+1,j,k-1)
+      if (li==TILE_DIMx .and. lk==TILE_DIMz) loc_rhoB(li+1,lj,lk+1) = rhoB_d(i+1,j,k+1)
+
+      if (lj==1 .and. lk==1) loc_rhoB(li,lj-1,lk-1) = rhoB_d(i,j-1,k-1)
+      if (lj==1 .and. lk==TILE_DIMz) loc_rhoB(li,lj-1,lk+1) = rhoB_d(i,j-1,k+1)
+
+      if (lj==TILE_DIMy .and. lk==1) loc_rhoB(li,lj+1,lk-1) = rhoB_d(i,j+1,k-1)
+      if (lj==TILE_DIMy .and. lk==TILE_DIMz) loc_rhoB(li,lj+1,lk+1) = rhoB_d(i,j+1,k+1)
+
+      ! Non serve halo
+      do l = 0, npops-1
+        loc_tempR(l) = popsR_d(i,j,k, l,flip)
+        loc_tempB(l) = popsB_d(i,j,k, l,flip)
+      enddo
+      call syncthreads
 
       if (myfluid_d(i,j,k, flip) == fluid_fluid) then
-        rhoR = rhoR_d(i,j,k)
-        rhoB = rhoB_d(i,j,k)
+        rhoR = loc_rhoR(li,lj,lk)
+        rhoB = loc_rhoB(li,lj,lk)
         rhosum = rhoR + rhoB
 
         rhoavg = rhoR/rhosum*viscR + rhoB/rhosum*viscB
@@ -234,17 +401,17 @@
         oneminusomega = 1.0 - omega
 
         invrho = 1.0 / rhosum
-        u   = compute_u_1fl(popsR_d,i,j,k,flip, invrho) + compute_u_1fl(popsB_d,i,j,k,flip, invrho)
-        v   = compute_v_1fl(popsR_d,i,j,k,flip, invrho) + compute_v_1fl(popsB_d,i,j,k,flip, invrho)
-        w   = compute_w_1fl(popsR_d,i,j,k,flip, invrho) + compute_w_1fl(popsB_d,i,j,k,flip, invrho)
+        u   = manual_u(loc_tempR) + manual_u(loc_tempB)
+        v   = manual_v(loc_tempR) + manual_v(loc_tempB)
+        w   = manual_w(loc_tempR) + manual_w(loc_tempB)
 
 
         !bgk step
         do l = 0, npops-1
-            tempR(l) = popsR_d(i,j,k, l, flip)*oneminusomega + equil(rhoR,u,v,w, l)*omega
+            loc_tempR(l) = loc_tempR(l)*oneminusomega + equil(rhoR,u,v,w, l)*omega
         enddo
         do l = 0, npops-1
-            tempB(l) = popsB_d(i,j,k, l, flip)*oneminusomega + equil(rhoB,u,v,w, l)*omega
+            loc_tempB(l) = loc_tempB(l)*oneminusomega + equil(rhoB,u,v,w, l)*omega
         enddo
 
 
@@ -253,15 +420,15 @@
         psiy = ZERO
         psiz = ZERO
         do l = 1, npops-1
-          i1 = mod(i + ex_d(l) +nx-1, nx) + 1
-          j1 = mod(j + ey_d(l) +ny-1, ny) + 1
-          k1 = mod(k + ez_d(l) +nz-1, nz) + 1
-          if (i1<1 .or. i1>nx .or. j1<1 .or. j1>ny .or.k1<1 .or. k1>nz) then
-            stop_d = __LINE__
-          endif
+          i1 = li + ex_d(l)
+          j1 = lj + ey_d(l)
+          k1 = lk + ez_d(l)
+          ! if (i1<1 .or. i1>nx .or. j1<1 .or. j1>ny .or.k1<1 .or. k1>nz) then
+          !   stop_d = __LINE__
+          ! endif
 
-          rhoR_shifted = rhoR_d(i1,j1,k1)
-          rhoB_shifted = rhoB_d(i1,j1,k1)
+          rhoR_shifted = loc_rhoR(i1,j1,k1)
+          rhoB_shifted = loc_rhoB(i1,j1,k1)
           psi_shifted = (rhoR_shifted - rhoB_shifted) / (rhoR_shifted + rhoB_shifted)
           psix = psix + a_d(l)*ex_d(l)* psi_shifted
           psiy = psiy + a_d(l)*ey_d(l)* psi_shifted
@@ -279,7 +446,7 @@
               temp = psinorm*(p_d(l)*(e_dot_psi*e_dot_psi)/psinorm_sq - b_l_d(l))
               !if(isnan(temp)) temp=ZERO
 
-              fdum(l) = tempR(l) + tempB(l) + acoeff*temp
+              loc_fdum(l) = loc_tempR(l) + loc_tempB(l) + acoeff*temp
           enddo
 
           !recoloring step
@@ -296,19 +463,18 @@
 
               temp = beta_CG * rhoR * rhoB * cosphi/(rhosum*rhosum)
 
-              tempR(l) = fdum(l)*rhoR/rhosum + temp*feq
-              tempB(l) = fdum(l)*rhoB/rhosum - temp*feq
+              popsR_d(i,j,k,l, flip) = loc_fdum(l)*rhoR/rhosum + temp*feq
+              popsB_d(i,j,k,l, flip) = loc_fdum(l)*rhoB/rhosum - temp*feq
+          enddo
+        else
+        ! Store to mem if not at the interface
+          do l = 0, npops-1
+            popsR_d(i,j,k,l, flip) = loc_tempR(l)
+          enddo
+          do l = 0, npops-1
+            popsB_d(i,j,k,l, flip) = loc_tempB(l)
           enddo
         endif
-
-        ! Store to mem
-        do l = 0, npops-1
-          popsR_d(i,j,k,l, flip) = tempR(l)
-        enddo
-        do l = 0, npops-1
-          popsB_d(i,j,k,l, flip) = tempB(l)
-        enddo
-        
       endif
     end subroutine time_step_CG
 
@@ -364,6 +530,74 @@
       endif
     
     end subroutine stream_CG
+    
+    attributes(global) subroutine streamR_CG(step, flip)
+      integer, value :: step,flip
+      integer :: i,j,k,flop
+
+      i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
+      j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
+      k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
+      ! if (step==1 .and. 1==i*j*k) write(*,*) 'CUDA stream_CG] i,k:',i,j,k
+
+      flop = 3 - flip
+
+      ! Streaming
+      if (myfluid_d(i,j,k, flip) /= fluid_spheredead) then
+          popsR_d(i+1,j+0,k+0,01, flop) = popsR_d(i,j,k,01,flip)
+          popsR_d(i-1,j+0,k+0,02, flop) = popsR_d(i,j,k,02,flip)
+          popsR_d(i+0,j+1,k+0,03, flop) = popsR_d(i,j,k,03,flip)
+          popsR_d(i+0,j-1,k+0,04, flop) = popsR_d(i,j,k,04,flip)
+          popsR_d(i+0,j+0,k+1,05, flop) = popsR_d(i,j,k,05,flip)
+          popsR_d(i+0,j+0,k-1,06, flop) = popsR_d(i,j,k,06,flip)
+          popsR_d(i+1,j+1,k+0,07, flop) = popsR_d(i,j,k,07,flip)
+          popsR_d(i-1,j-1,k+0,08, flop) = popsR_d(i,j,k,08,flip)
+          popsR_d(i-1,j+1,k+0,09, flop) = popsR_d(i,j,k,09,flip)
+          popsR_d(i+1,j-1,k+0,10, flop) = popsR_d(i,j,k,10,flip)
+          popsR_d(i+1,j+0,k+1,11, flop) = popsR_d(i,j,k,11,flip)
+          popsR_d(i-1,j+0,k-1,12, flop) = popsR_d(i,j,k,12,flip)
+          popsR_d(i-1,j+0,k+1,13, flop) = popsR_d(i,j,k,13,flip)
+          popsR_d(i+1,j+0,k-1,14, flop) = popsR_d(i,j,k,14,flip)
+          popsR_d(i+0,j+1,k+1,15, flop) = popsR_d(i,j,k,15,flip)
+          popsR_d(i+0,j-1,k-1,16, flop) = popsR_d(i,j,k,16,flip)
+          popsR_d(i+0,j-1,k+1,17, flop) = popsR_d(i,j,k,17,flip)
+          popsR_d(i+0,j+1,k-1,18, flop) = popsR_d(i,j,k,18,flip)
+      endif
+    end subroutine streamR_CG
+
+    attributes(global) subroutine streamB_CG(step, flip)
+      integer, value :: step,flip
+      integer :: i,j,k,flop
+
+      i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
+      j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
+      k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
+      ! if (step==1 .and. 1==i*j*k) write(*,*) 'CUDA stream_CG] i,k:',i,j,k
+
+      flop = 3 - flip
+
+      ! Streaming
+      if (myfluid_d(i,j,k, flip) /= fluid_spheredead) then
+          popsB_d(i+1,j+0,k+0,01, flop) = popsB_d(i,j,k,01,flip)
+          popsB_d(i-1,j+0,k+0,02, flop) = popsB_d(i,j,k,02,flip)
+          popsB_d(i+0,j+1,k+0,03, flop) = popsB_d(i,j,k,03,flip)
+          popsB_d(i+0,j-1,k+0,04, flop) = popsB_d(i,j,k,04,flip)
+          popsB_d(i+0,j+0,k+1,05, flop) = popsB_d(i,j,k,05,flip)
+          popsB_d(i+0,j+0,k-1,06, flop) = popsB_d(i,j,k,06,flip)
+          popsB_d(i+1,j+1,k+0,07, flop) = popsB_d(i,j,k,07,flip)
+          popsB_d(i-1,j-1,k+0,08, flop) = popsB_d(i,j,k,08,flip)
+          popsB_d(i-1,j+1,k+0,09, flop) = popsB_d(i,j,k,09,flip)
+          popsB_d(i+1,j-1,k+0,10, flop) = popsB_d(i,j,k,10,flip)
+          popsB_d(i+1,j+0,k+1,11, flop) = popsB_d(i,j,k,11,flip)
+          popsB_d(i-1,j+0,k-1,12, flop) = popsB_d(i,j,k,12,flip)
+          popsB_d(i-1,j+0,k+1,13, flop) = popsB_d(i,j,k,13,flip)
+          popsB_d(i+1,j+0,k-1,14, flop) = popsB_d(i,j,k,14,flip)
+          popsB_d(i+0,j+1,k+1,15, flop) = popsB_d(i,j,k,15,flip)
+          popsB_d(i+0,j-1,k-1,16, flop) = popsB_d(i,j,k,16,flip)
+          popsB_d(i+0,j-1,k+1,17, flop) = popsB_d(i,j,k,17,flip)
+          popsB_d(i+0,j+1,k-1,18, flop) = popsB_d(i,j,k,18,flip)
+      endif
+    end subroutine streamB_CG
 
     attributes(global) subroutine stream_CG_x(step, flip)
       integer, value :: step,flip

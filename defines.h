@@ -1,6 +1,7 @@
 #define noBGK
 #define CG
 #define PARTICLES
+#define FLUIDSPLIT
 
 #define noDEBUG_FORCE
 #define noDEBUG_ROT
