@@ -7,6 +7,13 @@ program TestLB
   use kernels_fluid_subs
   use kernels_particles
   use write_output
+
+#ifdef SERIAL
+! do nothing  
+#else
+  use mpi
+#endif
+
   implicit none
 
 
@@ -45,7 +52,10 @@ program TestLB
 
   stop_d = 0
   
+
   call readParameters
+
+  call setupMPI
 
   call setupGPUgridAndAlloc
 
@@ -76,6 +86,7 @@ program TestLB
 
 
   if (wantOut) call OutputVTK("step_", 0, 1)
+
 
   ! tauR = viscR/cssq + HALF
   ! viscR = cssq*(tauR-HALF)
@@ -201,14 +212,18 @@ program TestLB
 
 
     if (mod(step,niterOut)==0) then
-       write(*,fmt=100)  step, time*0.001, time/niterOut, lup * niterOut / time / 1000.
+       if (myrank== 0) then 
+           write(*,fmt=100)  step, time*0.001, time/niterOut, lup * niterOut / time / 1000.
+       endif
 100    format('Iter:',I10,'   Time(s):', G10.4, '   ms/it:',G9.3, '   Mlup/s:',F8.0)
 
        istat = cudaEventRecord(startEvent, 0)
     endif
 
     if (wantOut) then
-       if (mod(step,niterVTK)==0) call OutputVTK("step_",step, flipflop)
+       if (mod(step,niterVTK)==0) then 
+          call OutputVTK("step_",step, flipflop)
+       endif
     endif
     
   enddo
@@ -225,16 +240,23 @@ program TestLB
 
 
     subroutine readParameters
+!
+#ifdef SERIAL
+! do nothing  
+#else
+      use mpi
+#endif
+!
       implicit none
       character(len = 120)  :: string
       integer               :: itest, found
-
+!
       open(unit=11, file='input.dat', status='old', form='FORMATTED', action='read', iostat=itest)
       if (itest/=0) then
         write (*,*) "input.dat] Error opening file. STOP"
         stop
       endif
-
+!
       nIter = 0.2*1000*1000*1000 / lup * 10
       nIterOut = nIter / 10
       nIter = 5
@@ -326,10 +348,24 @@ program TestLB
     end subroutine fixPeriodic_isfluid
 
     subroutine fixPeriodic(faiPops,faiRho)
+#ifdef SERIAL
       implicit none
+#else
+      use mpi
+      implicit none
+
+      integer      :: reqs_right(5)
+      integer      :: status_up(MPI_STATUS_SIZE)
+      integer      :: reqs_up(5)
+      integer      :: status_down(MPI_STATUS_SIZE)
+      integer      :: reqs_down(5)
+      integer      :: tag
+
+#endif
       logical :: faiPops, faiRho
 
       if (withCG) then
+#ifdef SERIAL
           call bc_per_x2<<<dimGridx, dimBlock2>>>(step, flipflop, faiPops,faiRho)
           call bc_per_y2<<<dimGridy, dimBlock2>>>(step, flipflop, faiPops,faiRho)
           call bc_per_z2<<<dimGridz, dimBlock2>>>(step, flipflop, faiPops,faiRho)
@@ -339,6 +375,247 @@ program TestLB
           call bc_edge_z2<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
 
           call bc_corners<<<dimGridz, dimBlock2>>>(step, flipflop)
+#else
+          call bc_per_x2<<<dimGridx, dimBlock2>>>(step, flipflop, faiPops,faiRho)
+          call bc_per_y2<<<dimGridy, dimBlock2>>>(step, flipflop, faiPops,faiRho)
+
+! if it is the same task, there's no need to send/recv data
+          if(up(2) == myrank) then
+             call bc_per_z2<<<dimGridz, dimBlock2>>>(step, flipflop, faiPops,faiRho)
+          else 
+! 
+! I've to exchange pop with other task
+! -----------------------------------------------------------------------------------
+! send RED rho
+! 1) isend to up task 
+           tag = 405
+           call mpi_isend(rhoR_d(0,0,  nz), 1, xyplane, up(2), tag, &
+                             lbecomm, reqs_up(1), ierr)
+!
+! 2) recv from down task
+           tag = 405
+           call  mpi_recv(rhoR_d(0,0,   0), 1, xyplane, down(2), tag, &
+                             lbecomm, status_up, ierr)
+!
+! 3) isend to down task
+           tag = 406
+           call mpi_isend(rhoR_d(0,0,   1), 1, xyplane, down(2), tag, &
+                             lbecomm, reqs_down(1), ierr)
+!
+! 4) recv from up task
+           tag = 406
+           call  mpi_recv(rhoR_d(0,0,nz+1), 1, xyplane, up(2), tag, &
+                             lbecomm, status_down, ierr)
+!
+! 5) syncronize
+           call mpi_wait(reqs_up(1), status_up, ierr)
+           call mpi_wait(reqs_down(1), status_down, ierr)
+!
+! -----------------------------------------------------------------------------------
+! Send RED pops
+! 1) isend to up task
+           tag = 005
+           call mpi_isend(popsR_d(0,0,nz  , 5,flipflop), 1, xyplane, up(2), tag, &
+                             lbecomm, reqs_up(1), ierr)
+           tag = 011
+           call mpi_isend(popsR_d(0,0,nz  ,11,flipflop), 1, xyplane, up(2), tag, &
+                             lbecomm, reqs_up(2), ierr)
+           tag = 013
+           call mpi_isend(popsR_d(0,0,nz  ,13,flipflop), 1, xyplane, up(2), tag, &
+                             lbecomm, reqs_up(3), ierr)
+           tag = 015
+           call mpi_isend(popsR_d(0,0,nz  ,15,flipflop), 1, xyplane, up(2), tag, &
+                             lbecomm, reqs_up(4), ierr)
+           tag = 017
+           call mpi_isend(popsR_d(0,0,nz  ,17,flipflop), 1, xyplane, up(2), tag, &
+                             lbecomm, reqs_up(5), ierr)
+!
+! 2) recv from down task
+           tag = 005
+           call mpi_recv(popsR_d( 0,0,0  , 5,flipflop), 1, xyplane, down(2), tag, &
+                             lbecomm, status_up, ierr)
+           tag = 011
+           call mpi_recv(popsR_d(0,0, 0  ,11,flipflop), 1, xyplane, down(2), tag, &
+                             lbecomm, status_up, ierr)
+           tag = 013
+           call mpi_recv(popsR_d(0,0, 0  ,13,flipflop), 1, xyplane, down(2), tag, &
+                             lbecomm, status_up, ierr)
+           tag = 015
+           call mpi_recv(popsR_d(0,0, 0  ,15,flipflop), 1, xyplane, down(2), tag, &
+                             lbecomm, status_up, ierr)
+           tag = 017
+           call mpi_recv(popsR_d(0,0, 0  ,17,flipflop), 1, xyplane, down(2), tag, &
+                             lbecomm, status_up, ierr)
+!
+! 3) isend to down task
+           tag = 006
+           call mpi_isend(popsR_d(0,0, 1  , 6,flipflop), 1, xyplane, down(2), tag, &
+                             lbecomm, reqs_down(1), ierr)
+           tag = 012
+           call mpi_isend(popsR_d(0,0, 1  ,12,flipflop), 1, xyplane, down(2), tag, &
+                             lbecomm, reqs_down(2), ierr)
+           tag = 014
+           call mpi_isend(popsR_d(0,0, 1  ,14,flipflop), 1, xyplane, down(2), tag, &
+                             lbecomm, reqs_down(3), ierr)
+           tag = 016
+           call mpi_isend(popsR_d(0,0, 1  ,16,flipflop), 1, xyplane, down(2), tag, &
+                             lbecomm, reqs_down(4), ierr)
+           tag = 018
+           call mpi_isend(popsR_d(0,0, 1  ,18,flipflop), 1, xyplane, down(2), tag, &
+                             lbecomm, reqs_down(5), ierr)
+!
+! 4) recv from up task
+           tag = 006
+           call mpi_recv(popsR_d( 0,0,nz+1, 6,flipflop), 1, xyplane, up(2), tag, &
+                             lbecomm, status_down, ierr)
+           tag = 012
+           call mpi_recv(popsR_d( 0,0,nz+1,12,flipflop), 1, xyplane, up(2), tag, &
+                             lbecomm, status_down, ierr)
+           tag = 014
+           call mpi_recv(popsR_d( 0,0,nz+1,14,flipflop), 1, xyplane, up(2), tag, &
+                             lbecomm, status_down, ierr)
+           tag = 016
+           call mpi_recv(popsR_d( 0,0,nz+1,16,flipflop), 1, xyplane, up(2), tag, &
+                             lbecomm, status_down, ierr)
+           tag = 018
+           call mpi_recv(popsR_d( 0,0,nz+1,18,flipflop), 1, xyplane, up(2), tag, &
+                             lbecomm, status_down, ierr)
+!
+! 5) sincronizza
+           call mpi_wait(reqs_up(1), status_up, ierr)
+           call mpi_wait(reqs_down(1), status_down, ierr)
+           call mpi_wait(reqs_up(2), status_up, ierr)
+           call mpi_wait(reqs_down(2), status_down, ierr)
+           call mpi_wait(reqs_up(3), status_up, ierr)
+           call mpi_wait(reqs_down(3), status_down, ierr)
+           call mpi_wait(reqs_up(4), status_up, ierr)
+           call mpi_wait(reqs_down(4), status_down, ierr)
+           call mpi_wait(reqs_up(5), status_up, ierr)
+           call mpi_wait(reqs_down(5), status_down, ierr)
+!
+! -----------------------------------------------------------------------------------
+! send BLUE rho
+! 1) isend to up task
+           tag = 205 
+           call mpi_isend(rhoB_d(0,0,  nz), 1, xyplane, up(2), tag, &
+                             lbecomm, reqs_up(1), ierr)
+!
+! 2) recv from down task
+           tag = 205
+           call  mpi_recv(rhoB_d(0,0,   0), 1, xyplane, down(2), tag, &
+                             lbecomm, status_up, ierr)
+!
+! 3) isend to down task
+           tag = 206
+           call mpi_isend(rhoB_d(0,0,   1), 1, xyplane, down(2), tag, &
+                             lbecomm, reqs_down(1), ierr)
+!
+! 4) recv from up task
+           tag = 206
+           call  mpi_recv(rhoB_d(0,0,nz+1), 1, xyplane, up(2), tag, &
+                             lbecomm, status_down, ierr)
+!
+! 5) sincronizza
+           call mpi_wait(reqs_up(1), status_up, ierr)
+           call mpi_wait(reqs_down(1), status_down, ierr)
+!
+! -----------------------------------------------------------------------------------
+! send BLUE popos
+! 1) isend to up task
+           tag = 105
+           call mpi_isend(popsB_d(0,0,nz  , 5,flipflop), 1, xyplane, up(2), tag, &
+                             lbecomm, reqs_up(1), ierr)
+           tag = 111
+           call mpi_isend(popsB_d(0,0,nz  ,11,flipflop), 1, xyplane, up(2), tag, &
+                             lbecomm, reqs_up(2), ierr)
+           tag = 113
+           call mpi_isend(popsB_d(0,0,nz  ,13,flipflop), 1, xyplane, up(2), tag, &
+                             lbecomm, reqs_up(3), ierr)
+           tag = 115
+           call mpi_isend(popsB_d(0,0,nz  ,15,flipflop), 1, xyplane, up(2), tag, &
+                             lbecomm, reqs_up(4), ierr)
+           tag = 117
+           call mpi_isend(popsB_d(0,0,nz  ,17,flipflop), 1, xyplane, up(2), tag, &
+                             lbecomm, reqs_up(5), ierr)
+!
+! 2) recv from down task
+           tag = 105
+           call mpi_recv(popsB_d( 0,0,0  , 5,flipflop), 1, xyplane, down(2), tag, &
+                             lbecomm, status_up, ierr)
+           tag = 111
+           call mpi_recv(popsB_d(0,0, 0  ,11,flipflop), 1, xyplane, down(2), tag, &
+                             lbecomm, status_up, ierr)
+           tag = 113
+           call mpi_recv(popsB_d(0,0, 0  ,13,flipflop), 1, xyplane, down(2), tag, &
+                             lbecomm, status_up, ierr)
+           tag = 115
+           call mpi_recv(popsB_d(0,0, 0  ,15,flipflop), 1, xyplane, down(2), tag, &
+                             lbecomm, status_up, ierr)
+           tag = 117
+           call mpi_recv(popsB_d(0,0, 0  ,17,flipflop), 1, xyplane, down(2), tag, &
+                             lbecomm, status_up, ierr)
+!
+! 3) isend to down task
+           tag = 106
+           call mpi_isend(popsB_d(0,0, 1  , 6,flipflop), 1, xyplane, down(2), tag, &
+                             lbecomm, reqs_down(1), ierr)
+           tag = 112
+           call mpi_isend(popsB_d(0,0, 1  ,12,flipflop), 1, xyplane, down(2), tag, &
+                             lbecomm, reqs_down(2), ierr)
+           tag = 114
+           call mpi_isend(popsB_d(0,0, 1  ,14,flipflop), 1, xyplane, down(2), tag, &
+                             lbecomm, reqs_down(3), ierr)
+           tag = 116
+           call mpi_isend(popsB_d(0,0, 1  ,16,flipflop), 1, xyplane, down(2), tag, &
+                             lbecomm, reqs_down(4), ierr)
+           tag = 118
+           call mpi_isend(popsB_d(0,0, 1  ,18,flipflop), 1, xyplane, down(2), tag, &
+                             lbecomm, reqs_down(5), ierr)
+!
+! 4) recv from up task
+           tag = 106
+           call mpi_recv(popsB_d( 0,0,nz+1, 6,flipflop), 1, xyplane, up(2), tag, &
+                             lbecomm, status_down, ierr)
+           tag = 112
+           call mpi_recv(popsB_d( 0,0,nz+1,12,flipflop), 1, xyplane, up(2), tag, &
+                             lbecomm, status_down, ierr)
+           tag = 114
+           call mpi_recv(popsB_d( 0,0,nz+1,14,flipflop), 1, xyplane, up(2), tag, &
+                             lbecomm, status_down, ierr)
+           tag = 116
+           call mpi_recv(popsB_d( 0,0,nz+1,16,flipflop), 1, xyplane, up(2), tag, &
+                             lbecomm, status_down, ierr)
+           tag = 118
+           call mpi_recv(popsB_d( 0,0,nz+1,18,flipflop), 1, xyplane, up(2), tag, &
+                             lbecomm, status_down, ierr)
+!
+! 5) sincronizza
+           call mpi_wait(reqs_up(1), status_up, ierr)
+           call mpi_wait(reqs_down(1), status_down, ierr)
+           call mpi_wait(reqs_up(2), status_up, ierr)
+           call mpi_wait(reqs_down(2), status_down, ierr)
+           call mpi_wait(reqs_up(3), status_up, ierr)
+           call mpi_wait(reqs_down(3), status_down, ierr)
+           call mpi_wait(reqs_up(4), status_up, ierr)
+           call mpi_wait(reqs_down(4), status_down, ierr)
+           call mpi_wait(reqs_up(5), status_up, ierr)
+           call mpi_wait(reqs_down(5), status_down, ierr)
+!
+!             call bc_per_z2<<<dimGridz, dimBlock2>>>(step, flipflop, faiPops,faiRho)
+          endif
+
+          call bc_edge_x2<<<(nx+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
+          call bc_edge_y2<<<(ny+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
+          if(up(2) == myrank) then
+             call bc_edge_z2<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
+          else 
+!             mpi rho+pop myrank <--> up(2)
+!             call bc_edge_z2<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
+          endif
+
+          call bc_corners<<<dimGridz, dimBlock2>>>(step, flipflop)
+
+#endif
       endif
     end subroutine fixPeriodic
 

@@ -2,6 +2,7 @@
       subroutine setupMPI
 
       use dimensions_m
+      use cudafor
 
 #ifdef SERIAL
 !do nothing
@@ -13,7 +14,7 @@
       implicit none
       character*15 file_name5
 
-      integer:: i
+      integer:: i, istat, ndev
 
       call mpi_init(ierr)
       call MPI_comm_size(MPI_COMM_WORLD, nprocs, ierr)
@@ -56,7 +57,7 @@
       call MPI_type_contiguous((ny+2)*(nx+2), MPI_REAL, xyplane, ierr)
       call MPI_type_commit(xyplane,ierr)
       if(myrank.eq.0) then
-         write(16,*) "INFO: xyplane (KB)-->", (ny+2)*(nx+2)
+         write(6,*) "INFO: xyplane (KB)-->", (ny+2)*(nx+2)
       endif
 
 ! x dir  & y dir
@@ -68,7 +69,15 @@
 !!GA      write(file_name5(6:11),3100) myrank
 !!      open(38,file=file_name5, status='unknown')	! task.XXXXXX.log
 !
+      call MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, &
+                               MPI_INFO_NULL, localcomm, ierr)
+      call MPI_comm_size(localcomm, ndev, ierr)
+      call MPI_Comm_rank(localcomm, mydev, ierr)
+      istat = cudaSetDevice(mydev)
+
+!
         write(6,*) myrank,':tot   task ', nprocs, procx, procy, procz
+        write(6,*) myrank,':Device     ', mydev, ndev
         write(6,*) myrank,':task mpi-x ', mpicoords(1)
         write(6,*) myrank,':task mpi-y ', mpicoords(2)
         write(6,*) myrank,':task mpi-z ', mpicoords(3)

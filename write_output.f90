@@ -19,7 +19,7 @@
 
 
   iotest = 55
-  fnameFull = 'output/' // trim(fname) // '_' // trim(write_fmtnumb(step)) // '.vti'
+  fnameFull = 'output/' // trim(fname) // '_' // trim(write_fmtnumb(myrank)) // '.' //trim(write_fmtnumb(step)) // '.vti'
   open(unit=iotest,file=trim(fnameFull),status='replace',action='write')
 
   extent =  trim(write_fmtnumb(1)) // ' ' // trim(write_fmtnumb(nx)) // ' ' &
@@ -85,7 +85,8 @@
 
 
   iotest = 55
-  fnameFull = 'output/' // trim(fname) // '_' // trim(write_fmtnumb(step)) // '.vti'
+  fnameFull = 'output/' // trim(fname) // '_' // trim(write_fmtnumb(myrank)) // '.' //trim(write_fmtnumb(step)) // '.vti'
+
   open(unit=iotest,file=trim(fnameFull),status='replace',action='write')
 
   extent =  trim(write_fmtnumb(1)) // ' ' // trim(write_fmtnumb(nx)) // ' ' &

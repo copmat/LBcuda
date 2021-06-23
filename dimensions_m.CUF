@@ -4,7 +4,29 @@
     implicit none
 
     ! integer(4), parameter :: nx = 32, ny = nx, nz = nx
-    integer(4), parameter :: nx = 128, ny = nx, nz = nx
+! da mettere come parametri di input 
+    integer(4), parameter :: glx = 128, gly = glx, glz = glx
+    integer(4), parameter :: procx=1, procy=1, procz=2
+    integer(4), parameter :: nx=glx/procx
+    integer(4), parameter :: ny=gly/procy
+    integer(4), parameter :: nz=glz/procz
+!
+! mpi stuff
+    integer:: nprocs, myrank, ierr
+    integer:: xyplane
+    integer, parameter::  mpid=3
+    integer:: front(2),rear(2),right(2)
+    integer:: up(2),down(2),left(2)
+    logical remdims(mpid)
+    logical Tperiodic(mpid)
+    logical rreorder
+    integer:: lbecomm,localcomm
+    integer:: mydev 
+    integer:: prgrid(mpid)
+    integer:: mpicoords(mpid)
+    integer:: gsizes(3),lsizes(3),start_idx(3)
+    integer:: offset(3)
+!
     logical, parameter :: xperiodic = .true.
     logical, parameter :: yperiodic = .true.
     logical, parameter :: zperiodic = .true.
@@ -65,7 +87,7 @@
 
     ! Q3D19 related
     integer(4), parameter :: npops = 19
-    integer(8), parameter :: lup = (nx+2)*(ny+2)*(nz+2)
+    integer(8), parameter :: lup = (glx+2)*(gly+2)*(glz+2)
     integer(8), parameter :: dataSz = 4 * lup * npops
 
     real, parameter :: cssq = 1.0 / 3.0
@@ -167,9 +189,9 @@
     real, constant    :: ext_tqx_d, ext_tqy_d, ext_tqz_d
 
     integer, parameter :: TILE_DIM = 8
-    integer, parameter :: TILE_DIMx = 4
-    integer, parameter :: TILE_DIMy = 4
-    integer, parameter :: TILE_DIMz = 4
+    integer, parameter :: TILE_DIMx = 32
+    integer, parameter :: TILE_DIMy = 2
+    integer, parameter :: TILE_DIMz = 2
     integer, parameter :: TILE_DIMPART = 16
 
     ! MPI
