@@ -161,8 +161,6 @@
 
       countmk_d = 0
       countrm_d = 0
-      partVol_d = 0
-      oldpartVol_d = 0
       countn2p_d = 0
     end subroutine setup2
 

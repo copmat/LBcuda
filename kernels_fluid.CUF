@@ -25,7 +25,8 @@
     integer, device :: ndouble
     integer, device, allocatable :: exdouble(:), eydouble(:), ezdouble(:)
 
-    integer, device :: stop_d, countmk_d, countrm_d, partVol_d, oldpartVol_d
+    integer, device :: stop_d, countmk_d, countrm_d
+    integer, device, allocatable :: partVol_d(:), oldpartVol_d(:)
     integer, device :: countn2p_d
 
     real, device :: minRho = -0.1, minPops = -0.1

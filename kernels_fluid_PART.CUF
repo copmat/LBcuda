@@ -254,7 +254,7 @@
         if (val /= fluid_fluid) then
           setmyfluid = .true.
           myfluid_d(i,j,k, flip) = val
-          tempInt = atomicadd( partVol_d, 1)
+          tempInt = atomicadd( partVol_d(iatm), 1)
           debugfluid_d(i,j,k) = iatm
           ! write(*,*) 'isfl',step, i,j,k, myfluid_d(i,j,k, flip)+0
         endif
@@ -1044,21 +1044,21 @@
         myt2_d(3,i) = ext_tqz_d
       endif
 
+      if (oldpartVol_d(i)>0 .and. partVol_d(i) /= oldpartVol_d(i)) then        
+        ! write(*,*) 'partVol_d /= oldpartVol_d ->Atom', i, partVol_d(i), oldpartVol_d(i)
+        ! stop_d = __LINE__      
+      endif
+      oldpartVol_d(i) = partVol_d(i)
+      partVol_d(i) = 0
+
       if (i == 1) then
         if (countmk_d /= countrm_d) then
           write(*,*) 'countmk_d /= countrm_d ->', countmk_d, countrm_d
           stop_d = __LINE__
         endif
-
-        if (oldpartVol_d>0 .and. partVol_d /= oldpartVol_d) then        
-          write(*,*) 'partVol_d /= oldpartVol_d ->', partVol_d, oldpartVol_d
-          ! stop_d = __LINE__      
-        endif
         
         countmk_d = 0
         countrm_d = 0
-        oldpartVol_d = partVol_d
-        partVol_d = 0
         countn2p_d = 0
       endif
     end subroutine time_step_force_particles

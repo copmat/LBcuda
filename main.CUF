@@ -42,6 +42,7 @@ program TestLB
   
   ! Debug
   real :: debugline(numAtoms, 21,4)
+  integer,allocatable :: partVol(:)
 
 
   stop_d = 0
@@ -65,6 +66,20 @@ program TestLB
   if (withCG) then
      write(*,*) 'Initial setup red & blue pops...'
      call setup2<<<dimGrid, dimBlock>>>(vx,vy,vz)
+
+      if (withParticles) then
+#ifdef CHECK_VOLP
+        partVol_d(1:numAtoms) = 0
+#endif
+
+        call init_isfluid_CG<<<dimGrid, dimBlock>>>(step, flipflop)
+        call fixPeriodic_isfluid
+
+#ifdef CHECK_VOLP
+        partVol(1:numAtoms) = partVol_d(1:numAtoms)
+        partVol_d(1:numAtoms) = 0
+#endif
+      endif
   else
      call setup<<<dimGrid, dimBlock>>>(vx,vy,vz)
   end if
@@ -96,6 +111,10 @@ program TestLB
         call init_isfluid_CG<<<dimGrid, dimBlock>>>(step, flipflop)
         call fixPeriodic_isfluid
         call del_fluid_CG<<<dimGrid, dimBlock>>>(step, flipflop, lrotate)
+
+#ifdef CHECK_VOLP
+        partVol(1:numAtoms) = partVol_d(1:numAtoms)
+#endif
       endif
 #endif
 
@@ -1046,6 +1065,24 @@ program TestLB
       ! close(iosub+1)
    end subroutine print_rho_pops2
 
+   subroutine dumpPartvol(step)
+    implicit none
+    integer, intent(in) :: step
+    character(len=120) :: mynamefile
+    integer :: l
+
+
+    mynamefile=repeat(' ',120)
+    mynamefile='output/partVol_'//write_fmtnumb(step)//'.txt'
+    open(unit=111, file=trim(mynamefile), status='replace')
+
+    do l= 1, numAtoms
+      write(111,fmt=200) l, partVol(l)
+      200    format(I8,' ', I8)
+    enddo
+
+    close(111)
+  end subroutine dumpPartvol
 
    subroutine OutputVTK(fname, step, flip)
       implicit none
@@ -1142,13 +1179,20 @@ program TestLB
         call writeParticleVTK(mynamefile,step, x_atm,v_atm,q, textVTK)
 
         mynamefile = repeat(' ',120)
-        mynamefile = trim(fname)//'_isfluid'
+        if (fname(1:5) == 'step_') then
+          mynamefile = 'isfluid'
+        else
+          mynamefile = trim(fname)//'_isfluid'
+        endif
         if (fname(1:5) == 'step_' .and. step/=0) then
           ! After time step, use old value
           call writeImageDataVTI_islfuid(mynamefile,step, myfluid, 3-flip, textVTK)
         else
           call writeImageDataVTI_islfuid(mynamefile,step, myfluid, flip, textVTK)
         endif
+#ifdef CHECK_VOLP
+        call dumpPartvol(step)
+#endif
      endif
 
       call system_clock(c_stop)
@@ -1501,6 +1545,22 @@ program TestLB
         if (istat /= 0) then
           write(*,*) 'Allocation of debugline_d failed'
         end if
+
+        ! DEBUG CHECK_VOLP
+        allocate(partVol(numAtoms), STAT=istat)
+        if (istat /= 0) then
+          write(*,*) 'Allocation of partVol failed'
+        end if
+
+        allocate(partVol_d(numAtoms), STAT=istat)
+        if (istat /= 0) then
+          write(*,*) 'Allocation of partVol_d failed'
+        end if
+        allocate(oldpartVol_d(numAtoms), STAT=istat)
+        if (istat /= 0) then
+          write(*,*) 'Allocation of oldpartVol_d failed'
+        end if
+        
       endif
     end if
   

@@ -501,7 +501,7 @@
   ! fnameFull = 'output/' // 'partVol_' // trim(write_fmtnumb(step)) // '.txt'
   ! open(unit=iotest,file=trim(fnameFull),status='replace',action='write')
 
-  totSumI = 0.0
+  totSumI = 0
   do k=1,nz
     do j=1,ny
       do i=1,nx
@@ -512,7 +512,7 @@
       enddo
     enddo
   enddo
-  write(*,fmt='(I5, A, I10)') step, ' myfluid=', totSumI
+  write(*,fmt='(A,I5, A,I10)') 'writeImageDataVTI] step=', step, ' myfluid=', totSumI
 
   ! close(iotest)
   
