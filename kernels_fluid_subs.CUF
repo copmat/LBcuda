@@ -124,10 +124,11 @@
     end function fcut
 
     attributes(global) subroutine setup2(vx,vy,vz)
+
       real, value :: vx,vy,vz
       integer :: i,j,k, l
       real    :: rhoR,rhoB, u,v,w, eqR,eqB, distx,disty,distz, rdist,tempr
-      real,parameter    :: radius = glx/8
+      real,parameter    :: radius = nz/4
   
       i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
       j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
@@ -135,7 +136,8 @@
 
       distx = i - (glx/2 + 0.5)
       disty = j - (gly/2 + 0.5)
-      distz = k - (glz/2 + 0.5)
+      distz = k - (nz/2 + 0.5)
+!
 !
       rdist = sqrt(distx*distx + disty*disty + distz*distz)
       tempr = fcut(rdist, radius, radius+0.1)

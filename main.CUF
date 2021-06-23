@@ -49,13 +49,22 @@ program TestLB
   ! Debug
   real :: debugline(numAtoms, 21,4)
 
-
   stop_d = 0
-  
+
+#ifdef SERIAL
+  myrank = 0
+  nprocs = 1
+  offset(1)= 0
+  offset(2)= 0
+  offset(3)= 0
+#else
+  call mpi_init(ierr)
+  call MPI_comm_size(MPI_COMM_WORLD, nprocs, ierr)
+  call MPI_comm_rank(MPI_COMM_WORLD, myrank, ierr)
+  call setupMPI
+#endif
 
   call readParameters
-
-  call setupMPI
 
   call setupGPUgridAndAlloc
 
@@ -227,6 +236,8 @@ program TestLB
     endif
     
   enddo
+
+  call MPI_FINALIZE(ierr)
 
   contains
     pure function viscosity_to_omega(visc)
