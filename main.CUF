@@ -1419,7 +1419,7 @@ program TestLB
     dimGridAtm  = (numAtoms+TILE_DIMPART-1)/TILE_DIMPART
     dimBlockAtm = TILE_DIMPART
 
-    dimGridSubd  = dim3(dimGrid%x / TILE_DIMx, dimGrid%y / TILE_DIMy, dimGrid%z / TILE_DIMz)
+    dimGridSubd  = dim3((dimGrid%x+TILE_DIMx-1) / TILE_DIMx, (dimGrid%y+TILE_DIMy-1) / TILE_DIMy, (dimGrid%z+TILE_DIMz-1) / TILE_DIMz)
     dimBlockSubd = dim3(TILE_DIMx, TILE_DIMy, TILE_DIMz)
   
     ! For timing
