@@ -1,0 +1,90 @@
+
+      subroutine setupMPI
+
+      use dimensions_m
+
+#ifdef SERIAL
+!do nothing
+      implicit none
+      nprocs = 1
+      myrank = 0
+#else
+      use mpi
+      implicit none
+      character*15 file_name5
+
+      integer:: i
+
+      call mpi_init(ierr)
+      call MPI_comm_size(MPI_COMM_WORLD, nprocs, ierr)
+      call MPI_comm_rank(MPI_COMM_WORLD, myrank, ierr)
+
+! check
+      if ((procx*procy*procz).ne.nprocs) then
+        if (myrank.eq.0) then
+          write(*,*) 'ERROR: decomposed for', &
+                             procx*procy*procz, 'procs'
+          write(*,*) 'ERROR: launched on', nprocs, 'processes'
+        end if
+        call MPI_finalize(ierr)
+        stop
+      end if
+!
+! building virtual topology
+!
+      rreorder=.false.
+!
+      Tperiodic(1) = .true.
+      Tperiodic(2) = .true.
+      Tperiodic(3) = .true.
+!
+      prgrid(1) = procx
+      prgrid(2) = procy
+      prgrid(3) = procz
+!
+      call MPI_cart_create(MPI_COMM_WORLD, mpid, prgrid, &
+                              Tperiodic,rreorder,lbecomm,ierr)
+
+      call MPI_comm_rank(lbecomm, myrank, ierr)
+      call MPI_cart_coords(lbecomm, myrank, mpid, &
+                            mpicoords, ierr)
+!
+      call mpi_barrier(lbecomm,ierr)
+!
+! mpidata type (to remove for performance)
+! xy plane is contiguous arrays (stride.eq.1)
+      call MPI_type_contiguous((ny+2)*(nx+2), MPI_REAL, xyplane, ierr)
+      call MPI_type_commit(xyplane,ierr)
+      if(myrank.eq.0) then
+         write(16,*) "INFO: xyplane (KB)-->", (ny+2)*(nx+2)
+      endif
+
+! x dir  & y dir
+      call MPI_cart_shift(lbecomm, 0, 1, rear(2), front(2), ierr)
+      call MPI_cart_shift(lbecomm, 1, 1, left(2), right(2), ierr)
+      call MPI_cart_shift(lbecomm, 2, 1, down(2), up(2), ierr)
+!
+!!      file_name5 = 'task.xxxxxx.log'
+!!GA      write(file_name5(6:11),3100) myrank
+!!      open(38,file=file_name5, status='unknown')	! task.XXXXXX.log
+!
+        write(6,*) myrank,':tot   task ', nprocs, procx, procy, procz
+        write(6,*) myrank,':task mpi-x ', mpicoords(1)
+        write(6,*) myrank,':task mpi-y ', mpicoords(2)
+        write(6,*) myrank,':task mpi-z ', mpicoords(3)
+        write(6,*) myrank,':rear  task ', rear(1), rear(2)
+        write(6,*) myrank,':front task ', front(1), front(2)
+        write(6,*) myrank,':left  task ', left(1), left(2)
+        write(6,*) myrank,':right task ', right(1), right(2)
+        write(6,*) myrank,':up    task ', up(1), up(2)
+        write(6,*) myrank,':down  task ', down(1), down(2)
+
+!format
+3100  format(i6.6)
+
+#endif
+
+
+      return
+      end subroutine setupMPI
+
