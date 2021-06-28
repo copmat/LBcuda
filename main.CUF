@@ -68,17 +68,16 @@ program TestLB
      call setup2<<<dimGrid, dimBlock>>>(vx,vy,vz)
 
       if (withParticles) then
-#ifdef CHECK_VOLP
         partVol_d(1:numAtoms) = 0
-#endif
 
         call init_isfluid_CG<<<dimGrid, dimBlock>>>(step, flipflop)
         call fixPeriodic_isfluid
 
 #ifdef CHECK_VOLP
         partVol(1:numAtoms) = partVol_d(1:numAtoms)
-        partVol_d(1:numAtoms) = 0
 #endif
+        partVol_d(1:numAtoms) = 0
+
       endif
   else
      call setup<<<dimGrid, dimBlock>>>(vx,vy,vz)
@@ -1186,9 +1185,9 @@ program TestLB
         endif
         if (fname(1:5) == 'step_' .and. step/=0) then
           ! After time step, use old value
-          call writeImageDataVTI_islfuid(mynamefile,step, myfluid, 3-flip, textVTK)
+          call writeImageDataVTI_isfluid(mynamefile,step, myfluid, 3-flip, textVTK)
         else
-          call writeImageDataVTI_islfuid(mynamefile,step, myfluid, flip, textVTK)
+          call writeImageDataVTI_isfluid(mynamefile,step, myfluid, flip, textVTK)
         endif
 #ifdef CHECK_VOLP
         call dumpPartvol(step)

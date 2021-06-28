@@ -1045,7 +1045,7 @@
       endif
 
       if (oldpartVol_d(i)>0 .and. partVol_d(i) /= oldpartVol_d(i)) then        
-        ! write(*,*) 'partVol_d /= oldpartVol_d ->Atom', i, partVol_d(i), oldpartVol_d(i)
+        write(*,*) 'partVol_d /= oldpartVol_d ->Atom', i, partVol_d(i), oldpartVol_d(i)
         ! stop_d = __LINE__      
       endif
       oldpartVol_d(i) = partVol_d(i)
@@ -2209,7 +2209,7 @@
         else
           splitted(1) = .false.
           boxatom(1,3) = TILE_DIMx	! This avoid loopi==1
-          boxatom(1,4) = 0
+          boxatom(1,4) = -TILE_DIMx
         endif
 
         ! y-component
@@ -2228,7 +2228,7 @@
         else
           splitted(2) = .false.
           boxatom(2,3) = TILE_DIMy	! This avoid loopj==1
-          boxatom(2,4) = 0
+          boxatom(2,4) = -TILE_DIMy
         endif
 
         ! z-component
@@ -2247,27 +2247,27 @@
         else
           splitted(3) = .false.
           boxatom(3,3) = TILE_DIMz	! This avoid loopk==1
-          boxatom(3,4) = 0
+          boxatom(3,4) = -TILE_DIMz
         endif
  
       do loopk=0, 1
-	mink = boxatom(3,2*loopk+1) / TILE_DIMz + 1
-	maxk = boxatom(3,2*loopk+2) / TILE_DIMz + 1
+	mink = (boxatom(3,2*loopk+1)-1) / TILE_DIMz + 1
+	maxk = (boxatom(3,2*loopk+2)-1) / TILE_DIMz + 1
 	do k = mink, maxk
 	  ! write(*,*) "atom",l," k:", k, "loopk:",loopk
-	  if (k > nz/TILE_DIMz) cycle
+	  if (k<1 .or. k > nz/TILE_DIMz) cycle
 
       	  do loopj=0, 1
-      	    minj = boxatom(2,2*loopj+1) / TILE_DIMy + 1
-      	    maxj = boxatom(2,2*loopj+2) / TILE_DIMy + 1
+      	    minj = (boxatom(2,2*loopj+1)-1) / TILE_DIMy + 1
+      	    maxj = (boxatom(2,2*loopj+2)-1) / TILE_DIMy + 1
       	    do j = minj, maxj
-	      if (j > ny/TILE_DIMy) cycle
+	      if (j<1 .or. j > ny/TILE_DIMy) cycle
 
       	      do loopi=0, 1
-      	        mini = boxatom(1,2*loopi+1) / TILE_DIMx + 1
-      	        maxi = boxatom(1,2*loopi+2) / TILE_DIMx + 1
+      	        mini = (boxatom(1,2*loopi+1)-1) / TILE_DIMx + 1
+      	        maxi = (boxatom(1,2*loopi+2)-1) / TILE_DIMx + 1
       	        do i = mini, maxi
-	          if (i > nx/TILE_DIMx) cycle
+	          if (i<1 .or. i > nx/TILE_DIMx) cycle
 
       	          ! put atom l in list(i,j,k)
 		  tempInt = 1 + atomicadd( dim_matAtm_d(i,j,k), 1)
