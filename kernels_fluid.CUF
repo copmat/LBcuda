@@ -35,5 +35,7 @@
     real, allocatable, device :: debugline_d(:,:,:)
     real, device :: debugn2pf_d(2000,5)
     real, device :: debugn2pt_d(2000,5)
+    real, device :: debug_rm_d(2000,4)
+    real, device :: debug_mk_d(2000,4)
     integer(2), allocatable, device :: debugfluid_d(:,:,:)
   end module

@@ -41,7 +41,7 @@ program TestLB
   real :: vx,vy,vz
   
   ! Debug
-  real :: debugline(numAtoms, 21,4)
+  real,allocatable :: debugline(:,:,:)
   integer,allocatable :: partVol(:)
 
 
@@ -75,6 +75,7 @@ program TestLB
 
 #ifdef CHECK_VOLP
         partVol(1:numAtoms) = partVol_d(1:numAtoms)
+        call dumpPartvol(step)
 #endif
         partVol_d(1:numAtoms) = 0
 
@@ -113,6 +114,8 @@ program TestLB
 
 #ifdef CHECK_VOLP
         partVol(1:numAtoms) = partVol_d(1:numAtoms)
+
+        call dumpPartvol(step)
 #endif
       endif
 #endif
@@ -124,6 +127,11 @@ program TestLB
       if (withParticles) then
         call make_fluid_CG<<<dimGrid, dimBlock>>>(step, flipflop, lrotate)
         call fixPeriodic(.false., .true.)
+
+#ifdef DEBUG_MKRM
+        call dumpMkRm(step)
+#endif 
+
       endif
 
       ! call OutputVTK("rho_isfluid_",step, flipflop)
@@ -165,7 +173,7 @@ program TestLB
       call doBoundary
       ! call OutputVTK("bb_",step, flipflop)
 
-      ! call copy_CG<<<dimGrid, dimBlock>>>(step, flipflop)
+      call copy_CG<<<dimGrid, dimBlock>>>(step, flipflop)
 
       call stream_CG<<<dimGrid, dimBlock>>>(step, flipflop)
       call stream_CG_x<<<dimGridx, dimBlock2>>>(step, flipflop)
@@ -1083,6 +1091,49 @@ program TestLB
     close(111)
   end subroutine dumpPartvol
 
+  subroutine dumpMkRm(step)
+    implicit none
+    integer, intent(in) :: step
+    character(len=120) :: mynamefile
+    integer :: l, int1,int2
+    integer :: countmk, countrm
+    real :: debug_rm(2000,4)
+    real :: debug_mk(2000,4)
+
+
+    countmk = countmk_d
+    debug_mk = debug_mk_d
+
+    if (countmk>0) then
+      mynamefile=repeat(' ',120)
+      mynamefile='output/debugMK-f_'//write_fmtnumb(step)//'.txt'
+      open(unit=111, file=trim(mynamefile), status='replace')
+
+      do l = 1, countmk
+        int1 = debug_mk(l,1)
+        write(111,fmt=200) int1, debug_mk(l,2), debug_mk(l,3), debug_mk(l,4)
+200    format(I8,' ', 3F20.15)        
+      enddo
+
+      close(111)
+    endif
+
+    countrm = countrm_d
+    debug_rm = debug_rm_d
+
+    if (countrm>0) then
+      mynamefile='output/debugRM-f_'//write_fmtnumb(step)//'.txt'
+      open(unit=111, file=trim(mynamefile), status='replace')
+
+      do l = 1, countrm
+        int1 = debug_rm(l,1)
+        write(111,fmt=200) int1, debug_rm(l,2), debug_rm(l,3), debug_rm(l,4)
+      enddo
+
+      close(111)
+    endif
+  end subroutine dumpMkRm
+
    subroutine OutputVTK(fname, step, flip)
       implicit none
       integer, intent(in) :: step, flip
@@ -1189,9 +1240,6 @@ program TestLB
         else
           call writeImageDataVTI_isfluid(mynamefile,step, myfluid, flip, textVTK)
         endif
-#ifdef CHECK_VOLP
-        call dumpPartvol(step)
-#endif
      endif
 
       call system_clock(c_stop)
@@ -1538,6 +1586,12 @@ program TestLB
         allocate(dim_matAtm_d(nx/TILE_DIMx, ny/TILE_DIMy, nz/TILE_DIMz), STAT=istat)
         if (istat /= 0) then
           write(*,*) 'Allocation of findAtoms_d failed'
+        end if
+
+        ! DEBUG_FORCE
+        allocate(debugline(numAtoms, 21,4), STAT=istat)
+        if (istat /= 0) then
+          write(*,*) 'Allocation of CPU debugline failed'
         end if
 
         allocate(debugline_d(numAtoms, 21,4), STAT=istat)
