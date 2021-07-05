@@ -22,9 +22,9 @@
   fnameFull = 'output/' // trim(fname) // '_' // trim(write_fmtnumb(myrank)) // '.' //trim(write_fmtnumb(step)) // '.vti'
   open(unit=iotest,file=trim(fnameFull),status='replace',action='write')
 
-  extent =  trim(write_fmtnumb(1)) // ' ' // trim(write_fmtnumb(nx)) // ' ' &
-        // trim(write_fmtnumb(1)) // ' ' // trim(write_fmtnumb(ny)) // ' ' &
-        // trim(write_fmtnumb(1)) // ' ' // trim(write_fmtnumb(nz))
+  extent =  trim(write_fmtnumb(offset(1) + 1)) // ' ' // trim(write_fmtnumb(offset(1) +nx)) // ' ' &
+        // trim(write_fmtnumb(offset(2) + 1)) // ' ' // trim(write_fmtnumb(offset(2) +ny)) // ' ' &
+        // trim(write_fmtnumb(offset(3) + 1)) // ' ' // trim(write_fmtnumb(offset(3) +nz))
 
   write(iotest,*) '<VTKFile type="ImageData" version="1.0" byte_order="LittleEndian" >'
   write(iotest,*) ' <ImageData WholeExtent="' // trim(extent) // '" >'

@@ -47,8 +47,6 @@
       offset(1) = mpicoords(1)*nx
       offset(2) = mpicoords(2)*ny
       offset(3) = mpicoords(3)*nz
-
-      offset_d = offset
 !
       call mpi_barrier(lbecomm,ierr)
 !
@@ -74,6 +72,9 @@
       call MPI_comm_size(localcomm, ndev, ierr)
       call MPI_Comm_rank(localcomm, mydev, ierr)
       istat = cudaSetDevice(mydev)
+
+      write (*,*) 'CPU offset = ', offset
+      offset_d = offset
 !
       write(6,*) myrank,':tot   task ', nprocs, procx, procy, procz
       write(6,*) myrank,':Device     ', mydev, ndev
