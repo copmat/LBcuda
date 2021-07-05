@@ -195,7 +195,7 @@
     integer, parameter :: TILE_DIMPART = 16
 
     ! MPI
-    integer idrank, mxrank
+    integer, constant  :: offset_d(3)
 
     ! Particles
     real, parameter    :: atmWeight = 1.0 / rmass

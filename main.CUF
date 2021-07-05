@@ -1024,7 +1024,7 @@ program TestLB
 
       enddo
 
-      if (idrank==0) then        
+      if (myrank==0) then        
         write(6,'(a)') "File input.xyz correctly closed"
         write(6,*) "*******************************************************************************"
         write(6,*) "                                                                               "
@@ -1139,7 +1139,7 @@ program TestLB
       inquire(file=trim(makedirectory),exist=lexist)
         
       if(.not. lexist)then
-        if(idrank==0) then
+        if(myrank==0) then
           makedirectory=repeat(' ',255)
           makedirectory = 'mkdir output'
           call system(makedirectory)
@@ -1268,11 +1268,11 @@ program TestLB
       integer :: i,j,k,l, iosub = 55
 
       mynamefile=repeat(' ',120)
-      mynamefile='output/'//trim(filenam)//write_fmtnumb(step)//'.'//write_fmtnumb(idrank)//'.dat'
+      mynamefile='output/'//trim(filenam)//write_fmtnumb(step)//'.'//write_fmtnumb(myrank)//'.dat'
       open(unit=iosub, file=trim(mynamefile), status='replace')
     
       mynamefile=repeat(' ',120)
-      mynamefile='output/'//trim(filenam)//write_fmtnumb(step)//'.'//write_fmtnumb(idrank)//'.dat1'
+      mynamefile='output/'//trim(filenam)//write_fmtnumb(step)//'.'//write_fmtnumb(myrank)//'.dat1'
       open(unit=iosub+1,file=trim(mynamefile),status='replace')
     
       do k=1,nz
@@ -1547,9 +1547,6 @@ program TestLB
 
 
    subroutine setupGPUgridAndAlloc
-    idrank = 0
-    mxrank = 1
-  
     if (mod(nx, TILE_DIMx)/= 0) then
         write(*,*) 'nx must be a multiple of TILE_DIM'
         stop

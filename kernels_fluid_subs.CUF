@@ -127,6 +127,7 @@
 
       real, value :: vx,vy,vz
       integer :: i,j,k, l
+      integer :: gli,glj,glk
       real    :: rhoR,rhoB, u,v,w, eqR,eqB, distx,disty,distz, rdist,tempr
       real,parameter    :: radius = nz/4
   
@@ -134,9 +135,13 @@
       j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
       k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
 
-      distx = i - (glx/2 + 0.5)
-      disty = j - (gly/2 + 0.5)
-      distz = k - (nz/2 + 0.5)
+      gli = i + offset_d(1)
+      glj = j + offset_d(2)
+      glk = k + offset_d(3)
+
+      distx = gli - (glx/2 + 0.5)
+      disty = glj - (gly/2 + 0.5)
+      distz = glk - (glz/2 + 0.5)
 !
 !
       rdist = sqrt(distx*distx + disty*disty + distz*distz)

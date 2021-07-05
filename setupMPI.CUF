@@ -47,6 +47,8 @@
       offset(1) = mpicoords(1)*nx
       offset(2) = mpicoords(2)*ny
       offset(3) = mpicoords(3)*nz
+
+      offset_d = offset
 !
       call mpi_barrier(lbecomm,ierr)
 !
