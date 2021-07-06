@@ -482,13 +482,13 @@
   enddo
  end subroutine moments2Fl
 
- subroutine writeImageDataVTI_islfuid(fname, step, myfluid, flip, textual)
+ subroutine writeImageDataVTI_isfluid(fname, step, myfluid, flip, textual)
   use dimensions_m
   use kernels_fluid
   implicit none
   character(len=*),intent(in) :: fname
   integer,intent(in) :: step, flip
-  integer(1), intent(in) :: myfluid(:,:,:,:)
+  integer(1), allocatable, intent(in) :: myfluid(:,:,:,:)
   logical,intent(in) :: textual
   character(len=120) :: fnameFull,extent
   integer i,j,k, iotest
@@ -498,7 +498,7 @@
 
   iotest = 55
 
-  ! fnameFull = 'output/' // 'partVol_' // trim(write_fmtnumb(step)) // '.txt'
+  ! fnameFull = 'output/' // 'partisfluid_' // trim(write_fmtnumb(step)) // '.txt'
   ! open(unit=iotest,file=trim(fnameFull),status='replace',action='write')
 
   totSumI = 0
@@ -685,7 +685,7 @@
 
   ! write(iotest,*) '</VTKFile >'
   ! close(iotest)
- end subroutine writeImageDataVTI_islfuid
+ end subroutine writeImageDataVTI_isfluid
 
 end module write_output
 

@@ -389,8 +389,12 @@
         tempFoo = atomicadd( forceAtoms_d(3,iatm,flip), ftemp(3) )
 
 #ifdef DEBUG_MKRM        
-        tempInt = atomicadd( countrm_d, 1)
-        write(*,*) 'rm-fl]', linear(i,j,k), ftemp(1),ftemp(2),ftemp(3)
+        tempInt = 1 + atomicadd( countrm_d, 1)
+        debug_rm_d (tempInt, 1) = linear(i,j,k)
+        debug_rm_d (tempInt, 2) = ftemp(1)
+        debug_rm_d (tempInt, 3) = ftemp(2)
+        debug_rm_d (tempInt, 4) = ftemp(3)
+        ! write(*,*) 'rm-fl]', linear(i,j,k), ftemp(1),ftemp(2),ftemp(3)
         ! write(*,*) 'myrm]', linear(i,j,k), myu,myv,myw
         ! write(*,*) 'myrm]', linear(i,j,k), rhoR,rhoB
 #endif        
@@ -463,8 +467,12 @@
         tempFoo = atomicadd( forceAtoms_d(3,iatm,flip), ftemp(3) )
 
 #ifdef DEBUG_MKRM
-        tempInt = atomicadd( countrm_d, 1)
-        write(*,*) 'rm-fl2]', linear(i,j,k), ftemp(1),ftemp(2),ftemp(3)
+        tempInt = 1 + atomicadd( countrm_d, 1)
+        debug_rm_d (tempInt, 1) = linear(i,j,k)
+        debug_rm_d (tempInt, 2) = ftemp(1)
+        debug_rm_d (tempInt, 3) = ftemp(2)
+        debug_rm_d (tempInt, 4) = ftemp(3)
+        ! write(*,*) 'rm-fl2]', linear(i,j,k), ftemp(1),ftemp(2),ftemp(3)
         ! write(*,*) 'myrm2]', linear(i,j,k), myu,myv,myw
         ! write(*,*) 'myrm2]', linear(i,j,k), rhoR,rhoB
 #endif
@@ -562,8 +570,12 @@
         tempFoo = atomicadd( forceAtoms_d(3,iatm,flip), ftemp(3) )
 
 #ifdef DEBUG_MKRM
-        tempInt = atomicadd( countmk_d, 1)
-        write(*,*) 'mk-fl]', linear(i,j,k), ftemp(1),ftemp(2),ftemp(3)
+        tempInt = 1+ atomicadd( countmk_d, 1)
+        debug_mk_d (tempInt, 1) = linear(i,j,k)
+        debug_mk_d (tempInt, 2) = ftemp(1)
+        debug_mk_d (tempInt, 3) = ftemp(2)
+        debug_mk_d (tempInt, 4) = ftemp(3)
+        ! write(*,*) 'mk-fl]', linear(i,j,k), ftemp(1),ftemp(2),ftemp(3)
 #endif        
 
         if (lrotate) then
@@ -638,8 +650,12 @@
         tempFoo = atomicadd( forceAtoms_d(3,iatm,flip), ftemp(3) )
 
 #ifdef DEBUG_MKRM
-        tempInt = atomicadd( countmk_d, 1)
-        write(*,*) 'mk-fl2]', linear(i,j,k), ftemp(1),ftemp(2),ftemp(3)
+        tempInt = 1 + atomicadd( countmk_d, 1)
+        debug_mk_d (tempInt, 1) = linear(i,j,k)
+        debug_mk_d (tempInt, 2) = ftemp(1)
+        debug_mk_d (tempInt, 3) = ftemp(2)
+        debug_mk_d (tempInt, 4) = ftemp(3)
+        ! write(*,*) 'mk-fl2]', linear(i,j,k), ftemp(1),ftemp(2),ftemp(3)
 #endif        
 
         if (lrotate) then
@@ -961,24 +977,6 @@
       endif
     end subroutine partBB_CG_p2n2
 
-    attributes(global) subroutine copy_CG(step, flip)
-      integer, value :: step,flip
-      integer :: i,j,k, l, flop
-
-      i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
-      j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
-      k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
-      ! if (step==1 .and. 1==i*j*k) write(*,*) 'CUDA copy_CG] i,k:',i,j,k
-
-      flop = 3 - flip
-      
-      do l = 0, npops-1
-        popsR_d(i,j,k,l, flop) = popsR_d(i,j,k,l, flip)
-        popsB_d(i,j,k,l, flop) = popsB_d(i,j,k,l, flip)
-      enddo
-    end subroutine copy_CG
-
-
     ! PARTICLES 	-----------------------------------------------
     ! pos(1:3) -> xxx,yyy,zzz
     ! pos(4:6) -> vxx,vyy,vzz
@@ -1045,7 +1043,7 @@
       endif
 
       if (oldpartVol_d(i)>0 .and. partVol_d(i) /= oldpartVol_d(i)) then        
-        ! write(*,*) 'partVol_d /= oldpartVol_d ->Atom', i, partVol_d(i), oldpartVol_d(i)
+        write(*,*) 'partVol_d /= oldpartVol_d ->Atom', i, partVol_d(i), oldpartVol_d(i)
         ! stop_d = __LINE__      
       endif
       oldpartVol_d(i) = partVol_d(i)
@@ -1053,8 +1051,8 @@
 
       if (i == 1) then
         if (countmk_d /= countrm_d) then
-          write(*,*) 'countmk_d /= countrm_d ->', countmk_d, countrm_d
-          stop_d = __LINE__
+          ! write(*,*) 'countmk_d /= countrm_d ->', countmk_d, countrm_d
+          ! stop_d = __LINE__
         endif
         
         countmk_d = 0
@@ -1184,14 +1182,14 @@
       debugline_d(i, 8,2) = pos_d(2,i,flip)
       debugline_d(i, 8,3) = pos_d(3,i,flip)
 
-      debugline_d(i, 8,4) = partVol_d
+      debugline_d(i, 8,4) = partVol_d(i)
       debugline_d(i, 9,1) = countmk_d
       debugline_d(i, 9,2) = countrm_d
 
       debugline_d(i, 1,1) = fxx
       debugline_d(i, 1,2) = fyy
       debugline_d(i, 1,3) = fzz
-#endif      
+#endif
 
       !Double prec accum
       forceAtoms_d(4,i,flip) = myf_d(1,i)
@@ -1281,6 +1279,7 @@
       integer, value    :: step, flip, iatm,jatm
       real		:: xi(3), xj(3), rsq, mxrsqcut, rparcap, xdf,ydf,zdf, rrr,ggg
       real    :: ux,uy,uz, dotuv, visc, ftemp(3), tempFoo1
+      real(8) :: acc(3), accFoo1,accFoo2,accFoo3
 
       real, parameter	:: rsqcut = hz_rmin**TWO
       real, parameter	:: gmin = FIVE*HALF * hz_k * (hz_rmin-hz_rcap)**(THREE*HALF)      
@@ -1335,6 +1334,18 @@
 
           tempFoo1 = atomicadd( forceAtoms_d(3,iatm,flip), -ftemp(3) )
           tempFoo1 = atomicadd( forceAtoms_d(3,jatm,flip),  ftemp(3) )
+
+          ! Double prec
+          acc(1) = ftemp(1)
+          acc(2) = ftemp(2)
+          acc(3) = ftemp(3)          
+          accFoo1 = atomicadd( myf2_d(1,iatm), -acc(1) )
+          accFoo2 = atomicadd( myf2_d(2,iatm), -acc(2) )
+          accFoo3 = atomicadd( myf2_d(3,iatm), -acc(3) )
+          accFoo1 = atomicadd( myf2_d(1,jatm), acc(1) )
+          accFoo2 = atomicadd( myf2_d(2,jatm), acc(2) )
+          accFoo3 = atomicadd( myf2_d(3,jatm), acc(3) )
+          ! Done double
 
           ! write(*,*) '<=hz_rmin]', linear(0,iatm,jatm), xdf,ydf,zdf, rrr
           ! write(*,*) '<=hz_rmin]', linear(0,iatm,jatm), ftemp(1),ftemp(2),ftemp(3)
@@ -2209,7 +2220,7 @@
         else
           splitted(1) = .false.
           boxatom(1,3) = TILE_DIMx	! This avoid loopi==1
-          boxatom(1,4) = 0
+          boxatom(1,4) = -TILE_DIMx
         endif
 
         ! y-component
@@ -2228,7 +2239,7 @@
         else
           splitted(2) = .false.
           boxatom(2,3) = TILE_DIMy	! This avoid loopj==1
-          boxatom(2,4) = 0
+          boxatom(2,4) = -TILE_DIMy
         endif
 
         ! z-component
@@ -2247,27 +2258,27 @@
         else
           splitted(3) = .false.
           boxatom(3,3) = TILE_DIMz	! This avoid loopk==1
-          boxatom(3,4) = 0
+          boxatom(3,4) = -TILE_DIMz
         endif
  
       do loopk=0, 1
-	mink = boxatom(3,2*loopk+1) / TILE_DIMz + 1
-	maxk = boxatom(3,2*loopk+2) / TILE_DIMz + 1
+	mink = (boxatom(3,2*loopk+1)-1) / TILE_DIMz + 1
+	maxk = (boxatom(3,2*loopk+2)-1) / TILE_DIMz + 1
 	do k = mink, maxk
 	  ! write(*,*) "atom",l," k:", k, "loopk:",loopk
-	  if (k > nz/TILE_DIMz) cycle
+	  if (k<1 .or. k > nz/TILE_DIMz) cycle
 
       	  do loopj=0, 1
-      	    minj = boxatom(2,2*loopj+1) / TILE_DIMy + 1
-      	    maxj = boxatom(2,2*loopj+2) / TILE_DIMy + 1
+      	    minj = (boxatom(2,2*loopj+1)-1) / TILE_DIMy + 1
+      	    maxj = (boxatom(2,2*loopj+2)-1) / TILE_DIMy + 1
       	    do j = minj, maxj
-	      if (j > ny/TILE_DIMy) cycle
+	      if (j<1 .or. j > ny/TILE_DIMy) cycle
 
       	      do loopi=0, 1
-      	        mini = boxatom(1,2*loopi+1) / TILE_DIMx + 1
-      	        maxi = boxatom(1,2*loopi+2) / TILE_DIMx + 1
+      	        mini = (boxatom(1,2*loopi+1)-1) / TILE_DIMx + 1
+      	        maxi = (boxatom(1,2*loopi+2)-1) / TILE_DIMx + 1
       	        do i = mini, maxi
-	          if (i > nx/TILE_DIMx) cycle
+	          if (i<1 .or. i > nx/TILE_DIMx) cycle
 
       	          ! put atom l in list(i,j,k)
 		  tempInt = 1 + atomicadd( dim_matAtm_d(i,j,k), 1)
