@@ -1052,7 +1052,7 @@
       if (i == 1) then
         if (countmk_d /= countrm_d) then
           write(*,*) 'countmk_d /= countrm_d ->', countmk_d, countrm_d
-          stop_d = __LINE__
+          ! stop_d = __LINE__
         endif
         
         countmk_d = 0
@@ -1279,6 +1279,7 @@
       integer, value    :: step, flip, iatm,jatm
       real		:: xi(3), xj(3), rsq, mxrsqcut, rparcap, xdf,ydf,zdf, rrr,ggg
       real    :: ux,uy,uz, dotuv, visc, ftemp(3), tempFoo1
+      real(8) :: acc(3), accFoo1,accFoo2,accFoo3
 
       real, parameter	:: rsqcut = hz_rmin**TWO
       real, parameter	:: gmin = FIVE*HALF * hz_k * (hz_rmin-hz_rcap)**(THREE*HALF)      
@@ -1333,6 +1334,19 @@
 
           tempFoo1 = atomicadd( forceAtoms_d(3,iatm,flip), -ftemp(3) )
           tempFoo1 = atomicadd( forceAtoms_d(3,jatm,flip),  ftemp(3) )
+
+          ! Double prec
+          acc(1) = ftemp(1)
+          acc(2) = ftemp(2)
+          acc(3) = ftemp(3)          
+          accFoo1 = atomicadd( myf2_d(1,iatm), -acc(1) )
+          accFoo2 = atomicadd( myf2_d(2,iatm), -acc(2) )
+          accFoo3 = atomicadd( myf2_d(3,iatm), -acc(3) )
+          accFoo1 = atomicadd( myf2_d(1,jatm), acc(1) )
+          accFoo2 = atomicadd( myf2_d(2,jatm), acc(2) )
+          accFoo3 = atomicadd( myf2_d(3,jatm), acc(3) )
+
+          ! Done double
 
           write(*,*) '<=hz_rmin]', linear(0,iatm,jatm), xdf,ydf,zdf, rrr
           write(*,*) '<=hz_rmin]', linear(0,iatm,jatm), ftemp(1),ftemp(2),ftemp(3)
