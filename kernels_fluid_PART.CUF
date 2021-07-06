@@ -1051,7 +1051,7 @@
 
       if (i == 1) then
         if (countmk_d /= countrm_d) then
-          write(*,*) 'countmk_d /= countrm_d ->', countmk_d, countrm_d
+          ! write(*,*) 'countmk_d /= countrm_d ->', countmk_d, countrm_d
           ! stop_d = __LINE__
         endif
         
@@ -1345,11 +1345,10 @@
           accFoo1 = atomicadd( myf2_d(1,jatm), acc(1) )
           accFoo2 = atomicadd( myf2_d(2,jatm), acc(2) )
           accFoo3 = atomicadd( myf2_d(3,jatm), acc(3) )
-
           ! Done double
 
-          write(*,*) '<=hz_rmin]', linear(0,iatm,jatm), xdf,ydf,zdf, rrr
-          write(*,*) '<=hz_rmin]', linear(0,iatm,jatm), ftemp(1),ftemp(2),ftemp(3)
+          ! write(*,*) '<=hz_rmin]', linear(0,iatm,jatm), xdf,ydf,zdf, rrr
+          ! write(*,*) '<=hz_rmin]', linear(0,iatm,jatm), ftemp(1),ftemp(2),ftemp(3)
           ! write(*,*) '<=hz_rmin]', iatm, linear( nint(xi(1)),nint(xi(2)),nint(xi(3)) )
           ! write(*,*) '<=hz_rmin]', jatm, linear( nint(xj(1)),nint(xj(2)),nint(xj(3)) )
         endif

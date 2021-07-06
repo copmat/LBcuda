@@ -513,8 +513,8 @@ program TestLB
         do j=i+1,numAtoms
           dist_3d = x_atm(:,i) - x_atm(:,j)
           dist = norm2(dist_3d)
-          if (dist < rdim) then
-            write (*,*) 'Dist less than rdim',i,j, dist, rdim
+          if (dist < 2*rdim) then
+            write (*,*) 'Dist less than 2*rdim',i,j, dist, rdim*2
             stop
           endif
         enddo
