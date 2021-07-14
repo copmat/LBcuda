@@ -237,7 +237,11 @@ program TestLB
     
   enddo
 
+#ifdef SERIAL
+! do nothing  
+#else
   call MPI_FINALIZE(ierr)
+#endif
 
   contains
     pure function viscosity_to_omega(visc)
