@@ -5,7 +5,7 @@ program TestLB
   use dimensions_m
   use kernels_fluid
   use kernels_fluid_subs
-  use kernels_particles
+!  use kernels_particles
   use write_output
 
 #ifdef SERIAL
@@ -110,76 +110,28 @@ program TestLB
   do step=1, nIter
 
     if (withCG) then
-      if (withParticles) then
-        call init_isfluid_CG<<<dimGrid, dimBlock>>>(step, flipflop)
-        call fixPeriodic_isfluid
-        call del_fluid_CG<<<dimGrid, dimBlock>>>(step, flipflop, lrotate)
-      endif
-
       call init_rho_CG<<<dimGrid, dimBlock>>>(step, flipflop)
+#ifdef SERIAL
+#else
+      call abortOnLastErrorAndSync("init_rho_CG",step, flipflop)
+#endif
       call fixPeriodic(.false., .true.)
-
-      if (withParticles) then
-        call make_fluid_CG<<<dimGrid, dimBlock>>>(step, flipflop, lrotate)
-        call fixPeriodic(.false., .true.)
-      endif
-
-      ! call OutputVTK("rho_isfluid_",step, flipflop)
-
-      if (withParticles) then
-        call compute_densities_wall<<<dimGrid, dimBlock>>>(step, flipflop)
-        call fixPeriodic(.false., .true.)
-        ! call OutputVTK("wall_",step, flipflop)
-      endif
 
       call time_step_CG<<<dimGrid, dimBlock>>>(step, flipflop)
       ! call OutputVTK("cg_",step, flipflop)
 
-      call fixPeriodic(.true., .false.)
-      call abortOnLastErrorAndSync("fixPeriodic",step, flipflop)
+#ifdef SERIAL
+#else
+      call abortOnLastErrorAndSync("time_step_CG",step, flipflop)
+#endif
+      call fixPeriodic(.true., .false.)      
       
-      if (withParticles) then
-        call partBB_CG<<<dimGrid, dimBlock>>>(step, flipflop, lrotate)
-        call abortOnLastErrorAndSync("partBB_CG",step, flipflop)
-
-#ifdef DEBUG_N2P
-        call dumpTerms(step)
-#endif        
-        ! call OutputVTK("partBB_n2p_",step, flipflop)
-
-        call partBB_CG_p2n<<<dimGrid, dimBlock>>>(step, flipflop)          
-        ! call OutputVTK("partBB_p2n1_",step, flipflop)
-
-        call partBB_CG_p2n2<<<dimGrid, dimBlock>>>(step, flipflop, lrotate)          
-        ! call OutputVTK("partBB_",step, flipflop)
-
-        call fixPeriodic(.true., .false.)
-      endif
-
-      ! Boundary Conditions with new flipflop
-      !call doBoundary
-      ! call OutputVTK("bb_",step, flipflop)
-
       ! call copy_CG<<<dimGrid, dimBlock>>>(step, flipflop)
 
       call stream_CG<<<dimGrid, dimBlock>>>(step, flipflop)
       call stream_CG_x<<<dimGridx, dimBlock2>>>(step, flipflop)
       call stream_CG_y<<<dimGridy, dimBlock2>>>(step, flipflop)
       call stream_CG_z<<<dimGridz, dimBlock2>>>(step, flipflop)
-      
-      if (withParticles) then
-        call time_step_force_particles<<<dimGridAtm, dimBlockAtm>>>(step, flipflop, lrotate, numAtoms)
-        
-#ifdef DEBUG_FORCE
-        call dumpForces(step)
-#endif
-
-#ifdef DEBUG_ROT
-        if (lrotate) call dumpRot(step, flipflop)
-#endif
-
-        call updateListAtoms(3 - flipflop)  ! Use new pos
-      endif
     else
       ! if (forced) then
       !   if (const_forced) then
@@ -626,13 +578,13 @@ program TestLB
 
           endif
 
-          call bc_edge_x2<<<(nx+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
-          call bc_edge_y2<<<(ny+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
           if(up(2) == myrank) then
+            call bc_edge_x2<<<(nx+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
+            call bc_edge_y2<<<(ny+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)  
              call bc_edge_z2<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
           else
 !             mpi rho+pop myrank <--> up(2)
-!             call bc_edge_z2<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
+             call bc_edge_z2<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
           endif
 
           call bc_corners<<<dimGridz, dimBlock2>>>(step, flipflop)

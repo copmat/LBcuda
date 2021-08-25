@@ -189,9 +189,9 @@
     real, constant    :: ext_tqx_d, ext_tqy_d, ext_tqz_d
 
     integer, parameter :: TILE_DIM = 8
-    integer, parameter :: TILE_DIMx = 32
-    integer, parameter :: TILE_DIMy = 2
-    integer, parameter :: TILE_DIMz = 2
+    integer, parameter :: TILE_DIMx = 64
+    integer, parameter :: TILE_DIMy = 1
+    integer, parameter :: TILE_DIMz = 1
     integer, parameter :: TILE_DIMPART = 16
 
     ! MPI

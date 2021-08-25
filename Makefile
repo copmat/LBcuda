@@ -1,5 +1,5 @@
 
-FC = pgfortran
+FC = mpif90
 FIX = -DSERIAL 
 ifdef MPI
  FC = mpif90
@@ -16,11 +16,11 @@ CUDAFLAGS = -cuda -fast -gpu=cc70,cuda11.0,lineinfo -Minfo=accel
 CUDAFLAGS = -cuda -gpu=cc70 -fast
 
 
-lbCUDA: main.o dimensions_m.o kernels_fluid.o kernels_fluid_bc.o kernels_fluid_subs.o kernels_particles.o write_output.o setupMPI.o
+lbCUDA: main.o dimensions_m.o kernels_fluid.o kernels_fluid_bc.o kernels_fluid_subs.o write_output.o setupMPI.o
 	$(FC) $(FIX) $(CUDAFLAGS) $(F90FLAGS) -o lbCUDA main.o dimensions_m.o kernels_fluid.o write_output.o setupMPI.o \
-		kernels_fluid_bc.o kernels_fluid_subs.o kernels_particles.o
+		kernels_fluid_bc.o kernels_fluid_subs.o
 
-main.o: dimensions_m.mod kernels_fluid.o kernels_fluid_bc.o kernels_fluid_subs.o kernels_particles.o write_output.o setupMPI.o main.CUF 
+main.o: dimensions_m.mod kernels_fluid.o kernels_fluid_bc.o kernels_fluid_subs.o write_output.o setupMPI.o main.CUF 
 	$(FC) $(FIX) $(CUDAFLAGS) $(F90FLAGS) -c main.CUF
 
 dimensions_m.o: defines.h dimensions_m.CUF

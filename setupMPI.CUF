@@ -73,20 +73,14 @@
       call MPI_Comm_rank(localcomm, mydev, ierr)
       istat = cudaSetDevice(mydev)
 
-      write (*,*) 'CPU offset = ', offset
+      write (*,*) myrank,'CPU offset = ', offset
       offset_d = offset
 !
       write(6,*) myrank,':tot   task ', nprocs, procx, procy, procz
       write(6,*) myrank,':Device     ', mydev, ndev
-      write(6,*) myrank,':task mpi-x ', mpicoords(1)
-      write(6,*) myrank,':task mpi-y ', mpicoords(2)
       write(6,*) myrank,':task mpi-z ', mpicoords(3)
-      write(6,*) myrank,':rear  task ', rear(1), rear(2)
-      write(6,*) myrank,':front task ', front(1), front(2)
-      write(6,*) myrank,':left  task ', left(1), left(2)
-      write(6,*) myrank,':right task ', right(1), right(2)
-      write(6,*) myrank,':up    task ', up(1), up(2)
-      write(6,*) myrank,':down  task ', down(1), down(2)
+      write(6,*) myrank,':up    task ', up(2)
+      write(6,*) myrank,':down  task ', down(2)
 
 !format
 3100  format(i6.6)

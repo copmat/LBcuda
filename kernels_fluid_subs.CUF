@@ -647,12 +647,9 @@
         psiy = ZERO
         psiz = ZERO
         do l = 1, npops-1
-          i1 = mod(i + ex_d(l) +nx-1, nx) + 1
-          j1 = mod(j + ey_d(l) +ny-1, ny) + 1
-          k1 = mod(k + ez_d(l) +nz-1, nz) + 1
-          if (i1<1 .or. i1>nx .or. j1<1 .or. j1>ny .or.k1<1 .or. k1>nz) then
-            stop_d = __LINE__
-          endif
+          i1 = i + ex_d(l)
+          j1 = j + ey_d(l)
+          k1 = k + ez_d(l)
 
           rhoR_shifted = rhoR_d(i1,j1,k1)
           rhoB_shifted = rhoB_d(i1,j1,k1)
