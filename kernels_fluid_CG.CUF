@@ -38,7 +38,7 @@
 !!!!!!!!!!!!! Helpers for recovering phys vars
     attributes(device) function compute_rho(pops, i,j,k, flip)
      integer, intent(in) :: i,j,k, flip
-     real, intent(in) :: pops(0:nx+1,0:ny+1,0:nz+1, 0:npops-1, 2)
+     real, intent(in) :: pops(0:nx+1,0:ny+1,0:nz_d+1, 0:npops-1, 2)
      real :: compute_rho
 
      compute_rho = pops(i,j,k,0, flip) + pops(i,j,k,1, flip) + pops(i,j,k,2, flip) + &
@@ -53,7 +53,7 @@
 
     attributes(device) function compute_u_1fl(pops, i,j,k, flip, invrho)
      integer, intent(in) :: i,j,k, flip
-     real, intent(in) :: pops(0:nx+1,0:ny+1,0:nz+1, 0:npops-1, 2), invrho
+     real, intent(in) :: pops(0:nx+1,0:ny+1,0:nz_d+1, 0:npops-1, 2), invrho
      real :: compute_u_1fl
 
      compute_u_1fl   = invrho * ( pops(i,j,k,1, flip) - pops(i,j,k,2, flip) + pops(i,j,k,7, flip) - &
@@ -64,7 +64,7 @@
 
     attributes(device) function compute_v_1fl(pops, i,j,k, flip, invrho)
      integer, intent(in) :: i,j,k, flip
-     real, intent(in) :: pops(0:nx+1,0:ny+1,0:nz+1, 0:npops-1, 2), invrho
+     real, intent(in) :: pops(0:nx+1,0:ny+1,0:nz_d+1, 0:npops-1, 2), invrho
      real :: compute_v_1fl
 
      compute_v_1fl    = invrho * ( pops(i,j,k,3, flip) - pops(i,j,k,4, flip) + pops(i,j,k,7, flip) - &
@@ -75,7 +75,7 @@
 
     attributes(device) function compute_w_1fl(pops, i,j,k, flip, invrho)
      integer, intent(in) :: i,j,k, flip
-     real, intent(in) :: pops(0:nx+1,0:ny+1,0:nz+1, 0:npops-1, 2), invrho
+     real, intent(in) :: pops(0:nx+1,0:ny+1,0:nz_d+1, 0:npops-1, 2), invrho
      real :: compute_w_1fl
 
      compute_w_1fl    = invrho * ( pops(i,j,k,5, flip) - pops(i,j,k,6, flip) + pops(i,j,k,11, flip) - &
@@ -110,7 +110,6 @@
       i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
       j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
       k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
-      if (1==i*j*k) write(*,*) 'CUDA setup2] offset:', offset_d(1),offset_d(2),offset_d(3)
 
       gli = i + offset_d(1)
       glj = j + offset_d(2)
@@ -130,7 +129,7 @@
 
       ! distx = i - (nx/2 + 0.5)
       ! disty = j - (ny/2 + 0.5)
-      ! distz = k - (nz/4 + 0.5)
+      ! distz = k - (nz_d/4 + 0.5)
       ! rdist = sqrt(distx*distx + disty*disty + distz*distz)
       ! tempr = fcut(rdist, radius, radius+0.1)
       ! rhoR = rhoR + 0.0 + (1.0 - 0.0) * tempr
@@ -138,7 +137,7 @@
 
       ! distx = i - (nx/2 + 0.5)
       ! disty = j - (ny/2 + 0.5)
-      ! distz = k - (3*nz/4 + 0.5)
+      ! distz = k - (3*nz_d/4 + 0.5)
       ! rdist = sqrt(distx*distx + disty*disty + distz*distz)
       ! tempr = fcut(rdist, radius, radius+0.1)
       ! rhoR = rhoR + 0.0 + (1.0 - 0.0) * tempr
@@ -615,7 +614,7 @@
       k = (blockIdx%y-1) * TILE_DIM + threadIdx%y - 1
 
       if (j>ny+1) return
-      if (k>nz+1) return
+      if (k>nz_d+1) return
 
       flop = 3 - flip
 
@@ -626,7 +625,7 @@
           i1 = i + ex_d(l)
           j1 = j + ey_d(l)
           k1 = k + ez_d(l)
-          if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz) then
+          if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz_d) then
             popsR_d(i1,j1,k1,l, flop) = popsR_d(i,j,k,l, flip)
             popsB_d(i1,j1,k1,l, flop) = popsB_d(i,j,k,l, flip)
           endif
@@ -640,7 +639,7 @@
           i1 = i + ex_d(l)
           j1 = j + ey_d(l)
           k1 = k + ez_d(l)
-          if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz) then
+          if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz_d) then
             popsR_d(i1,j1,k1,l, flop) = popsR_d(i,j,k,l, flip)
             popsB_d(i1,j1,k1,l, flop) = popsB_d(i,j,k,l, flip)
           endif
@@ -657,7 +656,7 @@
     k = (blockIdx%y-1) * TILE_DIM + threadIdx%y - 1
     
     if (i>nx+1) return
-    if (k>nz+1) return
+    if (k>nz_d+1) return
 
     flop = 3 - flip
 
@@ -668,7 +667,7 @@
         i1 = i + ex_d(l)
         j1 = j + ey_d(l)
         k1 = k + ez_d(l)
-        if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz) then
+        if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz_d) then
           popsR_d(i1,j1,k1,l, flop) = popsR_d(i,j,k,l, flip)
           popsB_d(i1,j1,k1,l, flop) = popsB_d(i,j,k,l, flip)
         endif
@@ -682,7 +681,7 @@
         i1 = i + ex_d(l)
         j1 = j + ey_d(l)
         k1 = k + ez_d(l)
-        if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz) then
+        if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz_d) then
           popsR_d(i1,j1,k1,l, flop) = popsR_d(i,j,k,l, flip)
           popsB_d(i1,j1,k1,l, flop) = popsB_d(i,j,k,l, flip)
         endif
@@ -710,21 +709,21 @@
         i1 = i + ex_d(l)
         j1 = j + ey_d(l)
         k1 = k + ez_d(l)
-        if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz) then
+        if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz_d) then
           popsR_d(i1,j1,k1,l, flop) = popsR_d(i,j,k,l, flip)
           popsB_d(i1,j1,k1,l, flop) = popsB_d(i,j,k,l, flip)
         endif
       end do
     endif
 
-    ! Stream z=nz+1
-    k = nz+1
+    ! Stream z=nz_d+1
+    k = nz_d+1
     if (myfluid_d(i,j,k, flip) /= fluid_spheredead) then
       do l = 1, npops-1
         i1 = i + ex_d(l)
         j1 = j + ey_d(l)
         k1 = k + ez_d(l)
-        if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz) then
+        if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz_d) then
           popsR_d(i1,j1,k1,l, flop) = popsR_d(i,j,k,l, flip)
           popsB_d(i1,j1,k1,l, flop) = popsB_d(i,j,k,l, flip)
         endif
@@ -743,7 +742,7 @@
       ! if (1==step .and. 1==j*k) write(*,*) 'CUDA bc_per_x] i,j:',j,k
 
       ! Apply BC also on virtual nodes...
-      if (j<=ny+1 .and. k<=nz+1) then
+      if (j<=ny+1 .and. k<=nz_d+1) then
         popsR_d(1, j,k, 1, flip) = popsR_d(nx+1,j,k, 1, flip)
         popsR_d(1, j,k, 7, flip) = popsR_d(nx+1,j,k, 7, flip)
         popsR_d(1, j,k,10, flip) = popsR_d(nx+1,j,k,10, flip)
@@ -778,7 +777,7 @@
       k = (blockIdx%y-1) * TILE_DIM + threadIdx%y - 1
       ! if (1==step .and. 1==i*k) write(*,*) 'CUDA bc_per_y] i,k:',i,k
 
-      if (0<=i .and. i<=nx+1 .and. 0<=k .and. k<=nz+1) then
+      if (0<=i .and. i<=nx+1 .and. 0<=k .and. k<=nz_d+1) then
         do l = 1, npops-1
              if (ey_d(l)>0) popsR_d(i,1,k, l, flip) = popsR_d(i,ny+1,k, l, flip)
              if (ey_d(l)<0) popsR_d(i,ny,k, l, flip) = popsR_d(i,0,k, l, flip)
@@ -797,8 +796,8 @@
 
       if (0<=j .and. j<=ny+1 .and. 0<=i .and. i<=nx+1) then
         do l = 1, npops-1
-             if (ez_d(l)>0) popsR_d(i,j,1, l, flip) = popsR_d(i,j,nz+1, l, flip)
-             if (ez_d(l)<0) popsR_d(i,j,nz, l, flip) = popsR_d(i,j,0, l, flip)
+             if (ez_d(l)>0) popsR_d(i,j,1, l, flip) = popsR_d(i,j,nz_d+1, l, flip)
+             if (ez_d(l)<0) popsR_d(i,j,nz_d, l, flip) = popsR_d(i,j,0, l, flip)
         end do
       endif
     end subroutine bc_per_z
@@ -813,7 +812,7 @@
       k = (blockIdx%y-1) * TILE_DIM + threadIdx%y - 1
       ! if (1==step .and. 1==j*k) write(*,*) 'CUDA bc_per_x2] i,j:',j,k
 
-      if (1<=j .and. j<=ny .and. 1<=k .and. k<=nz) then
+      if (1<=j .and. j<=ny .and. 1<=k .and. k<=nz_d) then
         if (faiPops) then
           do l = 1, npops-1
             popsR_d(nx+1, j,k, l, flip) = popsR_d(1,j,k, l, flip)
@@ -844,7 +843,7 @@
       k = (blockIdx%y-1) * TILE_DIM + threadIdx%y - 1
       ! if (1==step .and. 1==i*k) write(*,*) 'CUDA bc_per_y2] i,k:',i,k
 
-      if (1<=i .and. i<=nx .and. 1<=k .and. k<=nz) then
+      if (1<=i .and. i<=nx .and. 1<=k .and. k<=nz_d) then
         if (faiPops) then
           do l = 1, npops-1
             popsR_d(i,ny+1,k, l, flip) = popsR_d(i,1,k, l, flip)
@@ -878,20 +877,20 @@
       if (1<=j .and. j<=ny .and. 1<=i .and. i<=nx) then
         if (faiPops) then
           do l = 1, npops-1        
-            popsR_d(i,j,nz+1, l, flip) = popsR_d(i,j,1, l, flip)
-            popsB_d(i,j,nz+1, l, flip) = popsB_d(i,j,1, l, flip)
+            popsR_d(i,j,nz_d+1, l, flip) = popsR_d(i,j,1, l, flip)
+            popsB_d(i,j,nz_d+1, l, flip) = popsB_d(i,j,1, l, flip)
           
-            popsR_d(i,j,0, l, flip) = popsR_d(i,j,nz, l, flip)
-            popsB_d(i,j,0, l, flip) = popsB_d(i,j,nz, l, flip)
+            popsR_d(i,j,0, l, flip) = popsR_d(i,j,nz_d, l, flip)
+            popsB_d(i,j,0, l, flip) = popsB_d(i,j,nz_d, l, flip)
           end do
         endif
 
         if (faiRho) then
-          rhoR_d(i,j,nz+1) = rhoR_d(i,j,1)
-          rhoB_d(i,j,nz+1) = rhoB_d(i,j,1)
+          rhoR_d(i,j,nz_d+1) = rhoR_d(i,j,1)
+          rhoB_d(i,j,nz_d+1) = rhoB_d(i,j,1)
 
-          rhoR_d(i,j,0) = rhoR_d(i,j,nz)
-          rhoB_d(i,j,0) = rhoB_d(i,j,nz)
+          rhoR_d(i,j,0) = rhoR_d(i,j,nz_d)
+          rhoB_d(i,j,0) = rhoB_d(i,j,nz_d)
         endif
       endif
     end subroutine bc_per_z2
@@ -904,7 +903,7 @@
   
       k = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
 
-      if (1<=k .and. k<=nz) then
+      if (1<=k .and. k<=nz_d) then
         if (faiPops) then
           do l = 1, npops-1
             popsR_d(0,0,k, l, flip) = popsR_d(nx,ny,k, l, flip)
@@ -947,32 +946,32 @@
       if (1<=j .and. j<=ny) then
         if (faiPops) then
           do l = 1, npops-1
-            popsR_d(0,j,0, l, flip) = popsR_d(nx,j,nz, l, flip)
-            popsB_d(0,j,0, l, flip) = popsB_d(nx,j,nz, l, flip)
+            popsR_d(0,j,0, l, flip) = popsR_d(nx,j,nz_d, l, flip)
+            popsB_d(0,j,0, l, flip) = popsB_d(nx,j,nz_d, l, flip)
 
-            popsR_d(0,j,nz+1, l, flip) = popsR_d(nx,j,1, l, flip)
-            popsB_d(0,j,nz+1, l, flip) = popsB_d(nx,j,1, l, flip)
+            popsR_d(0,j,nz_d+1, l, flip) = popsR_d(nx,j,1, l, flip)
+            popsB_d(0,j,nz_d+1, l, flip) = popsB_d(nx,j,1, l, flip)
 
-            popsR_d(nx+1,j,0, l, flip) = popsR_d(1,j,nz, l, flip)
-            popsB_d(nx+1,j,0, l, flip) = popsB_d(1,j,nz, l, flip)
+            popsR_d(nx+1,j,0, l, flip) = popsR_d(1,j,nz_d, l, flip)
+            popsB_d(nx+1,j,0, l, flip) = popsB_d(1,j,nz_d, l, flip)
 
-            popsR_d(nx+1,j,nz+1, l, flip) = popsR_d(1,j,1, l, flip)
-            popsB_d(nx+1,j,nz+1, l, flip) = popsB_d(1,j,1, l, flip)
+            popsR_d(nx+1,j,nz_d+1, l, flip) = popsR_d(1,j,1, l, flip)
+            popsB_d(nx+1,j,nz_d+1, l, flip) = popsB_d(1,j,1, l, flip)
           end do
         endif
 
         if (faiRho) then
-          rhoR_d (0,j,0) = rhoR_d (nx,j,nz)
-          rhoB_d (0,j,0) = rhoB_d (nx,j,nz)
+          rhoR_d (0,j,0) = rhoR_d (nx,j,nz_d)
+          rhoB_d (0,j,0) = rhoB_d (nx,j,nz_d)
 
-          rhoR_d (0,j,nz+1) = rhoR_d (nx,j,1)
-          rhoB_d (0,j,nz+1) = rhoB_d (nx,j,1)
+          rhoR_d (0,j,nz_d+1) = rhoR_d (nx,j,1)
+          rhoB_d (0,j,nz_d+1) = rhoB_d (nx,j,1)
 
-          rhoR_d (nx+1,j,0) = rhoR_d (1,j,nz)
-          rhoB_d (nx+1,j,0) = rhoB_d (1,j,nz)
+          rhoR_d (nx+1,j,0) = rhoR_d (1,j,nz_d)
+          rhoB_d (nx+1,j,0) = rhoB_d (1,j,nz_d)
 
-          rhoR_d (nx+1,j,nz+1) = rhoR_d (1,j,1)
-          rhoB_d (nx+1,j,nz+1) = rhoB_d (1,j,1)
+          rhoR_d (nx+1,j,nz_d+1) = rhoR_d (1,j,1)
+          rhoB_d (nx+1,j,nz_d+1) = rhoB_d (1,j,1)
         endif
       endif
     end subroutine bc_edge_y2
@@ -987,32 +986,32 @@
       if (1<=i .and. i<=nx) then
         if (faiPops) then
           do l = 1, npops-1
-            popsR_d(i,0,0, l, flip) = popsR_d(i,ny,nz, l, flip)
-            popsB_d(i,0,0, l, flip) = popsB_d(i,ny,nz, l, flip)
+            popsR_d(i,0,0, l, flip) = popsR_d(i,ny,nz_d, l, flip)
+            popsB_d(i,0,0, l, flip) = popsB_d(i,ny,nz_d, l, flip)
 
-            popsR_d(i,0,nz+1, l, flip) = popsR_d(i,ny,1, l, flip)
-            popsB_d(i,0,nz+1, l, flip) = popsB_d(i,ny,1, l, flip)
+            popsR_d(i,0,nz_d+1, l, flip) = popsR_d(i,ny,1, l, flip)
+            popsB_d(i,0,nz_d+1, l, flip) = popsB_d(i,ny,1, l, flip)
 
-            popsR_d(i,ny+1,0, l, flip) = popsR_d(i,1,nz, l, flip)
-            popsB_d(i,ny+1,0, l, flip) = popsB_d(i,1,nz, l, flip)
+            popsR_d(i,ny+1,0, l, flip) = popsR_d(i,1,nz_d, l, flip)
+            popsB_d(i,ny+1,0, l, flip) = popsB_d(i,1,nz_d, l, flip)
 
-            popsR_d(i,ny+1,nz+1, l, flip) = popsR_d(i,1,1, l, flip)
-            popsB_d(i,ny+1,nz+1, l, flip) = popsB_d(i,1,1, l, flip)
+            popsR_d(i,ny+1,nz_d+1, l, flip) = popsR_d(i,1,1, l, flip)
+            popsB_d(i,ny+1,nz_d+1, l, flip) = popsB_d(i,1,1, l, flip)
           end do
         endif
 
         if (faiRho) then
-          rhoR_d (i,0,0) = rhoR_d (i,ny,nz)
-          rhoB_d (i,0,0) = rhoB_d (i,ny,nz)
+          rhoR_d (i,0,0) = rhoR_d (i,ny,nz_d)
+          rhoB_d (i,0,0) = rhoB_d (i,ny,nz_d)
 
-          rhoR_d (i,0,nz+1) = rhoR_d (i,ny,1)
-          rhoB_d (i,0,nz+1) = rhoB_d (i,ny,1)
+          rhoR_d (i,0,nz_d+1) = rhoR_d (i,ny,1)
+          rhoB_d (i,0,nz_d+1) = rhoB_d (i,ny,1)
 
-          rhoR_d (i,ny+1,0) = rhoR_d (i,1,nz)
-          rhoB_d (i,ny+1,0) = rhoB_d (i,1,nz)
+          rhoR_d (i,ny+1,0) = rhoR_d (i,1,nz_d)
+          rhoB_d (i,ny+1,0) = rhoB_d (i,1,nz_d)
 
-          rhoR_d (i,ny+1,nz+1) = rhoR_d (i,1,1)
-          rhoB_d (i,ny+1,nz+1) = rhoB_d (i,1,1)
+          rhoR_d (i,ny+1,nz_d+1) = rhoR_d (i,1,1)
+          rhoB_d (i,ny+1,nz_d+1) = rhoB_d (i,1,1)
         endif
       endif
     end subroutine bc_edge_x2
@@ -1034,7 +1033,7 @@
       j = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
       k = (blockIdx%y-1) * TILE_DIM + threadIdx%y - 1
 
-      if (1<=j .and. j<=ny .and. 1<=k .and. k<=nz) then
+      if (1<=j .and. j<=ny .and. 1<=k .and. k<=nz_d) then
         myfluid_d(nx+1, j,k, flip) = myfluid_d( 1,j,k, flip)
         myfluid_d(   0, j,k, flip) = myfluid_d(nx,j,k, flip)
       endif
@@ -1048,7 +1047,7 @@
       i = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
       k = (blockIdx%y-1) * TILE_DIM + threadIdx%y - 1
 
-      if (1<=i .and. i<=nx .and. 1<=k .and. k<=nz) then
+      if (1<=i .and. i<=nx .and. 1<=k .and. k<=nz_d) then
         myfluid_d(i,ny+1,k, flip) = myfluid_d(i, 1,k, flip)
         myfluid_d(i,   0,k, flip) = myfluid_d(i,ny,k, flip)
       endif
@@ -1063,8 +1062,8 @@
       j = (blockIdx%y-1) * TILE_DIM + threadIdx%y - 1
 
       if (1<=j .and. j<=ny .and. 1<=i .and. i<=nx) then
-        myfluid_d(i,j,nz+1, flip) = myfluid_d(i,j, 1, flip)        
-        myfluid_d(i,j,   0, flip) = myfluid_d(i,j,nz, flip)
+        myfluid_d(i,j,nz_d+1, flip) = myfluid_d(i,j, 1, flip)        
+        myfluid_d(i,j,   0, flip) = myfluid_d(i,j,nz_d, flip)
       endif
     end subroutine isfluid_per_z2
 
@@ -1075,7 +1074,7 @@
   
       k = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
 
-      if (1<=k .and. k<=nz) then
+      if (1<=k .and. k<=nz_d) then
         myfluid_d (   0,   0,k, flip) = myfluid_d (nx,ny,k, flip)
         myfluid_d (   0,ny+1,k, flip) = myfluid_d (nx, 1,k, flip)
         myfluid_d (nx+1,   0,k, flip) = myfluid_d ( 1,ny,k, flip)
@@ -1090,10 +1089,10 @@
       j = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
 
       if (1<=j .and. j<=ny) then
-        myfluid_d (   0,j,   0, flip) = myfluid_d (nx,j, nz, flip)
-        myfluid_d (   0,j,nz+1, flip) = myfluid_d (nx,j,  1, flip)
-        myfluid_d (nx+1,j,   0, flip) = myfluid_d ( 1,j, nz, flip)
-        myfluid_d (nx+1,j,nz+1, flip) = myfluid_d ( 1,j,  1, flip)
+        myfluid_d (   0,j,   0, flip) = myfluid_d (nx,j, nz_d, flip)
+        myfluid_d (   0,j,nz_d+1, flip) = myfluid_d (nx,j,  1, flip)
+        myfluid_d (nx+1,j,   0, flip) = myfluid_d ( 1,j, nz_d, flip)
+        myfluid_d (nx+1,j,nz_d+1, flip) = myfluid_d ( 1,j,  1, flip)
       endif
     end subroutine isfluid_edge_y2
 
@@ -1104,10 +1103,10 @@
       i = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
 
       if (1<=i .and. i<=nx) then
-        myfluid_d (i,   0,   0, flip) = myfluid_d (i,ny,nz, flip)
-        myfluid_d (i,   0,nz+1, flip) = myfluid_d (i,ny, 1, flip)
-        myfluid_d (i,ny+1,   0, flip) = myfluid_d (i, 1,nz, flip)
-        myfluid_d (i,ny+1,nz+1, flip) = myfluid_d (i, 1, 1, flip)
+        myfluid_d (i,   0,   0, flip) = myfluid_d (i,ny,nz_d, flip)
+        myfluid_d (i,   0,nz_d+1, flip) = myfluid_d (i,ny, 1, flip)
+        myfluid_d (i,ny+1,   0, flip) = myfluid_d (i, 1,nz_d, flip)
+        myfluid_d (i,ny+1,nz_d+1, flip) = myfluid_d (i, 1, 1, flip)
       endif
     end subroutine isfluid_edge_x2
 
@@ -1121,7 +1120,7 @@
       ! if (1==step .and. 1==j*k) write(*,*) 'CUDA bc_periodic_ext_x] i,j:',j,k
 
       ! Copy on virtual nodes...
-      if (0<=j .and. j<=ny+1 .and. 0<=k .and. k<=nz+1) then
+      if (0<=j .and. j<=ny+1 .and. 0<=k .and. k<=nz_d+1) then
         do l = 0, npops-1
           popsR_d(0   ,j,k, l, flip) = popsR_d(nx,j,k, l, flip)
           popsR_d(nx+1,j,k, l, flip) = popsR_d(1 ,j,k, l, flip)
@@ -1137,7 +1136,7 @@
       k = (blockIdx%y-1) * TILE_DIM + threadIdx%y - 1
       ! if (1==step .and. 1==i*k) write(*,*) 'CUDA bc_periodic_ext_y] i,k:',i,k
 
-      if (0<=i .and. i<=nx+1 .and. 0<=k .and. k<=nz+1) then
+      if (0<=i .and. i<=nx+1 .and. 0<=k .and. k<=nz_d+1) then
         do l = 0, npops-1
           popsR_d(i,0   ,k, l, flip) = popsR_d(i,ny,k, l, flip)
           popsR_d(i,ny+1,k, l, flip) = popsR_d(i,1 ,k, l, flip)
@@ -1155,8 +1154,8 @@
 
       if (0<=j .and. j<=ny+1 .and. 0<=i .and. i<=nx+1) then
         do l = 0, npops-1
-          popsR_d(i,j,0   , l, flip) = popsR_d(i,j,nz, l, flip)
-          popsR_d(i,j,nz+1, l, flip) = popsR_d(i,j,1 , l, flip)
+          popsR_d(i,j,0   , l, flip) = popsR_d(i,j,nz_d, l, flip)
+          popsR_d(i,j,nz_d+1, l, flip) = popsR_d(i,j,1 , l, flip)
         end do
       endif
     end subroutine bc_periodic_ext_z
@@ -1172,7 +1171,7 @@
       k = (blockIdx%y-1) * TILE_DIM + threadIdx%y
       ! if (1==step .and. 1==j*k) write(*,*) 'CUDA bc_bb_x] j,k:',j,k
 
-      if (0<=j .and. j<=ny+1 .and. 0<=k .and. k<=nz+1) then
+      if (0<=j .and. j<=ny+1 .and. 0<=k .and. k<=nz_d+1) then
 	      rho1 = compute_rho(popsR_d,1,j,k,flip)
 
         popsR_d(1,j,k, 1, flip) = popsR_d(0, j,   k,    2, flip)
@@ -1201,7 +1200,7 @@
       k = (blockIdx%y-1) * TILE_DIM + threadIdx%y
       ! if (1==step .and. 1==i*k) write(*,*) 'CUDA bc_bb_y] i,k:',i,k
 
-      if (0<=i .and. i<=nx+1 .and. 0<=k .and. k<=nz+1) then
+      if (0<=i .and. i<=nx+1 .and. 0<=k .and. k<=nz_d+1) then
           popsR_d(i,1,k, 3, flip) = popsR_d(i,   0, k,    4, flip)
           popsR_d(i,1,k, 7, flip) = popsR_d(i-1, 0, k,    8, flip)
           popsR_d(i,1,k, 9, flip) = popsR_d(i+1, 0, k,   10, flip)
@@ -1235,13 +1234,13 @@
         popsR_d(i,j,1,15, flip) = popsR_d(i,   j-1, 0, 16, flip)
         popsR_d(i,j,1,17, flip) = popsR_d(i,   j+1, 0, 18, flip)
 
-        rho2 = compute_rho(popsR_d,i,j,nz,flip)
+        rho2 = compute_rho(popsR_d,i,j,nz_d,flip)
 
-        popsR_d(i,j,nz, 6, flip) = popsR_d(i,   j,   nz+1,  5, flip)
-        popsR_d(i,j,nz,12, flip) = popsR_d(i+1, j,   nz+1, 11, flip) - p_d(11)*buz_d*rho2 * wall_z1_d(1)
-        popsR_d(i,j,nz,14, flip) = popsR_d(i-1, j,   nz+1, 13, flip) + p_d(13)*buz_d*rho2 * wall_z1_d(1)
-        popsR_d(i,j,nz,16, flip) = popsR_d(i,   j+1, nz+1, 15, flip)
-        popsR_d(i,j,nz,18, flip) = popsR_d(i,   j-1, nz+1, 17, flip)
+        popsR_d(i,j,nz_d, 6, flip) = popsR_d(i,   j,   nz_d+1,  5, flip)
+        popsR_d(i,j,nz_d,12, flip) = popsR_d(i+1, j,   nz_d+1, 11, flip) - p_d(11)*buz_d*rho2 * wall_z1_d(1)
+        popsR_d(i,j,nz_d,14, flip) = popsR_d(i-1, j,   nz_d+1, 13, flip) + p_d(13)*buz_d*rho2 * wall_z1_d(1)
+        popsR_d(i,j,nz_d,16, flip) = popsR_d(i,   j+1, nz_d+1, 15, flip)
+        popsR_d(i,j,nz_d,18, flip) = popsR_d(i,   j-1, nz_d+1, 17, flip)
       endif
     end subroutine bc_bb_z
 
@@ -1254,7 +1253,7 @@
       k = (blockIdx%y-1) * TILE_DIM + threadIdx%y
       ! if (1==step .and. 1==j*k) write(*,*) 'CUDA bc_bb_x] j,k:',j,k
 
-      if (0<=j .and. j<=ny+1 .and. 0<=k .and. k<=nz+1) then	    
+      if (0<=j .and. j<=ny+1 .and. 0<=k .and. k<=nz_d+1) then	    
         popsR_d(1,j,k, 1, flip) = popsR_d(0, j,   k,    2, flip)
         popsR_d(1,j,k, 7, flip) = popsR_d(0, j-1, k,    8, flip)
         popsR_d(1,j,k,10, flip) = popsR_d(0, j+1, k,    9, flip)
@@ -1290,7 +1289,7 @@
       k = (blockIdx%y-1) * TILE_DIM + threadIdx%y
       ! if (1==step .and. 1==i*k) write(*,*) 'CUDA bc_bb_y] i,k:',i,k
 
-      if (0<=i .and. i<=nx+1 .and. 0<=k .and. k<=nz+1) then
+      if (0<=i .and. i<=nx+1 .and. 0<=k .and. k<=nz_d+1) then
           popsR_d(i,1,k, 3, flip) = popsR_d(i,   0, k,    4, flip)
           popsR_d(i,1,k, 7, flip) = popsR_d(i-1, 0, k,    8, flip)
           popsR_d(i,1,k, 9, flip) = popsR_d(i+1, 0, k,   10, flip)
@@ -1335,12 +1334,12 @@
         popsR_d(i,j,1,15, flip) = popsR_d(i,   j-1, 0, 16, flip)
         popsR_d(i,j,1,17, flip) = popsR_d(i,   j+1, 0, 18, flip)
 
-        rho2 = compute_rho(popsR_d,i,j,nz,flip)
-        popsR_d(i,j,nz, 6, flip) = popsR_d(i,   j,   nz+1,  5, flip)
-        popsR_d(i,j,nz,12, flip) = popsR_d(i+1, j,   nz+1, 11, flip) - p_d(11)*buz_d*rho2 * wall_z1_d(1)
-        popsR_d(i,j,nz,14, flip) = popsR_d(i-1, j,   nz+1, 13, flip) + p_d(13)*buz_d*rho2 * wall_z1_d(1)
-        popsR_d(i,j,nz,16, flip) = popsR_d(i,   j+1, nz+1, 15, flip)
-        popsR_d(i,j,nz,18, flip) = popsR_d(i,   j-1, nz+1, 17, flip)
+        rho2 = compute_rho(popsR_d,i,j,nz_d,flip)
+        popsR_d(i,j,nz_d, 6, flip) = popsR_d(i,   j,   nz_d+1,  5, flip)
+        popsR_d(i,j,nz_d,12, flip) = popsR_d(i+1, j,   nz_d+1, 11, flip) - p_d(11)*buz_d*rho2 * wall_z1_d(1)
+        popsR_d(i,j,nz_d,14, flip) = popsR_d(i-1, j,   nz_d+1, 13, flip) + p_d(13)*buz_d*rho2 * wall_z1_d(1)
+        popsR_d(i,j,nz_d,16, flip) = popsR_d(i,   j+1, nz_d+1, 15, flip)
+        popsR_d(i,j,nz_d,18, flip) = popsR_d(i,   j-1, nz_d+1, 17, flip)
 
         rho3 = compute_rho(popsB_d,i,j,1,flip)
         popsB_d(i,j,1, 5, flip) = popsB_d(i,   j,   0,  6, flip)
@@ -1349,12 +1348,12 @@
         popsB_d(i,j,1,15, flip) = popsB_d(i,   j-1, 0, 16, flip)
         popsB_d(i,j,1,17, flip) = popsB_d(i,   j+1, 0, 18, flip)
 
-        rho4 = compute_rho(popsB_d,i,j,nz,flip)
-        popsB_d(i,j,nz, 6, flip) = popsB_d(i,   j,   nz+1,  5, flip)
-        popsB_d(i,j,nz,12, flip) = popsB_d(i+1, j,   nz+1, 11, flip) - p_d(11)*buz_d*rho4 * wall_z1_d(1)
-        popsB_d(i,j,nz,14, flip) = popsB_d(i-1, j,   nz+1, 13, flip) + p_d(13)*buz_d*rho4 * wall_z1_d(1)
-        popsB_d(i,j,nz,16, flip) = popsB_d(i,   j+1, nz+1, 15, flip)
-        popsB_d(i,j,nz,18, flip) = popsB_d(i,   j-1, nz+1, 17, flip)
+        rho4 = compute_rho(popsB_d,i,j,nz_d,flip)
+        popsB_d(i,j,nz_d, 6, flip) = popsB_d(i,   j,   nz_d+1,  5, flip)
+        popsB_d(i,j,nz_d,12, flip) = popsB_d(i+1, j,   nz_d+1, 11, flip) - p_d(11)*buz_d*rho4 * wall_z1_d(1)
+        popsB_d(i,j,nz_d,14, flip) = popsB_d(i-1, j,   nz_d+1, 13, flip) + p_d(13)*buz_d*rho4 * wall_z1_d(1)
+        popsB_d(i,j,nz_d,16, flip) = popsB_d(i,   j+1, nz_d+1, 15, flip)
+        popsB_d(i,j,nz_d,18, flip) = popsB_d(i,   j-1, nz_d+1, 17, flip)
       endif
     end subroutine bc_bb_z2
 

@@ -16,6 +16,8 @@ program TestLB
 
   implicit none
 
+  integer(4) :: nz
+
 
   ! host arrays
   real(4), allocatable, pinned :: pop_pinned(:,:,:,:)  ! pinned (aka page-locked) host memory, must be allocatable
@@ -23,8 +25,8 @@ program TestLB
   real(4), allocatable :: rhoR(:,:,:), rhoB(:,:,:), vel(:,:,:,:), phase(:,:,:)
   real(4), allocatable :: x_atm(:,:), v_atm(:,:), q(:,:)
   integer(1), allocatable :: myfluid(:,:,:,:)
-  integer(2) :: listAtoms(numAtoms * nx/TILE_DIMx* ny/TILE_DIMy* nz/TILE_DIMz)
-  integer(2) :: findAtoms(2,nx/TILE_DIMx, ny/TILE_DIMy, nz/TILE_DIMz)
+  ! integer(2) :: listAtoms(numAtoms * nx/TILE_DIMx* ny/TILE_DIMy* nz/TILE_DIMz)
+  ! integer(2) :: findAtoms(2,nx/TILE_DIMx, ny/TILE_DIMy, nz/TILE_DIMz)
 
   integer :: nsphere=0,nspheredead=0
   integer, allocatable :: spherelist(:,:),spherelistdead(:,:)
@@ -62,6 +64,8 @@ program TestLB
 #ifdef SERIAL
   myrank = 0
   nprocs = 1
+  nz = glz
+  nz_d = glz
   offset(1)= 0
   offset(2)= 0
   offset(3)= 0
@@ -69,7 +73,9 @@ program TestLB
   call mpi_init(ierr)
   call MPI_comm_size(MPI_COMM_WORLD, nprocs, ierr)
   call MPI_comm_rank(MPI_COMM_WORLD, myrank, ierr)
-  call setupMPI
+  nz = glz / nprocs
+  nz_d = glz / nprocs
+  call setupMPI(nz)
 #endif
 
   call readParameters
@@ -87,9 +93,9 @@ program TestLB
 
   flipflop = 1
 
-  write(*,*) 'Initial setup...'
+  if (myrank== 0) write(*,*) 'Initial setup...'
   if (withCG) then
-     write(*,*) 'Initial setup red & blue pops...'
+    if (myrank== 0) write(*,*) 'Initial setup red & blue pops...'
      call setup2<<<dimGrid, dimBlock>>>(vx,vy,vz)
 
       if (withParticles) then
@@ -123,9 +129,10 @@ program TestLB
   omega = ONE / tauR
 
 
-  call printParams
-
-  write(*,*) 'Run...'
+  if (myrank== 0) then
+    call printParams
+    write(*,*) 'Run...'
+  endif
   istat = cudaEventRecord(startEvent, 0)
 
 #ifdef CUDASTREAM
@@ -781,6 +788,9 @@ program TestLB
     subroutine SetConstants
       implicit none
       integer l, i,j,k
+
+      cz_d = real(nz+1) * HALF
+
       do l=0,npops-1
         p_d(l) = p(l)
         ex_d(l) = ex(l)
@@ -1526,7 +1536,7 @@ program TestLB
          if (istat/=0) write(*,*) 'status after deviceSync B',status
 
          myfluid = myfluid_d
-         call moments2Fl(pop_pinned,rhoR, popB_pinned,rhoB, vel, phase, myfluid, flip)
+         call moments2Fl(nz, pop_pinned,rhoR, popB_pinned,rhoB, vel, phase, myfluid, flip)
 
          istat = cudaMemcpy(rhoR, rhoR_d(:,:,:), (nx+2)*(ny+2)*(nz+2) )
          if (istat/=0) write(*,*) 'status after rho R:',istat
@@ -1549,8 +1559,8 @@ program TestLB
          mynamefile = repeat(' ',120)
          mynamefile = trim(fname)//'rhoB'
 
-         ! call writeImageDataVTI(mynamefile,step, 'rhoB', rhoB, textVTK)
-         ! call writeImageDataVTI("phase",step, phase, textVTK)
+         ! call writeImageDataVTI(nz, mynamefile,step, 'rhoB', rhoB, textVTK)
+         ! call writeImageDataVTI(nz, "phase",step, phase, textVTK)
       endif
 
       mynamefile = repeat(' ',120)
@@ -1559,9 +1569,9 @@ program TestLB
       else
         mynamefile = trim(fname)//'rho'
       endif
-      call writeImageDataVTI(mynamefile,step, 'rho', rhoR, textVTK)
+      call writeImageDataVTI(nz, mynamefile,step, 'rho', rhoR, textVTK)
 
-      call writeImageDataVTI_3d("vel",step, vel, textVTK)
+      call writeImageDataVTI_3d(nz, "vel",step, vel, textVTK)
 
       if (withParticles) then
         call system_clock(c_start2)
@@ -1589,9 +1599,9 @@ program TestLB
         endif
         if (fname(1:5) == 'step_' .and. step/=0) then
           ! After time step, use old value
-          call writeImageDataVTI_isfluid(mynamefile,step, myfluid, 3-flip, textVTK)
+          call writeImageDataVTI_isfluid(nz, mynamefile,step, myfluid, 3-flip, textVTK)
         else
-          call writeImageDataVTI_isfluid(mynamefile,step, myfluid, flip, textVTK)
+          call writeImageDataVTI_isfluid(nz, mynamefile,step, myfluid, flip, textVTK)
         endif
      endif
 
@@ -1617,7 +1627,7 @@ program TestLB
     
     rmin = floor(rdim)
     rmax = rdim + 1    
-    write(*,*) 'spherical_template] rmin,rmax=', rmin,rmax, 'sqrcut in',sqrcut,rmax*rmax
+    if (myrank== 0) write(*,*) 'spherical_template] rmin,rmax=', rmin,rmax, 'sqrcut in',sqrcut,rmax*rmax
 
 
     allocate(issub(-rmax:rmax,-rmax:rmax,-rmax:rmax))
@@ -1701,7 +1711,7 @@ program TestLB
     nspheredead = l
     allocate(spherelistdead(3,nspheredead))
 
-    write (*,*) 'nsphere,nspheredead=', nsphere,nspheredead
+    if (myrank== 0) write (*,*) 'nsphere,nspheredead=', nsphere,nspheredead
     
     l = 0
     do k = -rmax,rmax
@@ -1783,14 +1793,16 @@ program TestLB
   
     ! write parameters
   
-    write(*,*)
-    write(*,fmt=10) nx,ny,nz,npops
-    write(*,fmt=11) dimGrid%x, dimGrid%y, dimGrid%z, dimBlock%x, dimBlock%y, dimBlock%z
-    write(*,fmt=12) dimGridx%x, dimGridx%y, dimGridx%z, dimBlock2%x, dimBlock2%y, dimBlock2%z
-    write(*,fmt=13) dimGridy%x, dimGridy%y, dimGridy%z
-    write(*,fmt=14) dimGridz%x, dimGridz%y, dimGridz%z
-    write(*,fmt=15) dimGridAtm, dimBlockAtm
-    write(*,fmt=20) dimGridSubd%x,dimGridSubd%y,dimGridSubd%z, dimBlockSubd%x,dimBlockSubd%y,dimBlockSubd%z
+    if (myrank== 0) then
+	    write(*,*)
+	    write(*,fmt=10) nx,ny,nz,npops
+	    write(*,fmt=11) dimGrid%x, dimGrid%y, dimGrid%z, dimBlock%x, dimBlock%y, dimBlock%z
+	    write(*,fmt=12) dimGridx%x, dimGridx%y, dimGridx%z, dimBlock2%x, dimBlock2%y, dimBlock2%z
+	    write(*,fmt=13) dimGridy%x, dimGridy%y, dimGridy%z
+	    write(*,fmt=14) dimGridz%x, dimGridz%y, dimGridz%z
+	    write(*,fmt=15) dimGridAtm, dimBlockAtm
+	    write(*,fmt=20) dimGridSubd%x,dimGridSubd%y,dimGridSubd%z, dimBlockSubd%x,dimBlockSubd%y,dimBlockSubd%z
+    endif
   
     10 format('Matrix size:', 4i5)
     11 format('dimGrid:', 3i4, ',   dimBlock:', 3i4)
@@ -1800,9 +1812,9 @@ program TestLB
     15 format('dimGridAtm:', i4, ',   dimBlockAtm:', i4)
     20 format('dimGridSubd:', 3i4, ',   dimBlockSubd:', 3i4)
 
-    write(*,*) 'Mem size:', dataSz/1024./1024.0, 'MB'
+    if (myrank== 0) write(*,*) 'Mem size:', dataSz/1024./1024.0, 'MB'
 
-    write(*,*) 'Allocation of HOST pops array, pinned:', pinnedFlag
+    if (myrank== 0) write(*,*) 'Allocation of HOST pops array, pinned:', pinnedFlag
     allocate(pop_pinned(0:nx+1,0:ny+1,0:nz+1,0:npops-1), STAT=istat, PINNED=pinnedFlag)
     if (istat /= 0) then
        write(*,*) 'Allocation of pop_pinned failed'
@@ -1824,7 +1836,7 @@ program TestLB
       write(*,*) 'Allocation of particle myfluid failed'
     end if
 
-    write(*,*) 'Allocation of GPU pops:'
+    if (myrank== 0) write(*,*) 'Allocation of GPU pops:'
     allocate(popsR_d(0:nx+1,0:ny+1,0:nz+1,0:npops-1, 2), STAT=istat)
     if (istat /= 0) then
        write(*,*) 'Allocation of popsR_d failed'
@@ -1855,7 +1867,7 @@ program TestLB
     
   
     if (withCG) then
-      write(*,*) 'Allocation of HOST other pops:'
+      if (myrank== 0) write(*,*) 'Allocation of HOST other pops:'
       allocate(popB_pinned(0:nx+1,0:ny+1,0:nz+1,0:npops-1), STAT=istat, PINNED=pinnedFlag)
       if (istat /= 0) then
         write(*,*) 'Allocation of popB_pinned failed'
@@ -1873,7 +1885,7 @@ program TestLB
         write(*,*) 'Allocation of phase failed'
       end if
 
-      write(*,*) 'Allocation of GPU other pops:'
+      if (myrank== 0) write(*,*) 'Allocation of GPU other pops:'
       allocate(popsB_d(0:nx+1,0:ny+1,0:nz+1,0:npops-1, 2), STAT=istat)
       if (istat /= 0) then
         write(*,*) 'Allocation of popsB_d failed'
@@ -1887,7 +1899,7 @@ program TestLB
       end if
 
       if (withParticles) then
-        write(*,fmt=16) numAtoms
+        if (myrank== 0) write(*,fmt=16) numAtoms
         16 format('Allocating ', i4, ' particles on GPU...')
 
         allocate(pos_d(13, numAtoms,2), STAT=istat)
@@ -1977,21 +1989,23 @@ program TestLB
       stop
     endif
   
-    write(*,*)
-    write(*,*) 'Device: ', trim(prop%name)
-  
-    write(*,*) '************************'
-    write(*,*) 'Transfer size (MB): ', dataSz/1024./1024.
-    istat = cudaEventRecord(startEvent, 0)
-    
-    istat = cudaMemcpy(pop_pinned, popsR_d, (nx+2)*(ny+2)*(nz+2)*npops )
-    if (istat/=0) write(*,*) 'status after pops-gpuSync:',istat
-    istat = cudaEventRecord(stopEvent, 0)
-    istat = cudaEventSynchronize(stopEvent)
-    
-    istat = cudaEventElapsedTime(mytime, startEvent, stopEvent)
-    write(*,*) '  Device to Host bandwidth (GiB/s): ', dataSz/mytime*(1.e+3/1024**3)
-    write(*,*)
+    if (myrank== 0) then
+      write(*,*)
+      write(*,*) 'Device: ', trim(prop%name)
+
+      write(*,*) '************************'
+      write(*,*) 'Transfer size (MB): ', dataSz/1024./1024.
+      istat = cudaEventRecord(startEvent, 0)
+
+      istat = cudaMemcpy(pop_pinned, popsR_d, (nx+2)*(ny+2)*(nz+2)*npops )
+      if (istat/=0) write(*,*) 'status after pops-gpuSync:',istat
+      istat = cudaEventRecord(stopEvent, 0)
+      istat = cudaEventSynchronize(stopEvent)
+
+      istat = cudaEventElapsedTime(mytime, startEvent, stopEvent)
+      write(*,*) '  Device to Host bandwidth (GiB/s): ', dataSz/mytime*(1.e+3/1024**3)
+      write(*,*)
+    endif
    end subroutine setupGPUgridAndAlloc
 
 

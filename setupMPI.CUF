@@ -1,11 +1,12 @@
 
-      subroutine setupMPI
+      subroutine setupMPI(nz)
 
       use dimensions_m
       use cudafor
 
       use mpi
       implicit none
+      integer(4), intent(in) :: nz
       character*15 file_name5
 
       integer:: i, istat, ndev
@@ -13,17 +14,6 @@
 !      call mpi_init(ierr)
 !      call MPI_comm_size(MPI_COMM_WORLD, nprocs, ierr)
 !      call MPI_comm_rank(MPI_COMM_WORLD, myrank, ierr)
-
-! check
-      if ((procx*procy*procz).ne.nprocs) then
-        if (myrank.eq.0) then
-          write(*,*) 'ERROR: decomposed for', &
-                             procx*procy*procz, 'procs'
-          write(*,*) 'ERROR: launched on', nprocs, 'processes'
-        end if
-        call MPI_finalize(ierr)
-        stop
-      end if
 !
 ! building virtual topology
 !
@@ -33,9 +23,9 @@
       Tperiodic(2) = .true.
       Tperiodic(3) = .true.
 !
-      prgrid(1) = procx
-      prgrid(2) = procy
-      prgrid(3) = procz
+      prgrid(1) = 1
+      prgrid(2) = 1
+      prgrid(3) = nprocs
 !
       call MPI_cart_create(MPI_COMM_WORLD, mpid, prgrid, &
                               Tperiodic,rreorder,lbecomm,ierr)
@@ -55,36 +45,27 @@
       call MPI_type_contiguous((ny+2)*(nx+2), MPI_REAL, xyplane, ierr)
       call MPI_type_commit(xyplane,ierr)
       if(myrank.eq.0) then
-         write(6,*) "INFO: xyplane (KB)-->", (ny+2)*(nx+2) *4 / 1024
+         write(6,*) 'MPI-DEBUG) INFO: xyplane (KB)-->', (ny+2)*(nx+2) *4 / 1024
       endif
 !
 ! x dir  & y dir
       call MPI_cart_shift(lbecomm, 0, 1, rear(2), front(2), ierr)
       call MPI_cart_shift(lbecomm, 1, 1, left(2), right(2), ierr)
       call MPI_cart_shift(lbecomm, 2, 1, down(2), up(2), ierr)
-!
-!!      file_name5 = 'task.xxxxxx.log'
-!!GA      write(file_name5(6:11),3100) myrank
-!!      open(38,file=file_name5, status='unknown')	! task.XXXXXX.log
-!
+
       call MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, &
                                MPI_INFO_NULL, localcomm, ierr)
       call MPI_comm_size(localcomm, ndev, ierr)
       call MPI_Comm_rank(localcomm, mydev, ierr)
       istat = cudaSetDevice(mydev)
 
-      write (*,*) myrank,'CPU offset = ', offset
+      write (6,*) 'MPI-DEBUG',myrank,'CPU offset = ', offset
       offset_d = offset
 !
-      write(6,*) myrank,':tot   task ', nprocs, procz
-      write(6,*) myrank,':Device     ', mydev, ndev
-      write(6,*) myrank,':task mpi-z ', mpicoords(3)
-      write(6,*) myrank,':up    task ', up(2)
-      write(6,*) myrank,':down  task ', down(2)
-
-!format
-3100  format(i6.6)
-
-      return
+      write(6,*) 'MPI-DEBUG',myrank,':tot  tasks ', nprocs
+      write(6,*) 'MPI-DEBUG',myrank,':Device     ', mydev, ndev
+      write(6,*) 'MPI-DEBUG',myrank,':task mpi-z ', mpicoords(3)
+      write(6,*) 'MPI-DEBUG',myrank,':up    task ', up(2)
+      write(6,*) 'MPI-DEBUG',myrank,':down  task ', down(2)
       end subroutine setupMPI
 

@@ -4,12 +4,9 @@
     implicit none
 
     ! integer(4), parameter :: nx = 32, ny = nx, nz = nx
-! da mettere come parametri di input 
     integer(4), parameter :: glx = 128, gly = glx, glz = glx
-    integer(4), parameter :: procx=1, procy=1, procz=2
-    integer(4), parameter :: nx=glx/procx
-    integer(4), parameter :: ny=gly/procy
-    integer(4), parameter :: nz=glz/procz
+    integer(4), parameter :: nx = glx, ny = gly
+    !integer(4) :: nz
 !
 ! mpi stuff
     integer:: nprocs, myrank, ierr
@@ -173,7 +170,7 @@
     ! Particles PBC
     real, parameter :: cx=real(nx+1) * HALF
     real, parameter :: cy=real(ny+1) * HALF
-    real, parameter :: cz=real(nz+1) * HALF
+    !real, parameter :: cz=real(nz+1) * HALF
 
     ! Device constants...
     integer, dimension(0:npops-1), constant :: ex_d,ey_d,ez_d

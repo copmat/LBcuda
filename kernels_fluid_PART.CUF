@@ -23,7 +23,7 @@
 
     attributes(device) function compute_rho(pops, i,j,k, flip)
      integer, intent(in) :: i,j,k, flip
-     real, intent(in) :: pops(0:nx+1,0:ny+1,0:nz+1, 0:npops-1, 2)
+     real, intent(in) :: pops(0:nx+1,0:ny+1,0:nz_d+1, 0:npops-1, 2)
      real :: compute_rho
 
      compute_rho = pops(i,j,k,0, flip) + pops(i,j,k,1, flip) + pops(i,j,k,2, flip) + &
@@ -38,7 +38,7 @@
 
     attributes(device) function compute_u_1fl(pops, i,j,k, flip, invrho)
      integer, intent(in) :: i,j,k, flip
-     real, intent(in) :: pops(0:nx+1,0:ny+1,0:nz+1, 0:npops-1, 2), invrho
+     real, intent(in) :: pops(0:nx+1,0:ny+1,0:nz_d+1, 0:npops-1, 2), invrho
      real :: compute_u_1fl
 
      compute_u_1fl   = invrho * ( pops(i,j,k,1, flip) - pops(i,j,k,2, flip) + pops(i,j,k,7, flip) - &
@@ -49,7 +49,7 @@
 
     attributes(device) function compute_v_1fl(pops, i,j,k, flip, invrho)
      integer, intent(in) :: i,j,k, flip
-     real, intent(in) :: pops(0:nx+1,0:ny+1,0:nz+1, 0:npops-1, 2), invrho
+     real, intent(in) :: pops(0:nx+1,0:ny+1,0:nz_d+1, 0:npops-1, 2), invrho
      real :: compute_v_1fl
 
      compute_v_1fl    = invrho * ( pops(i,j,k,3, flip) - pops(i,j,k,4, flip) + pops(i,j,k,7, flip) - &
@@ -60,7 +60,7 @@
 
     attributes(device) function compute_w_1fl(pops, i,j,k, flip, invrho)
      integer, intent(in) :: i,j,k, flip
-     real, intent(in) :: pops(0:nx+1,0:ny+1,0:nz+1, 0:npops-1, 2), invrho
+     real, intent(in) :: pops(0:nx+1,0:ny+1,0:nz_d+1, 0:npops-1, 2), invrho
      real :: compute_w_1fl
 
      compute_w_1fl    = invrho * ( pops(i,j,k,5, flip) - pops(i,j,k,6, flip) + pops(i,j,k,11, flip) - &
@@ -219,11 +219,11 @@
     
       getDeltak = k - zzz
       if (zperiodic) then
-        if (zzz-rdim < 1 .or. zzz+rdim > nz) then
-          if (zzz+rdim > nz .and. k < 2*rdim) then
-            getDeltak = k - zzz + nz
-          else if (zzz-rdim < 1 .and. k > nz - 2*rdim) then
-            getDeltak = k - zzz - nz
+        if (zzz-rdim < 1 .or. zzz+rdim > nz_d) then
+          if (zzz+rdim > nz_d .and. k < 2*rdim) then
+            getDeltak = k - zzz + nz_d
+          else if (zzz-rdim < 1 .and. k > nz_d - 2*rdim) then
+            getDeltak = k - zzz - nz_d
           endif
         endif
       endif
@@ -341,7 +341,7 @@
       ! apply periodic conditions if necessary
       ! i=pimage(ixpbc,i,nx)
       ! j=pimage(iypbc,j,ny)
-      ! k=pimage(izpbc,k,nz)
+      ! k=pimage(izpbc,k,nz_d)
 
       xxx = nint(pos_d(1,iatm, flip))
       yyy = nint(pos_d(2,iatm, flip))
@@ -406,11 +406,11 @@
 
           aaa = ONE/real(nx)
           bbb = ONE/real(ny)
-          ccc = ONE/real(nz)
+          ccc = ONE/real(nz_d)
           
           rtemp(1) = rtemp(1) - real(nx)*nint(aaa*rtemp(1))
           rtemp(2) = rtemp(2) - real(ny)*nint(bbb*rtemp(2))
-          rtemp(3) = rtemp(3) - real(nz)*nint(ccc*rtemp(3))
+          rtemp(3) = rtemp(3) - real(nz_d)*nint(ccc*rtemp(3))
           
           modr = sqrt( rtemp(1)*rtemp(1) + rtemp(2)*rtemp(2) + rtemp(3)*rtemp(3))
           rtemp(1:3) = rdim / modr * rtemp(1:3)
@@ -585,11 +585,11 @@
 
           aaa = ONE/real(nx)
           bbb = ONE/real(ny)
-          ccc = ONE/real(nz)
+          ccc = ONE/real(nz_d)
           
           rtemp(1) = rtemp(1) - real(nx)*nint(aaa*rtemp(1))
           rtemp(2) = rtemp(2) - real(ny)*nint(bbb*rtemp(2))
-          rtemp(3) = rtemp(3) - real(nz)*nint(ccc*rtemp(3))
+          rtemp(3) = rtemp(3) - real(nz_d)*nint(ccc*rtemp(3))
 
           modr = sqrt( rtemp(1)*rtemp(1) + rtemp(2)*rtemp(2) + rtemp(3)*rtemp(3))
           rtemp(1:3) = rdim / modr * rtemp(1:3)
@@ -736,7 +736,7 @@
         ! CYCLE_OUT_INTERVAL(ishift, minx-nbuff, maxx+nbuff)
         ! CYCLE_OUT_INTERVAL(jshift, miny-nbuff, maxy+nbuff)
         ! CYCLE_OUT_INTERVAL(kshift, minz-nbuff, maxz+nbuff)
-        if (i1<0 .or. i1>nx+1 .or. j1<0 .or. j1>ny+1 .or. k1<0 .or. k1>nz+1) then
+        if (i1<0 .or. i1>nx+1 .or. j1<0 .or. j1>ny+1 .or. k1<0 .or. k1>nz_d+1) then
           stop_d = __LINE__
           write(*,*) '1belt] RangeErr i,j,k=',linear(i,j,k),linear(i1,j1,k1)
         endif
@@ -767,9 +767,9 @@
       do l = 1, ndouble
         i1 = pimage(i + exdouble(l), nx)
         j1 = pimage(j + eydouble(l), ny)
-        k1 = pimage(k + ezdouble(l), nz)
+        k1 = pimage(k + ezdouble(l), nz_d)
 
-        if (i1<0 .or. i1>nx+1 .or. j1<0 .or. j1>ny+1 .or.k1<0 .or. k1>nz+1) then
+        if (i1<0 .or. i1>nx+1 .or. j1<0 .or. j1>ny+1 .or.k1<0 .or. k1>nz_d+1) then
           stop_d = __LINE__
           write(*,*) '2belt] RangeErr i,j,k=',linear(i,j,k),linear(i1,j1,k1)
         endif
@@ -813,7 +813,7 @@
         j1 = j + eyd3q27(l)
         k1 = k + ezd3q27(l)
 
-        if (i1<0 .or. i1>nx+1 .or. j1<0 .or. j1>ny+1 .or. k1<0 .or. k1>nz+1) then
+        if (i1<0 .or. i1>nx+1 .or. j1<0 .or. j1>ny+1 .or. k1<0 .or. k1>nz_d+1) then
           stop_d = __LINE__
           write(*,*) '1beltWghts] RangeErr i,j,k=',linear(i,j,k),linear(i1,j1,k1)
         endif
@@ -1067,11 +1067,14 @@
       real, parameter	  :: inflimit = sidewall_rdist + HALF, rlimit = ONE+HALF, gmin = FIVE*HALF * sidewall_k
       real, parameter	  :: suplimitx = nx - inflimit
       real, parameter	  :: suplimity = ny - inflimit
-      real, parameter	  :: suplimitz = nz - inflimit
+      real	  :: suplimitz
       real, parameter	  :: suprcapx = nx - 1.5
       real, parameter	  :: suprcapy = ny - 1.5
-      real, parameter	  :: suprcapz = nz - 1.5
+      real	  :: suprcapz
       real              :: rrr,ggg
+
+      suplimitz = nz_d - inflimit
+      suprcapz = nz_d - 1.5
 
       ! vmin = sidewall_k*(ONE**(FIVE*HALF))    
       if (1==step.and.1==iatm) write(*,*) 'sw]', inflimit, rlimit, gmin
@@ -1308,7 +1311,7 @@
       ! write(*,*) 'Hz] xdf:', xdf,ydf,zdf
       if (xperiodic) xdf = xdf - nx*nint(xdf / nx)
       if (yperiodic) ydf = ydf - ny*nint(ydf / ny)
-      if (zperiodic) zdf = zdf - nz*nint(zdf / nz)
+      if (zperiodic) zdf = zdf - nz_d*nint(zdf / nz_d)
 
       rsq = xdf*xdf + ydf*ydf + zdf*zdf
       if (rsq <= mxrsqcut) then
@@ -1369,7 +1372,7 @@
               ! zcm = nint( zzz(iatm) + zdf*HALF )
               ! xcm = pimage(ixpbc,xcm,nx)
               ! ycm = pimage(iypbc,ycm,ny)
-              ! zcm = pimage(izpbc,zcm,nz)
+              ! zcm = pimage(izpbc,zcm,nz_d)
               ! visc=omega_to_viscosity(omega(xcm,ycm,zcm))
             ! endif
             
@@ -1476,8 +1479,8 @@
         endif
       endif
       if (zperiodic) then
-        zzz = pbc_images_centeredz(zzz, cz)
-        if (zzz< 0.5 .or. zzz>nz+0.5) then
+        zzz = pbc_images_centeredz(zzz, cz_d)
+        if (zzz< 0.5 .or. zzz>nz_d+0.5) then
           write(*,*) 'nve]z step,i,pos', step, i, zzz
           stop_d = __LINE__
         endif
@@ -1798,10 +1801,10 @@
         ! PBC treatment
         aaa = ONE/real(nx)
         bbb = ONE/real(ny)
-        ccc = ONE/real(nz)
+        ccc = ONE/real(nz_d)
         rversor(1) = rversor(1) - real(nx)*nint(aaa*rversor(1))
         rversor(2) = rversor(2) - real(ny)*nint(bbb*rversor(2))
-        rversor(3) = rversor(3) - real(nz)*nint(ccc*rversor(3))
+        rversor(3) = rversor(3) - real(nz_d)*nint(ccc*rversor(3))
 
         modr = sqrt( rversor(1)*rversor(1) + rversor(2)*rversor(2) + rversor(3)*rversor(3) )
         rversor(1:3) = rdim / modr * rversor(1:3)
@@ -1813,11 +1816,11 @@
       
         ii = pimage(i + ex(indlow), nx)
         jj = pimage(j + ey(indlow), ny)
-        kk = pimage(k + ez(indlow), nz)
+        kk = pimage(k + ez(indlow), nz_d)
 
         io = pimage(i + ex(indhig), nx)
         jo = pimage(j + ey(indhig), ny)
-        ko = pimage(k + ez(indhig), nz)
+        ko = pimage(k + ez(indhig), nz_d)
       
         if (myfluid_d(ii,jj,kk, flip)==fluid_fluid .and. myfluid_d(io,jo,ko, flip)/=fluid_fluid) then
           deltai = getDeltai(ii, xxx)
@@ -2024,9 +2027,9 @@
       real :: pbc_images_centeredz, zzs, ccc
 
       zzs = z - atomz
-      ccc = ONE/real(nz)
+      ccc = ONE/real(nz_d)
 
-      pbc_images_centeredz = zzs - real(nz)*nint(ccc*zzs) + atomz
+      pbc_images_centeredz = zzs - real(nz_d)*nint(ccc*zzs) + atomz
     end function
 
     attributes(device) subroutine particle_to_node_bounce_back_bc2_phase1(step, flip, i,j,k)
@@ -2040,11 +2043,11 @@
 
         ii = pimage(i + ex(indlow), nx)
         jj = pimage(j + ey(indlow), ny)
-        kk = pimage(k + ez(indlow), nz)
+        kk = pimage(k + ez(indlow), nz_d)
 
         io = pimage(i + ex(indhig), nx)
         jo = pimage(j + ey(indhig), ny)
-        ko = pimage(k + ez(indhig), nz)
+        ko = pimage(k + ez(indhig), nz_d)
 
         if(myfluid_d(ii,jj,kk, flip)==fluid_fluid .and. myfluid_d(io,jo,ko, flip)/=fluid_fluid)then
 #ifdef DEBUG_P2N
@@ -2101,10 +2104,10 @@
         ! PBC treatment
         aaa = ONE/real(nx)
         bbb = ONE/real(ny)
-        ccc = ONE/real(nz)
+        ccc = ONE/real(nz_d)
         rversor(1) = rversor(1) - real(nx)*nint(aaa*rversor(1))
         rversor(2) = rversor(2) - real(ny)*nint(bbb*rversor(2))
-        rversor(3) = rversor(3) - real(nz)*nint(ccc*rversor(3))
+        rversor(3) = rversor(3) - real(nz_d)*nint(ccc*rversor(3))
         
         modr = sqrt( rversor(1)*rversor(1) + rversor(2)*rversor(2) + rversor(3)*rversor(3) )
         rversor(1:3) = rdim / modr * rversor(1:3)
@@ -2116,11 +2119,11 @@
       
         ii = pimage(i + ex(indlow), nx)
         jj = pimage(j + ey(indlow), ny)
-        kk = pimage(k + ez(indlow), nz)
+        kk = pimage(k + ez(indlow), nz_d)
 
         io = pimage(i + ex(indhig), nx)
         jo = pimage(j + ey(indhig), ny)
-        ko = pimage(k + ez(indhig), nz)
+        ko = pimage(k + ez(indhig), nz_d)
 
         if (myfluid_d(ii,jj,kk, flip)==fluid_fluid .and. myfluid_d(io,jo,ko, flip)/=fluid_fluid)then
           if (lrotate) then
@@ -2176,7 +2179,7 @@
       
       if (i>nx/TILE_DIMx) return
       if (j>ny/TILE_DIMy) return
-      if (k>nz/TILE_DIMz) return
+      if (k>nz_d/TILE_DIMz) return
 
       dim_matAtm_d(i,j,k) = 0
     end subroutine zeroListAtomsGPU
@@ -2247,14 +2250,14 @@
           splitted(3) = .true.
           boxatom(3,1) = 1
           boxatom(3,2) = k+rdim
-          boxatom(3,3) = k-rdim + nz
-          boxatom(3,4) = nz
-        elseif (zperiodic .and. boxatom(3, 2) > nz) then 
+          boxatom(3,3) = k-rdim + nz_d
+          boxatom(3,4) = nz_d
+        elseif (zperiodic .and. boxatom(3, 2) > nz_d) then 
           splitted(3) = .true.
           boxatom(3,1) = 1
-          boxatom(3,2) = k+rdim - nz
+          boxatom(3,2) = k+rdim - nz_d
           boxatom(3,3) = k-rdim
-          boxatom(3,4) = nz
+          boxatom(3,4) = nz_d
         else
           splitted(3) = .false.
           boxatom(3,3) = TILE_DIMz	! This avoid loopk==1
@@ -2266,7 +2269,7 @@
 	maxk = (boxatom(3,2*loopk+2)-1) / TILE_DIMz + 1
 	do k = mink, maxk
 	  ! write(*,*) "atom",l," k:", k, "loopk:",loopk
-	  if (k<1 .or. k > nz/TILE_DIMz) cycle
+	  if (k<1 .or. k > nz_d/TILE_DIMz) cycle
 
       	  do loopj=0, 1
       	    minj = (boxatom(2,2*loopj+1)-1) / TILE_DIMy + 1

@@ -2,13 +2,14 @@
     use dimensions_m
     implicit none
 
-    integer(1)  :: debugInt1(0:nx+1,0:ny+1,0:nz+1)
-    real        :: debugReal(0:nx+1,0:ny+1,0:nz+1)
+    ! integer(1)  :: debugInt1(0:nx+1,0:ny+1,0:nz+1)
+    ! real        :: debugReal(0:nx+1,0:ny+1,0:nz+1)
  contains
 
- subroutine writeImageDataVTI(fname, step, varname, rhoR, textual)
+ subroutine writeImageDataVTI(nz, fname, step, varname, rhoR, textual)
   use dimensions_m
   implicit none
+  integer(4), intent(in) :: nz
   character(len=*),intent(in) :: fname, varname
   integer,intent(in) :: step
   real(4),allocatable,intent(in) :: rhoR(:,:,:)
@@ -72,9 +73,10 @@
  end subroutine writeImageDataVTI
 
 
- subroutine writeImageDataVTI_3d(fname, step, vel, textual)
+ subroutine writeImageDataVTI_3d(nz, fname, step, vel, textual)
   use dimensions_m
   implicit none
+  integer(4), intent(in) :: nz
   character(len=*),intent(in) :: fname
   integer,intent(in) :: step
   real(4),allocatable,intent(in) :: vel(:,:,:,:)
@@ -359,9 +361,10 @@
  end function write_fmtnumb8
 
 
- subroutine moments1Fl(pops, rhoR,vel)
+ subroutine moments1Fl(nz, pops, rhoR,vel)
   use dimensions_m
   implicit none
+  integer(4), intent(in) :: nz
   real(4), allocatable, pinned,intent(in) :: pops(:,:,:,:)
   real(4), allocatable :: rhoR(:,:,:), vel(:,:,:,:)
   integer i,j,k, l
@@ -416,9 +419,10 @@
   ! write (*,*) 1,1,1, rhoR(1,1,1), (pops(1,1,1,l), l=0,18)
  end subroutine moments1Fl
 
- subroutine moments2Fl(pops,rhoR, popsB,rhoB, vel, phase, myfluid, flip)
+ subroutine moments2Fl(nz, pops,rhoR, popsB,rhoB, vel, phase, myfluid, flip)
   use dimensions_m
   implicit none
+  integer(4), intent(in) :: nz
   real(4), allocatable, pinned,intent(in) :: pops(:,:,:,:), popsB(:,:,:,:)
   real(4), allocatable :: rhoR(:,:,:), rhoB(:,:,:), vel(:,:,:,:), phase(:,:,:)
   integer(1), allocatable, intent(in) :: myfluid(:,:,:,:)
@@ -483,10 +487,11 @@
   enddo
  end subroutine moments2Fl
 
- subroutine writeImageDataVTI_isfluid(fname, step, myfluid, flip, textual)
+ subroutine writeImageDataVTI_isfluid(nz, fname, step, myfluid, flip, textual)
   use dimensions_m
   use kernels_fluid
   implicit none
+  integer(4), intent(in) :: nz
   character(len=*),intent(in) :: fname
   integer,intent(in) :: step, flip
   integer(1), allocatable, intent(in) :: myfluid(:,:,:,:)

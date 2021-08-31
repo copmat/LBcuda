@@ -2,6 +2,9 @@
     use dimensions_m
     implicit none
 
+    integer(4), constant :: nz_d
+    real,constant        :: cz_d
+
     ! device arrays
     real(4), allocatable, device :: popsR_d(:,:,:,:,:), popsB_d(:,:,:,:,:)
     real(4), allocatable, device :: force_d(:, :,:,:)
