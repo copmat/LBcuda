@@ -103,16 +103,26 @@
     attributes(global) subroutine setup2(vx,vy,vz)
       real, value :: vx,vy,vz
       integer :: i,j,k, l
+      integer :: gli,glj,glk
       real    :: rhoR,rhoB, u,v,w, eqR,eqB, distx,disty,distz, rdist,tempr
-      real,parameter    :: radius = nx/8
+      real,parameter    :: radius = glz/8
   
       i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
       j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
       k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
+      if (1==i*j*k) write(*,*) 'CUDA setup2] offset:', offset_d(1),offset_d(2),offset_d(3)
 
-      distx = i - (nx/2 + 0.5)
-      disty = j - (ny/2 + 0.5)
-      distz = k - (nz/2 + 0.5)
+      gli = i + offset_d(1)
+      glj = j + offset_d(2)
+      glk = k + offset_d(3)
+
+      if (1==i*j*k) write(*,*) 'CUDA setup2] offset:', gli, glj, glk
+
+      distx = gli - (glx/2 + 0.5)
+      disty = glj - (gly/2 + 0.5)
+      distz = glk - (glz/4 + 0.5)
+!
+!
       rdist = sqrt(distx*distx + disty*disty + distz*distz)
       tempr = fcut(rdist, radius, radius+0.1)
       rhoR = tempr
@@ -423,9 +433,6 @@
           i1 = li + ex_d(l)
           j1 = lj + ey_d(l)
           k1 = lk + ez_d(l)
-          ! if (i1<1 .or. i1>nx .or. j1<1 .or. j1>ny .or.k1<1 .or. k1>nz) then
-          !   stop_d = __LINE__
-          ! endif
 
           rhoR_shifted = loc_rhoR(i1,j1,k1)
           rhoB_shifted = loc_rhoB(i1,j1,k1)
