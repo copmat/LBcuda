@@ -71,7 +71,7 @@
                                MPI_INFO_NULL, localcomm, ierr)
       call MPI_comm_size(localcomm, ndev, ierr)
       call MPI_Comm_rank(localcomm, mydev, ierr)
-      mydev=0; !istat = cudaSetDevice(mydev)
+      istat = cudaSetDevice(mydev)
 
       write (*,*) myrank,'CPU offset = ', offset
       offset_d = offset
