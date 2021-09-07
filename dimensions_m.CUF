@@ -3,14 +3,14 @@
   module dimensions_m
     implicit none
 
-    ! integer(4), parameter :: nx = 32, ny = nx, nz = nx
-    integer(4), parameter :: glx = 128, gly = glx, glz = glx
+    ! integer(4), parameter :: glx = 32, gly = glx, glz = glx
+    integer(4), parameter :: glx = 256, gly = glx, glz = glx
     integer(4), parameter :: nx = glx, ny = gly
     !integer(4) :: nz
 !
 ! mpi stuff
     integer:: nprocs, myrank, ierr
-    integer:: xyplane
+    integer:: xyplane, xyplane_int1
     integer, parameter::  mpid=3
     integer:: front(2),rear(2),right(2)
     integer:: up(2),down(2),left(2)
@@ -28,7 +28,7 @@
     logical, parameter :: yperiodic = .true.
     logical, parameter :: zperiodic = .true.
     logical, parameter :: uniqueOmega = .true.
-    logical, parameter :: wantOut = .true.
+    logical, parameter :: wantOut = .false.
     logical, parameter :: textVTK = .false.
     logical, parameter :: forced = .false.
     logical, parameter :: const_forced = .false.
@@ -186,9 +186,9 @@
     real, constant    :: ext_tqx_d, ext_tqy_d, ext_tqz_d
 
     integer, parameter :: TILE_DIM = 8
-    integer, parameter :: TILE_DIMx = 4
-    integer, parameter :: TILE_DIMy = 4
-    integer, parameter :: TILE_DIMz = 4
+    integer, parameter :: TILE_DIMx = 128
+    integer, parameter :: TILE_DIMy = 1
+    integer, parameter :: TILE_DIMz = 1
     integer, parameter :: TILE_DIMPART = 16
 
     ! MPI

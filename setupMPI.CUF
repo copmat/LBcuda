@@ -47,6 +47,12 @@
       if(myrank.eq.0) then
          write(6,*) 'MPI-DEBUG) INFO: xyplane (KB)-->', (ny+2)*(nx+2) *4 / 1024
       endif
+
+      call MPI_type_contiguous((ny+2)*(nx+2), MPI_INTEGER1, xyplane_int1, ierr)
+      call MPI_type_commit(xyplane_int1,ierr)
+      if(myrank.eq.0) then
+         write(6,*) 'MPI-DEBUG) INFO: xyplane_int1 (KB)-->', (ny+2)*(nx+2) / 1024
+      endif
 !
 ! x dir  & y dir
       call MPI_cart_shift(lbecomm, 0, 1, rear(2), front(2), ierr)

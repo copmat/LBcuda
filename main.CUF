@@ -24,16 +24,15 @@ program TestLB
   real(4), allocatable, pinned :: popB_pinned(:,:,:,:)  ! pinned (aka page-locked) host memory, must be allocatable
   real(4), allocatable :: rhoR(:,:,:), rhoB(:,:,:), vel(:,:,:,:), phase(:,:,:)
   real(4), allocatable :: x_atm(:,:), v_atm(:,:), q(:,:)
+  real(8), allocatable :: buffer_for(:,:),buffer_forall(:,:)
   integer(1), allocatable :: myfluid(:,:,:,:)
-  ! integer(2) :: listAtoms(numAtoms * nx/TILE_DIMx* ny/TILE_DIMy* nz/TILE_DIMz)
-  ! integer(2) :: findAtoms(2,nx/TILE_DIMx, ny/TILE_DIMy, nz/TILE_DIMz)
-
+  
   integer :: nsphere=0,nspheredead=0
   integer, allocatable :: spherelist(:,:),spherelistdead(:,:)
 
   ! events for timing
   type (cudaEvent) :: startEvent, stopEvent
-  integer(8)	   :: clock_rate, c_stopAtom,c_startAtom, diff_listatom, diff_listatomGPU
+  integer(8)	   :: clock_rate, c_stopAtom,c_startAtom, diff_listatomGPU
 
   ! misc
   type (dim3) :: dimGrid, dimBlock, dimGridx,dimGridy,dimGridz, dimBlock2
@@ -102,7 +101,7 @@ program TestLB
         partVol_d(1:numAtoms) = 0
 
         call init_isfluid_CG<<<dimGrid, dimBlock>>>(step, flipflop)
-        call fixPeriodic_isfluid
+        call fixPeriodic_isfluid("setup2")
 
 #ifdef CHECK_VOLP
         partVol(1:numAtoms) = partVol_d(1:numAtoms)
@@ -148,7 +147,7 @@ program TestLB
 #ifdef PARTICLES
       if (withParticles) then
         call init_isfluid_CG<<<dimGrid, dimBlock>>>(step, flipflop)
-        call fixPeriodic_isfluid
+        call fixPeriodic_isfluid("step")
         call del_fluid_CG<<<dimGrid, dimBlock>>>(step, flipflop, lrotate)
 
 #ifdef CHECK_VOLP
@@ -172,17 +171,13 @@ program TestLB
 #endif
 #endif
 
-#ifdef SERIAL
-#else
-      call abortOnLastErrorAndSync("init_rho_CG",step, flipflop)
-#endif
 
-      call fixPeriodic(.false., .true.)
+      call fixPeriodic(.false., .true., "init_rho_CG")
 
 #ifdef PARTICLES
       if (withParticles) then
         call make_fluid_CG<<<dimGrid, dimBlock>>>(step, flipflop, lrotate)
-        call fixPeriodic(.false., .true.)
+        call fixPeriodic(.false., .true., "make_fluid_CG")
 
 #ifdef DEBUG_MKRM
         call dumpMkRm(step)
@@ -194,7 +189,7 @@ program TestLB
 
       if (withParticles) then
         call compute_densities_wall<<<dimGrid, dimBlock>>>(step, flipflop)
-        call fixPeriodic(.false., .true.)
+        call fixPeriodic(.false., .true., "compute_densities_wall")
         ! call OutputVTK("wall_",step, flipflop)
       endif
 #endif
@@ -202,20 +197,13 @@ program TestLB
       call time_step_CG<<<dimGrid, dimBlock>>>(step, flipflop)
       ! call OutputVTK("cg_",step, flipflop)
 
-#ifdef SERIAL
-#else
-      call abortOnLastErrorAndSync("time_step_CG",step, flipflop)
-#endif
-      call fixPeriodic(.true., .false.)
+      call fixPeriodic(.true., .false., "time_step_CG")
       
 #ifdef PARTICLES
       if (withParticles) then
         call partBB_CG<<<dimGrid, dimBlock>>>(step, flipflop, lrotate)
         call abortOnLastErrorAndSync("partBB_CG",step, flipflop)
 
-#ifdef DEBUG_N2P
-        call dumpTerms(step)
-#endif        
         ! call OutputVTK("partBB_n2p_",step, flipflop)
 
         call partBB_CG_p2n<<<dimGrid, dimBlock>>>(step, flipflop)          
@@ -224,7 +212,14 @@ program TestLB
         call partBB_CG_p2n2<<<dimGrid, dimBlock>>>(step, flipflop, lrotate)          
         ! call OutputVTK("partBB_",step, flipflop)
 
-        call fixPeriodic(.true., .false.)
+        call fixPeriodic(.true., .false., "partBB_CG_p2n2")
+
+#ifdef DEBUG_N2P
+        call dumpTerms_n2p(step)
+#endif
+#ifdef DEBUG_P2N
+        call dumpTerms_p2n(step)
+#endif
       endif
 #endif
 
@@ -234,7 +229,6 @@ program TestLB
 
       ! call copy_CG<<<dimGrid, dimBlock>>>(step, flipflop)
 
-      !GA call stream_CG<<<dimGrid, dimBlock>>>(step, flipflop)
 ! 
 #ifdef CUDASTREAM 
 ! 
@@ -257,6 +251,12 @@ program TestLB
       
 #ifdef PARTICLES
       if (withParticles) then
+        call inter_force_particles<<<dimGridAtm, dimBlockAtm>>>(step, flipflop, numAtoms)
+# ifdef SERIAL
+# else
+        call abortOnLastErrorAndSync("inter_force_particles",step, flipflop)
+        call mpiAddForces()
+# endif        
         call time_step_force_particles<<<dimGridAtm, dimBlockAtm>>>(step, flipflop, lrotate, numAtoms)
         
 #ifdef DEBUG_FORCE
@@ -318,10 +318,9 @@ program TestLB
 100     format('Iter:',I10,'   Time(s):', G10.4, '   ms/it:',G9.3, '   Mlup/s:',F8.0)
 
         if (withParticles) then
-          write(*,fmt=101)  step, diff_listatom/real(clock_rate), diff_listatomGPU/real(clock_rate)
-101       format('Iter:',I10,'   ListAtom Time(s):', F10.3,'   ListAtomGPU Time(s):', F10.3)
+          if (diff_listatomGPU/real(clock_rate)>0.5) write(*,fmt=101)  step, diff_listatomGPU/real(clock_rate)
+101       format('Iter:',I10, '   ListAtomGPU Time(s):', F10.3)
         
-          diff_listatom = 0
           diff_listatomGPU = 0
         endif
       endif
@@ -371,8 +370,8 @@ program TestLB
 
       open(unit=11, file='input.dat', status='old', form='FORMATTED', action='read', iostat=itest)
       if (itest/=0) then
-        write (*,*) "input.dat] Error opening file. STOP"
-        stop
+        write (*,*) "input.dat] Error opening file. call mystop"
+        call mystop
       endif
 
       nIter = 0.2*1000*1000*1000 / lup * 10
@@ -446,31 +445,92 @@ program TestLB
         if (withParticles .and. found<6) write (*,*) 'ext_fxx,ext_fyy,ext_fzz not found'
         if (withParticles .and. found<7) write (*,*) 'lrotate not found'
         if (lrotate .and. found<8) write (*,*) 'ext_tqx,ext_tqy,ext_tqz not found'
-        stop
+        call mystop
       endif
     end subroutine
 
 
-    subroutine fixPeriodic_isfluid
-      implicit none
-
-      if (withCG) then
-          call isfluid_per_x2<<<dimGridx, dimBlock2>>>(step, flipflop)
-          call isfluid_per_y2<<<dimGridy, dimBlock2>>>(step, flipflop)
-          call isfluid_per_z2<<<dimGridz, dimBlock2>>>(step, flipflop)
-
-          call isfluid_edge_x2<<<(nx+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
-          call isfluid_edge_y2<<<(ny+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
-          call isfluid_edge_z2<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
-      endif
-    end subroutine fixPeriodic_isfluid
-
-    subroutine fixPeriodic(faiPops,faiRho)
+    subroutine fixPeriodic_isfluid(msg)
 #ifdef SERIAL
       implicit none
+      character(len=*), intent(in) :: msg
+
+      if (withCG) then
+        call isfluid_per_x2<<<dimGridx, dimBlock2>>>(step, flipflop)
+        call isfluid_per_y2<<<dimGridy, dimBlock2>>>(step, flipflop)
+        call isfluid_per_z2<<<dimGridz, dimBlock2>>>(step, flipflop)
+
+        call isfluid_edge_x2<<<(nx+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
+        call isfluid_edge_y2<<<(ny+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
+        call isfluid_edge_z2<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
+    endif
 #else
       use mpi
       implicit none
+      character(len=*), intent(in) :: msg
+
+      integer      :: reqs_right(5)
+      integer      :: status_up(MPI_STATUS_SIZE)
+      integer      :: reqs_up(5)
+      integer      :: status_down(MPI_STATUS_SIZE)
+      integer      :: reqs_down(5)
+      integer      :: tag
+
+      call abortOnLastErrorAndSync(msg,step, flipflop)
+
+      if (withCG) then
+        call isfluid_per_x2<<<dimGridx, dimBlock2>>>(step, flipflop)
+        call isfluid_per_y2<<<dimGridy, dimBlock2>>>(step, flipflop)
+
+        ! if it is the same task, there's no need to send/recv data
+        if(up(2) == myrank) then
+          call isfluid_per_z2<<<dimGridz, dimBlock2>>>(step, flipflop)
+        else
+          ! 1) isend to up task 
+          tag = 405
+          call mpi_isend(myfluid_d(0,0,nz, flipflop), 1, xyplane_int1, up(2), tag, &
+                            lbecomm, reqs_up(1), ierr)
+          !
+          ! 2) recv from down task
+          tag = 405
+          call  mpi_recv(myfluid_d(0,0, 0, flipflop), 1, xyplane_int1, down(2), tag, &
+                            lbecomm, status_up, ierr)
+          !
+          ! 3) isend to down task
+          tag = 406
+          call mpi_isend(myfluid_d(0,0, 1, flipflop), 1, xyplane_int1, down(2), tag, &
+                            lbecomm, reqs_down(1), ierr)
+          !
+          ! 4) recv from up task
+          tag = 406
+          call  mpi_recv(myfluid_d(0,0,nz+1, flipflop), 1, xyplane_int1, up(2), tag, &
+                            lbecomm, status_down, ierr)
+          !
+          ! 5) syncronize
+          call mpi_wait(reqs_up(1), status_up, ierr)
+          call mpi_wait(reqs_down(1), status_down, ierr)
+        endif
+
+        ! if it is the same task, there's no need to send/recv data
+        if(up(2) == myrank) then
+          call isfluid_edge_x2<<<(nx+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
+          call isfluid_edge_y2<<<(ny+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
+          call isfluid_edge_z2<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
+        else
+          call isfluid_edge_z2<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
+        endif
+      endif
+#endif      
+    end subroutine fixPeriodic_isfluid
+
+    subroutine fixPeriodic(faiPops,faiRho, msg)
+#ifdef SERIAL
+      implicit none
+      character(len=*), intent(in) :: msg
+#else
+      use mpi
+      implicit none
+      character(len=*), intent(in) :: msg
 
       integer      :: reqs_right(5)
       integer      :: status_up(MPI_STATUS_SIZE)
@@ -494,6 +554,8 @@ program TestLB
 
           call bc_corners<<<dimGridz, dimBlock2>>>(step, flipflop)
 #else
+          call abortOnLastErrorAndSync(msg,step, flipflop)
+
           call bc_per_x2<<<dimGridx, dimBlock2>>>(step, flipflop, faiPops,faiRho)
           call bc_per_y2<<<dimGridy, dimBlock2>>>(step, flipflop, faiPops,faiRho)
 
@@ -732,7 +794,7 @@ program TestLB
           if(up(2) == myrank) then
             call bc_edge_x2<<<(nx+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
             call bc_edge_y2<<<(ny+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)  
-             call bc_edge_z2<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
+            call bc_edge_z2<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
           else
 !             mpi rho+pop myrank <--> up(2)
              call bc_edge_z2<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
@@ -789,7 +851,7 @@ program TestLB
       implicit none
       integer l, i,j,k
 
-      cz_d = real(nz+1) * HALF
+      cz_d = real(glz+1) * HALF
 
       do l=0,npops-1
         p_d(l) = p(l)
@@ -850,27 +912,24 @@ program TestLB
 
       if (nx < 2*rdim .or.ny < 2*rdim .or. nz < 2*rdim) then
         write (*,*) 'Particle does not fit the lattice:rdim=',rdim, 'Box=', nx,ny,nz
-        stop
+        call mystop
       endif
 
       
       
 
-      write(*,*) 'Initial setup of particles...'
+      if (myrank== 0) write(*,*) 'Initial setup of particles...'
 
-      call read_input_atom        
-
-      ! call makeListAtoms(1)
+      call read_input_atom
 
       call zeroListAtomsGPU<<<dimGridSubd, dimBlockSubd>>>(1, 1)
       call makeListAtomsGPU<<<dimGridAtm, dimBlockAtm>>>(1, 1, numAtoms)
 
       ! Sanity checks...
-      do i=1,numAtoms    
-
-        if (x_atm(1,i) < 1 .or. x_atm(1,i)>nx .or. x_atm(2,i)<1 .or. x_atm(2,i)>ny .or. x_atm(3,i)<1 .or. x_atm(3,i)>nz) then
+      do i=1,numAtoms
+        if (x_atm(1,i) < 1 .or. x_atm(1,i)>glx .or. x_atm(2,i)<1 .or. x_atm(2,i)>gly .or. x_atm(3,i)<1 .or. x_atm(3,i)>glz) then
           write (*,*) 'Particle #',i, 'out of bounds', x_atm(:,i)
-          stop
+          call mystop
         endif
 
         do j=i+1,numAtoms
@@ -878,162 +937,11 @@ program TestLB
           dist = norm2(dist_3d)
           if (dist < 2*rdim) then
             write (*,*) 'Dist less than 2*rdim',i,j, dist, rdim*2
-            stop
+            call mystop
           endif
         enddo
       enddo
     end subroutine SetupParts
-
-    ! subroutine makeListAtoms(flip)
-    !   implicit none
-    !   integer, intent(in)   :: flip
-    !   real                  :: x,y,z
-    !   integer               :: i,j,k, l,n, n1st
-    !   integer               :: mini,minj,mink, maxi,maxj,maxk
-    !   integer               :: boxatom(3, 4, numAtoms)
-    !   logical               :: splitted(3, numAtoms)
-
-
-    !   do l = 1, numAtoms
-    !     i = ceiling( x_atm(1,l) )
-    !     j = ceiling( x_atm(2,l) )
-    !     k = ceiling( x_atm(3,l) )
-    !     x = x_atm(1,l)
-    !     y = x_atm(2,l)
-    !     z = x_atm(3,l)
-    !     boxatom(:,1, l) = (/ x-rdim, y-rdim, z-rdim /)
-    !     boxatom(:,2, l) = (/ x+rdim, y+rdim, z+rdim /)
-
-    !     ! x-component
-    !     if (xperiodic .and. boxatom(1,1, l)< 1) then 
-    !       splitted(1, l) = .true.
-    !       boxatom(1,1, l) = 1
-    !       boxatom(1,2, l) = i+rdim
-    !       boxatom(1,3, l) = i-rdim + nx
-    !       boxatom(1,4, l) = nx
-    !     elseif (xperiodic .and. boxatom(1, 2, l) > nx) then 
-    !       splitted(1, l) = .true.
-    !       boxatom(1,1, l) = 1
-    !       boxatom(1,2, l) = i+rdim - nx
-    !       boxatom(1,3, l) = i-rdim
-    !       boxatom(1,4, l) = nx
-    !     else
-    !       splitted(1, l) = .false.
-    !       boxatom(1,3, l) = 0
-    !       boxatom(1,4, l) = 0
-    !     endif
-
-    !     ! y-component
-    !     if (yperiodic .and. boxatom(2,1, l)< 1) then 
-    !       splitted(2, l) = .true.
-    !       boxatom(2,1, l) = 1
-    !       boxatom(2,2, l) = j+rdim
-    !       boxatom(2,3, l) = j-rdim + ny
-    !       boxatom(2,4, l) = ny
-    !     elseif (yperiodic .and. boxatom(2, 2, l) > ny) then 
-    !       splitted(2, l) = .true.
-    !       boxatom(2,1, l) = 1
-    !       boxatom(2,2, l) = j+rdim - ny
-    !       boxatom(2,3, l) = j-rdim
-    !       boxatom(2,4, l) = ny
-    !     else
-    !       splitted(2, l) = .false.
-    !       boxatom(2,3, l) = 0
-    !       boxatom(2,4, l) = 0
-    !     endif
-
-    !     ! z-component
-    !     if (zperiodic .and. boxatom(3,1, l)< 1) then 
-    !       splitted(3, l) = .true.
-    !       boxatom(3,1, l) = 1
-    !       boxatom(3,2, l) = k+rdim
-    !       boxatom(3,3, l) = k-rdim + nz
-    !       boxatom(3,4, l) = nz
-    !     elseif (zperiodic .and. boxatom(3, 2, l) > nz) then 
-    !       splitted(3, l) = .true.
-    !       boxatom(3,1, l) = 1
-    !       boxatom(3,2, l) = k+rdim - nz
-    !       boxatom(3,3, l) = k-rdim
-    !       boxatom(3,4, l) = nz
-    !     else
-    !       splitted(3, l) = .false.
-    !       boxatom(3,3, l) = 0
-    !       boxatom(3,4, l) = 0
-    !     endif
-
-
-    !     ! write(*,fmt=100) l, boxatom(:,1,l),boxatom(:,2,l), boxatom(:,3,l),boxatom(:,4,l)
-    !     100 format("boxatom minimax at:", I4, "]", 3I4, "->", 3I4, "  U", 3I4, "->", 3I4)
-    !   enddo
-
-    !   n = 0
-    !   do k = 1, dimGrid%z
-    !     mink = TILE_DIMz*(k-1) + 1
-    !     maxk = TILE_DIMz*k
-
-    !     do j = 1, dimGrid%y
-    !       minj = TILE_DIMy*(j-1) + 1
-    !       maxj = TILE_DIMy*j
-
-    !       do i = 1, dimGrid%x
-    !         mini = TILE_DIMx*(i-1) + 1
-    !         maxi = TILE_DIMx*i
-    !         
-    !         n1st = 0
-    !         do l = 1, numAtoms
-    !           ! write(*,fmt=101) mini,minj,mink, maxk,maxj,maxi, l, boxatom(:,1,l), boxatom(:,2,l)
-    !           101 format("We are at", 3I4,"->", 3I4, " Atm ", I3, " at:", 3I4, "->", 3I4)
-
-    !           if (splitted(1, l)) then
-    !             if (boxatom(1,2, l)<mini .and. maxi < boxatom(1,3, l)) cycle
-    !           else
-    !             if (boxatom(1,2, l)<mini .or. maxi < boxatom(1,1, l)) cycle
-    !           endif
-
-    !           if (splitted(2, l)) then
-    !             if (boxatom(2,2, l)<minj .and. maxj < boxatom(2,3, l)) cycle
-    !           else
-    !             if (boxatom(2,2, l)<minj .or. maxj < boxatom(2,1, l)) cycle
-    !           endif
-
-    !           if (splitted(3, l)) then
-    !             if (boxatom(3,2, l)<mink .and. maxk < boxatom(3,3, l)) cycle
-    !           else
-    !             if (boxatom(3,2, l)<mink .or. maxk < boxatom(3,1, l)) cycle
-    !           endif
-
-    !           n = n + 1
-    !           listAtoms(n) = l
-
-    !           if (n1st == 0) then
-    !             n1st = n
-    !             findAtoms(1, i,j,k) = n
-    !           	if (n>=256**2 / 2 -1) then
-    !           	  write(*,*) "findAtoms at:",i,j,k, "=", n, " > max int(2). STOP"
-    !     	  stop
-    !     	endif
-    !           endif
-    !         
-    !         enddo
-    !         if (n1st /= 0) then
-    !           findAtoms(2, i,j,k) = n
-    !           ! if (step<1) write(*,*) "findAtoms at:",i,j,k, "=", findAtoms(1, i,j,k), findAtoms(2, i,j,k)
-    !         endif
-
-    !       enddo
-    !     enddo
-    !   enddo
-
-    !   ! do i = 1, n
-    !   !   write(*,*) "listAtoms at:",i, "=", listAtoms(i)
-    !   ! enddo
-
-    !   istat = cudaMemcpy(findAtoms_d, findAtoms, 2 * dimGrid%x*dimGrid%y*dimGrid%z)
-    !   if (istat/=0) write(*,*) 'status after copy findAtoms:',istat
-
-    !   istat = cudaMemcpy(listAtoms_d, listAtoms, numAtoms * dimGrid%x*dimGrid%y*dimGrid%z)
-    !   if (istat/=0) write(*,*) 'status after copy findAtoms:',istat
-    ! end subroutine makeListAtoms
 
 
     subroutine read_input_atom
@@ -1044,16 +952,16 @@ program TestLB
 
       open(unit=11, file='input.xyz', status='old', form='FORMATTED', action='read', iostat=itest)
       if (itest/=0) then
-        write (*,*) "input.xyz] Error opening file. STOP"
-        stop
+        write (*,*) "input.xyz] Error opening file. call mystop"
+        call mystop
       endif
 
       ! Number of atoms
       read(11, *, end=120) i
-      write (*,*) 'input.xyz] Using:', numAtoms, ' particles from a file with:', i
+      if (myrank==0) write (*,*) 'input.xyz] Using:', numAtoms, ' particles from a file with:', i
       if (i < numAtoms) then        
-        write (*,*) 'Input file:input.xyz contains less particles than needed. STOP'
-        stop
+        write (*,*) 'Input file:input.xyz contains less particles than needed. call mystop'
+        call mystop
       endif
 
       allocate(x_atm(3, numAtoms), STAT=istat)
@@ -1179,16 +1087,6 @@ program TestLB
       implicit none
       integer, intent(in)   :: flip
 
-      ! On th CPU
-      call system_clock(c_startAtom)
-
-      ! x_atm = pos_d(1:3,:, flip)
-      ! call makeListAtoms(flip)
-
-      call system_clock(c_stopAtom)
-      diff_listatom = diff_listatom + c_stopAtom-c_startAtom
-
-
       ! On th GPU
       call system_clock(c_startAtom)
 
@@ -1254,7 +1152,7 @@ program TestLB
         ! write(*,fmt=100) 'Size of findAtoms_d', dimGrid%x*dimGrid%y*dimGrid%z
         ! write(*,fmt=100) 'Size of listAtoms_d', numAtoms* dimGrid%x*dimGrid%y*dimGrid%z
         volatms = 4.0/3.0 * Pi * rdim**THREE
-        write(*,fmt=106) 'Vol. fraction (%)', 100*volatms*numAtoms / real(nx*ny*nz)
+        write(*,fmt=106) 'Vol. fraction (%)', 100*volatms*numAtoms / real(glx*gly*glz)
       endif
       write(*,*) '************************'
       write(*,*)
@@ -1288,20 +1186,20 @@ program TestLB
     end subroutine makeOutput
 
     
-    subroutine dumpTerms(step)
+    subroutine dumpTerms_n2p(step)
       implicit none
       integer, intent(in) :: step
       character(len=120) :: mynamefile
       integer :: l, int1,int2
       integer :: countn2p
-      real :: debugn2pf(2000,5)
-      real :: debugn2pt(2000,5)
+      real :: debugn2pf(20000,5)
+      real :: debugn2pt(20000,5)
 
       mynamefile=repeat(' ',120)
-      mynamefile='output/n2pf_'//write_fmtnumb(step)//'.txt'
+      mynamefile='output/debugN2pf_'//write_fmtnumb(myrank) // '.' // write_fmtnumb(step)//'.txt'
       open(unit=111, file=trim(mynamefile), status='replace')
 
-      mynamefile='output/n2pt_'//write_fmtnumb(step)//'.txt'
+      mynamefile='output/debugN2pt_'//write_fmtnumb(myrank) // '.' // write_fmtnumb(step)//'.txt'
       open(unit=112, file=trim(mynamefile), status='replace')
 
       countn2p = countn2p_d
@@ -1318,11 +1216,53 @@ program TestLB
         write(112,fmt=200) int1,int2,debugn2pt(l,3), debugn2pt(l,4), debugn2pt(l,5)
       enddo
 
-200    format(2I8,' ', 3F20.15)
+200    format(2I12,' ', 3F20.15)
 
       close(111)
       close(112)
-    end subroutine dumpTerms
+    end subroutine dumpTerms_n2p
+
+    subroutine dumpTerms_p2n(step)
+      implicit none
+      integer, intent(in) :: step
+      character(len=120) :: mynamefile
+      integer :: l, int1,int2,int3,int4
+      integer :: countp2n1, countp2n2
+      real :: debugp2n1(20000,4)
+      real :: debugp2n2(20000,4)
+
+      mynamefile=repeat(' ',120)
+      mynamefile='output/debugP2n1_'//write_fmtnumb(myrank) // '.' // write_fmtnumb(step)//'.txt'
+      open(unit=111, file=trim(mynamefile), status='replace')
+
+      countp2n1 = countp2n1_d
+      debugp2n1 = debugp2n1_d
+
+      do l= 1, countp2n1
+        int1 = debugp2n1(l,1)
+        int2 = debugp2n1(l,2)
+        int3 = debugp2n1(l,3)
+        int4 = debugp2n1(l,4)
+        write(111,fmt=200) int1,int2, int3,int4
+200     format(4I12)
+      enddo
+      close(111)
+
+
+      mynamefile='output/debugP2n2_'//write_fmtnumb(myrank) // '.' // write_fmtnumb(step)//'.txt'
+      open(unit=111, file=trim(mynamefile), status='replace')
+
+      countp2n2 = countp2n2_d      
+      debugp2n2 = debugp2n2_d
+
+      do l= 1, countp2n2
+        int1 = debugp2n2(l,1)
+        int2 = debugp2n2(l,2)
+        write(111,fmt=201) int1,int2, debugp2n2(l,3), debugp2n2(l,4)
+201     format(2I12,' ', 2F20.15)
+      enddo
+      close(111)
+    end subroutine dumpTerms_p2n    
 
     subroutine dumpRot(step, flip)
       implicit none
@@ -1330,6 +1270,8 @@ program TestLB
       character(len=120) :: mynamefile
       integer :: iatm
 
+      ! Only master dumps...
+      if(myrank/=0) return
 
       mynamefile='output/debugRot_'//write_fmtnumb(step)//'.txt'
       open(unit=111, file=trim(mynamefile), status='replace')
@@ -1369,6 +1311,9 @@ program TestLB
       integer :: iatm, int1,int2,int3
 
 
+      ! Only master dumps...
+      if(myrank/=0) return
+
       debugline = debugline_d
 
       100 format (A,I8, 3G20.7)
@@ -1399,6 +1344,67 @@ program TestLB
         close(111)
       enddo
     end subroutine dumpForces
+
+    subroutine mpiAddForces()
+#ifdef SERIAL
+      implicit none
+#else
+      use mpi
+      implicit none
+      integer      :: istat4(4)
+
+      ! istat4(1) = cudaMemcpy(buffer_for(1,  1), myf_d , 3*numAtoms )
+      ! istat4(2) = cudaMemcpy(buffer_for(4,  1), myf2_d, 3*numAtoms )
+      ! if (lrotate) then
+      !   istat4(3) = cudaMemcpy(buffer_for(7, 1), myt_d, 3*numAtoms )
+      !   istat4(4) = cudaMemcpy(buffer_for(10,1), myt2_d, 3*numAtoms )
+      ! endif
+      buffer_for(1:3,  1:numAtoms) = myf_d
+      buffer_for(4:6,  1:numAtoms) = myf2_d
+      if (lrotate) then
+        buffer_for(7:9,  1:numAtoms) = myt_d
+        buffer_for(10:12,  1:numAtoms) = myt2_d
+      endif
+
+      istat = cudaDeviceSynchronize
+      if (istat/=0) then
+        write(*,*) 'status after mpiAddForces1 Sync:', cudaGetErrorString(istat)
+        write(*,*) 'status after mpiAddForces1 Sync:', istat4
+        write(*,*) 'Exiting ....'
+        call mystop
+      endif
+
+      if (lrotate) then
+        call mpi_allreduce(buffer_for,buffer_forall, 12*numAtoms,MPI_REAL8, &
+          MPI_SUM, lbecomm, ierr)
+      else
+        call mpi_allreduce(buffer_for,buffer_forall, 6*numAtoms,MPI_REAL8, &
+          MPI_SUM, lbecomm, ierr)
+      endif
+      
+      ! istat4(1) = cudaMemcpy(myf_d,  buffer_forall(1,  1), 3*numAtoms )
+      ! istat4(2) = cudaMemcpy(myf2_d, buffer_forall(4,  1), 3*numAtoms )
+      ! if (lrotate) then
+      !   istat4(3) = cudaMemcpy(myt_d , buffer_forall(7, 1), 3*numAtoms )
+      !   istat4(4) = cudaMemcpy(myt2_d, buffer_forall(10,1), 3*numAtoms )
+      ! endif
+
+      myf_d = buffer_for(1:3,  1:numAtoms)
+      myf2_d = buffer_for(4:6,  1:numAtoms)
+      if (lrotate) then
+        myt_d = buffer_for(7:9,  1:numAtoms)
+        myt2_d = buffer_for(10:12,  1:numAtoms)
+      endif
+
+      istat = cudaDeviceSynchronize
+      if (istat/=0) then
+        write(*,*) 'status after mpiAddForces2 Sync:', cudaGetErrorString(istat)
+        write(*,*) 'status after mpiAddForces2 Sync:', istat4
+        write(*,*) 'Exiting ....'
+        call mystop
+      endif
+#endif
+    end subroutine mpiAddForces
 
     subroutine print_rho_pops2(filenam,step,flip)
       implicit none
@@ -1443,7 +1449,7 @@ program TestLB
 
 
     mynamefile=repeat(' ',120)
-    mynamefile='output/partVol_'//write_fmtnumb(step)//'.txt'
+    mynamefile='output/partVol_'//write_fmtnumb(myrank) // '.' // write_fmtnumb(step)//'.txt'
     open(unit=111, file=trim(mynamefile), status='replace')
 
     do l= 1, numAtoms
@@ -1460,8 +1466,8 @@ program TestLB
     character(len=120) :: mynamefile
     integer :: l, int1,int2
     integer :: countmk, countrm
-    real :: debug_rm(2000,4)
-    real :: debug_mk(2000,4)
+    real :: debug_rm(20000,4)
+    real :: debug_mk(20000,4)
 
 
     countmk = countmk_d
@@ -1469,13 +1475,13 @@ program TestLB
 
     if (countmk>0) then
       mynamefile=repeat(' ',120)
-      mynamefile='output/debugMK-f_'//write_fmtnumb(step)//'.txt'
+      mynamefile='output/debugMK-f_'//write_fmtnumb(myrank) // '.' // write_fmtnumb(step)//'.txt'
       open(unit=111, file=trim(mynamefile), status='replace')
 
       do l = 1, countmk
         int1 = debug_mk(l,1)
         write(111,fmt=200) int1, debug_mk(l,2), debug_mk(l,3), debug_mk(l,4)
-200    format(I8,' ', 3F20.15)        
+200    format(I12,' ', 3F20.15)
       enddo
 
       close(111)
@@ -1506,7 +1512,7 @@ program TestLB
       character(len=120) :: mynamefile
       
 
-      ! if (fname(1:5) /= 'step_' .and. fname(1:4)/= 'Stop') return
+      ! if (fname(1:5) /= 'step_' .and. fname(1:4)/= 'call mystop') return
 
       call system_clock(c_start)
 
@@ -1552,7 +1558,7 @@ program TestLB
          diff_xfer = diff_xfer + c_stop-c_start2
 
          call system_clock(c_start2)
-         ! call print_rho_pops2(fname,step, flip)
+         if (nIter==step) call print_rho_pops2(fname,step, flip)
          call system_clock(c_stop)
          pops_time = c_stop-c_start2
 
@@ -1641,7 +1647,7 @@ program TestLB
             issub(i,j,k) = fluid_spheredead
             if (i>rmin .or. i<-rmin .or. j>rmin .or. j<-rmin .or. k>rmin .or. k<-rmin) then
               write (*,*) 'Strange error here. Stopping'
-              stop
+              call mystop
             endif
           endif
         enddo
@@ -1747,29 +1753,32 @@ program TestLB
     if (istat/=0) then
       write(*,*) 'status after spherical_template:',cudaGetErrorString(istat)
       write(*,*) 'Exiting ....'
-      stop
+      call mystop
     endif
 
    end subroutine spherical_template
 
 
    subroutine setupGPUgridAndAlloc
+    implicit none
+    integer*8 gpuMEM
+
     if (mod(nx, TILE_DIMx)/= 0) then
         write(*,*) 'nx must be a multiple of TILE_DIM'
-        stop
+        call mystop
     end if
     if (mod(ny, TILE_DIMy) /= 0) then
         write(*,*) 'ny must be a multiple of TILE_DIMy'
-        stop
+        call mystop
     end if
     if (mod(nz, TILE_DIMz) /= 0) then
         write(*,*) 'nz must be a multiple of TILE_DIMz'
-        stop
+        call mystop
     end if
   
     ! if (withParticles .and. mod(numAtoms, TILE_DIMPART) /= 0) then
     !    write(*,*) 'numAtoms(',numAtoms,') must be a multiple of TILE_DIMPART(',TILE_DIMPART,')'
-    !    stop
+    !    call mystop
     ! end if
   
     dimGrid  = dim3(nx/TILE_DIMx, ny/TILE_DIMy, nz/TILE_DIMz)
@@ -1818,7 +1827,7 @@ program TestLB
     allocate(pop_pinned(0:nx+1,0:ny+1,0:nz+1,0:npops-1), STAT=istat, PINNED=pinnedFlag)
     if (istat /= 0) then
        write(*,*) 'Allocation of pop_pinned failed'
-       stop
+       call mystop
     end if
     pop_pinned = 0.0
   
@@ -1840,7 +1849,7 @@ program TestLB
     allocate(popsR_d(0:nx+1,0:ny+1,0:nz+1,0:npops-1, 2), STAT=istat)
     if (istat /= 0) then
        write(*,*) 'Allocation of popsR_d failed'
-       stop
+       call mystop
     end if
     pop_pinned = 0.0
   
@@ -1871,7 +1880,7 @@ program TestLB
       allocate(popB_pinned(0:nx+1,0:ny+1,0:nz+1,0:npops-1), STAT=istat, PINNED=pinnedFlag)
       if (istat /= 0) then
         write(*,*) 'Allocation of popB_pinned failed'
-        stop
+        call mystop
       end if
       popB_pinned = 0.0
   
@@ -1889,7 +1898,7 @@ program TestLB
       allocate(popsB_d(0:nx+1,0:ny+1,0:nz+1,0:npops-1, 2), STAT=istat)
       if (istat /= 0) then
         write(*,*) 'Allocation of popsB_d failed'
-        stop
+        call mystop
       end if
       popB_pinned = 0.0
   
@@ -1932,24 +1941,23 @@ program TestLB
           write(*,*) 'Allocation of myt2_d failed'
         end if
 
-        ! allocate(listAtoms_d(numAtoms * nx/TILE_DIMx* ny/TILE_DIMy* nz/TILE_DIMz), STAT=istat)
-        ! if (istat /= 0) then
-        !   write(*,*) 'Allocation of listAtoms_d failed'
-        ! end if
-
-        ! allocate(findAtoms_d(2,nx/TILE_DIMx, ny/TILE_DIMy, nz/TILE_DIMz), STAT=istat)
-        ! if (istat /= 0) then
-        !   write(*,*) 'Allocation of findAtoms_d failed'
-        ! end if
+        allocate(buffer_for(12, numAtoms), STAT=istat)
+        if (istat /= 0) then
+          write(*,*) 'Allocation of buffer_for failed'
+        end if
+        allocate(buffer_forall(12, numAtoms), STAT=istat)
+        if (istat /= 0) then
+          write(*,*) 'Allocation of buffer_forall failed'
+        end if
 
         allocate(matrixAtoms_d(maxAtomInBlock, nx/TILE_DIMx, ny/TILE_DIMy, nz/TILE_DIMz), STAT=istat)
         if (istat /= 0) then
-          write(*,*) 'Allocation of listAtoms_d failed'
+          write(*,*) 'Allocation of matrixAtoms_d failed'
         end if
 
         allocate(dim_matAtm_d(nx/TILE_DIMx, ny/TILE_DIMy, nz/TILE_DIMz), STAT=istat)
         if (istat /= 0) then
-          write(*,*) 'Allocation of findAtoms_d failed'
+          write(*,*) 'Allocation of dim_matAtm_d failed'
         end if
 
         ! DEBUG_FORCE
@@ -1986,15 +1994,18 @@ program TestLB
     if (istat/=0) then
       write(*,*) 'status after cudaGetDeviceProperties:',cudaGetErrorString(istat)
       write(*,*) 'Exiting ....'
-      stop
+      call mystop
     endif
   
     if (myrank== 0) then
+      gpuMEM = (nx+2)*(ny+2)*(nz+2)
+      gpuMEM = gpuMEM *(npops+1)*2* 2* 4/1024./1024.
       write(*,*)
       write(*,*) 'Device: ', trim(prop%name)
 
       write(*,*) '************************'
-      write(*,*) 'Transfer size (MB): ', dataSz/1024./1024.
+      write(*,*) 'GPU LB (R+B) size (MB): ', gpuMEM
+      write(*,*) 'Transfer size (MB): ', gpuMEM / 4 * npops/(npops+1)
       istat = cudaEventRecord(startEvent, 0)
 
       istat = cudaMemcpy(pop_pinned, popsR_d, (nx+2)*(ny+2)*(nz+2)*npops )
@@ -2009,32 +2020,42 @@ program TestLB
    end subroutine setupGPUgridAndAlloc
 
 
+   subroutine mystop
+    implicit none
+
+#ifdef SERIAL
+      stop
+#else
+      call mpi_abort(MPI_COMM_WORLD, 10, ierr)
+#endif
+   end subroutine mystop
+
    subroutine abortOnLastErrorAndSync(msg, step, flipflop)
     implicit none
     integer, intent(in) :: step, flipflop
     character(len=*), intent(in) :: msg
-    integer :: mystop
+    integer :: gpustop
 
     istat = cudaGetLastError()
     if (istat/=0) then
       write(*,*) 'status after ',msg,':', cudaGetErrorString(istat)
       write(*,*) 'Exiting ....'
-      stop
+      call mystop
     endif
 
     istat = cudaDeviceSynchronize
     if (istat/=0) then
       write(*,*) 'status after ',msg,' Sync:', cudaGetErrorString(istat)
       write(*,*) 'Exiting ....'
-      stop
+      call mystop
     endif
 
-    mystop = stop_d
-    if (mystop/=0) then
-      write(*,*) 'status after ',msg,' mystop:', mystop
+    gpustop = stop_d
+    if (gpustop/=0) then
+      write(*,*) 'status after ',msg,' mystop:', gpustop
       write(*,*) 'Exiting ....'
-      call OutputVTK("Stop",step, flipflop)
-      stop
+      call OutputVTK("stop",step, flipflop)
+      call mystop
     endif
    end subroutine
 end program

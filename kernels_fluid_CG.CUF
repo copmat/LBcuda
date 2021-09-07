@@ -171,6 +171,8 @@
       countmk_d = 0
       countrm_d = 0
       countn2p_d = 0
+      countp2n1_d = 0
+      countp2n2_d = 0
     end subroutine setup2
 
 
@@ -204,6 +206,9 @@
           stop_d = __LINE__
         endif
 
+        if (rhoR < MINDENS) rhoR = MINDENS
+        if (rhoB < MINDENS) rhoB = MINDENS
+
         rhoR_d(i,j,k) = rhoR
         rhoB_d(i,j,k) = rhoB
       else
@@ -215,6 +220,7 @@
     attributes(global) subroutine init_rhoR_CG(step, flip)
       integer, value :: step,flip
       integer :: i,j,k
+      real    :: rhoR
 
       i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
       j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
@@ -222,7 +228,7 @@
 
       ! Only on fluid nodes
       if (myfluid_d(i,j,k, flip) == fluid_fluid) then
-        rhoR_d(i,j,k) = popsR_d(i,j,k,0, flip) + popsR_d(i,j,k,1, flip) + &
+        rhoR = popsR_d(i,j,k,0, flip) + popsR_d(i,j,k,1, flip) + &
                popsR_d(i,j,k,2, flip) + popsR_d(i,j,k,3, flip) + &
                popsR_d(i,j,k,4, flip) + popsR_d(i,j,k,5, flip) + &
                popsR_d(i,j,k,6, flip) + popsR_d(i,j,k,7, flip) + &
@@ -232,6 +238,8 @@
                popsR_d(i,j,k,14,flip) + popsR_d(i,j,k,15,flip) + &
                popsR_d(i,j,k,16,flip) + popsR_d(i,j,k,17,flip) + &
                popsR_d(i,j,k,18,flip)
+        if (rhoR < MINDENS) rhoR = MINDENS
+        rhoR_d(i,j,k) = rhoR
       else
         rhoR_d(i,j,k) = MINDENS
       endif
@@ -241,6 +249,7 @@
     attributes(global) subroutine init_rhoB_CG(step, flip)
       integer, value :: step,flip
       integer :: i,j,k
+      real    :: rhoB
 
       i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
       j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
@@ -248,7 +257,7 @@
 
       ! Only on fluid nodes
       if (myfluid_d(i,j,k, flip) == fluid_fluid) then
-        rhoB_d(i,j,k) = popsB_d(i,j,k,0, flip) + popsB_d(i,j,k,1, flip) + &
+        rhoB = popsB_d(i,j,k,0, flip) + popsB_d(i,j,k,1, flip) + &
                popsB_d(i,j,k,2, flip) + popsB_d(i,j,k,3, flip) + &
                popsB_d(i,j,k,4, flip) + popsB_d(i,j,k,5, flip) + &
                popsB_d(i,j,k,6, flip) + popsB_d(i,j,k,7, flip) + &
@@ -258,6 +267,8 @@
                popsB_d(i,j,k,14,flip) + popsB_d(i,j,k,15,flip) + &
                popsB_d(i,j,k,16,flip) + popsB_d(i,j,k,17,flip) + &
                popsB_d(i,j,k,18,flip)
+        if (rhoB < MINDENS) rhoB = MINDENS
+        rhoB_d(i,j,k) = rhoB
       else
         rhoB_d(i,j,k) = MINDENS
       endif

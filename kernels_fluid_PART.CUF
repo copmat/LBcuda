@@ -245,7 +245,7 @@
 
       deltai = getDeltai(i, xxx)
       deltaj = getDeltaj(j, yyy)
-      deltak = getDeltak(k, zzz)
+      deltak = getDeltak(k+ offset_d(3), zzz)   ! MPI along z
       
       ! Check if inside particle      
       if (abs(deltai)<=rmax_issub_d.and.abs(deltaj)<=rmax_issub_d.and.abs(deltak)<=rmax_issub_d) then
@@ -349,7 +349,7 @@
 
       deltai = getDeltai(i, xxx)
       deltaj = getDeltaj(j, yyy)
-      deltak = getDeltak(k, zzz)
+      deltak = getDeltak(k+ offset_d(3), zzz)     ! MPI along z
 
       atmDist = deltai*deltai + deltaj*deltaj + deltak*deltak
       ! only remove fluid if near THIS atom...
@@ -402,15 +402,15 @@
         if (lrotate) then
           rtemp(1) = i - pos_d(1,iatm,flip)
           rtemp(2) = j - pos_d(2,iatm,flip)
-          rtemp(3) = k - pos_d(3,iatm,flip)
+          rtemp(3) = k+ offset_d(3) - pos_d(3,iatm,flip)
 
           aaa = ONE/real(nx)
           bbb = ONE/real(ny)
-          ccc = ONE/real(nz_d)
+          ccc = ONE/real(glz)
           
           rtemp(1) = rtemp(1) - real(nx)*nint(aaa*rtemp(1))
           rtemp(2) = rtemp(2) - real(ny)*nint(bbb*rtemp(2))
-          rtemp(3) = rtemp(3) - real(nz_d)*nint(ccc*rtemp(3))
+          rtemp(3) = rtemp(3) - real(glz)*nint(ccc*rtemp(3))
           
           modr = sqrt( rtemp(1)*rtemp(1) + rtemp(2)*rtemp(2) + rtemp(3)*rtemp(3))
           rtemp(1:3) = rdim / modr * rtemp(1:3)
@@ -480,7 +480,7 @@
         if (lrotate) then
           rtemp(1) = i - pos_d(1,iatm,flip)
           rtemp(2) = j - pos_d(2,iatm,flip)
-          rtemp(3) = k - pos_d(3,iatm,flip)
+          rtemp(3) = k+ offset_d(3) - pos_d(3,iatm,flip)
           modr = sqrt( rtemp(1)*rtemp(1) + rtemp(2)*rtemp(2) + rtemp(3)*rtemp(3))
           rtemp(1:3) = rdim / modr * rtemp(1:3)
           ttemp(1) = xcross(rtemp,ftemp)
@@ -526,7 +526,7 @@
 
       deltai = getDeltai(i, xxx)
       deltaj = getDeltaj(j, yyy)
-      deltak = getDeltak(k, zzz)
+      deltak = getDeltak(k+ offset_d(3), zzz)       ! MPI over z
 
       atmDist = deltai*deltai + deltaj*deltaj + deltak*deltak
       ! only remove fluid if near THIS atom...
@@ -570,7 +570,7 @@
         tempFoo = atomicadd( forceAtoms_d(3,iatm,flip), ftemp(3) )
 
 #ifdef DEBUG_MKRM
-        tempInt = 1+ atomicadd( countmk_d, 1)
+        tempInt = 1 + atomicadd( countmk_d, 1)
         debug_mk_d (tempInt, 1) = linear(i,j,k)
         debug_mk_d (tempInt, 2) = ftemp(1)
         debug_mk_d (tempInt, 3) = ftemp(2)
@@ -581,15 +581,15 @@
         if (lrotate) then
           rtemp(1) = i - pos_d(1,iatm,flip)
           rtemp(2) = j - pos_d(2,iatm,flip)
-          rtemp(3) = k - pos_d(3,iatm,flip)
+          rtemp(3) = k+ offset_d(3) - pos_d(3,iatm,flip)
 
           aaa = ONE/real(nx)
           bbb = ONE/real(ny)
-          ccc = ONE/real(nz_d)
+          ccc = ONE/real(glz)
           
           rtemp(1) = rtemp(1) - real(nx)*nint(aaa*rtemp(1))
           rtemp(2) = rtemp(2) - real(ny)*nint(bbb*rtemp(2))
-          rtemp(3) = rtemp(3) - real(nz_d)*nint(ccc*rtemp(3))
+          rtemp(3) = rtemp(3) - real(glz)*nint(ccc*rtemp(3))
 
           modr = sqrt( rtemp(1)*rtemp(1) + rtemp(2)*rtemp(2) + rtemp(3)*rtemp(3))
           rtemp(1:3) = rdim / modr * rtemp(1:3)
@@ -661,7 +661,7 @@
         if (lrotate) then
           rtemp(1) = i - pos_d(1,iatm,flip)
           rtemp(2) = j - pos_d(2,iatm,flip)
-          rtemp(3) = k - pos_d(3,iatm,flip)
+          rtemp(3) = k+ offset_d(3) - pos_d(3,iatm,flip)
           modr = sqrt( rtemp(1)*rtemp(1) + rtemp(2)*rtemp(2) + rtemp(3)*rtemp(3))
           rtemp(1:3) = rdim / modr * rtemp(1:3)
           ttemp(1) = xcross(rtemp,ftemp)
@@ -767,14 +767,15 @@
       do l = 1, ndouble
         i1 = pimage(i + exdouble(l), nx)
         j1 = pimage(j + eydouble(l), ny)
-        k1 = pimage(k + ezdouble(l), nz_d)
+        k1 = pimage(k + ezdouble(l), glz)
+        if (k1<0 .or. k1>nz_d+1) cycle
 
         if (i1<0 .or. i1>nx+1 .or. j1<0 .or. j1>ny+1 .or.k1<0 .or. k1>nz_d+1) then
           stop_d = __LINE__
           write(*,*) '2belt] RangeErr i,j,k=',linear(i,j,k),linear(i1,j1,k1)
         endif
 
-        if ( myfluid_d(i1,j1,k1, flip)==fluid_fluid .and. &
+        if (myfluid_d(i1,j1,k1, flip)==fluid_fluid .and. &
               myfluid_d(i1,j1,k1, 3-flip)==fluid_fluid) then
             Rsum = Rsum + rhoR_d(i1,j1,k1)
             Bsum = Bsum + rhoB_d(i1,j1,k1)
@@ -884,7 +885,7 @@
 
             deltai = getDeltai(i, xxx)
             deltaj = getDeltaj(j, yyy)
-            deltak = getDeltak(k, zzz)
+            deltak = getDeltak(k+ offset_d(3), zzz)
             
             atmDist = deltai*deltai + deltaj*deltaj + deltak*deltak
             ! only call n2p_bb if near THIS atom...
@@ -897,7 +898,7 @@
 
                 deltai = getDeltai(i, xxx)
                 deltaj = getDeltaj(j, yyy)
-                deltak = getDeltak(k, zzz)
+                deltak = getDeltak(k+ offset_d(3), zzz)
                 okDist = deltai*deltai + deltaj*deltaj + deltak*deltak
                 write(*,*) 'partBB_CG]Wrong atom', linear(i,j,k), i_atm+0.001*atmDist, debugfluid_d(i,j,k)+0.001*okDist
                 ! stop_d = __LINE__
@@ -958,7 +959,7 @@
 
             deltai = getDeltai(i, xxx)
             deltaj = getDeltaj(j, yyy)
-            deltak = getDeltak(k, zzz)
+            deltak = getDeltak(k+ offset_d(3), zzz)
 
             atmDist = deltai*deltai + deltaj*deltaj + deltak*deltak
             ! only call P2N_bb if near THIS atom...
@@ -987,16 +988,14 @@
     ! force(7:9) -> tqx,tqy,tqz
     ! force(10:12) -> tqb,tqb,tqb
 
-    attributes(global) subroutine time_step_force_particles(step, flip, lrotate, numAtoms)
+    attributes(global) subroutine inter_force_particles(step, flip, numAtoms)
       integer, value    :: step,flip,numAtoms
-      logical, value    :: lrotate
       integer           :: i,j
-      integer :: flop
-  
+
       i = (blockIdx%x-1) * TILE_DIMPART + threadIdx%x
       if (i>numAtoms) return
 
-      if (1==step .and. 1==i) write(*,*) 'CUDA time_step_force_particles] i:',i
+      if (offset_d(3)==1 .and. 1==step .and. 1==i) write(*,*) 'CUDA inter_force_particles] i:',i
 
       if (withSidewall) call add_sidewall(step, flip, i)
 
@@ -1005,6 +1004,18 @@
           call addHertzian(step, flip, i,j)
         enddo
       endif
+    end subroutine inter_force_particles
+
+    attributes(global) subroutine time_step_force_particles(step, flip, lrotate, numAtoms)
+      integer, value    :: step,flip,numAtoms
+      logical, value    :: lrotate
+      integer           :: i
+      integer :: flop
+  
+      i = (blockIdx%x-1) * TILE_DIMPART + threadIdx%x
+      if (i>numAtoms) return
+
+      if (offset_d(3)==1 .and. 1==step .and. 1==i) write(*,*) 'CUDA time_step_force_particles] i:',i
 
       call addForce_particle_bounce_back(step, flip, i, lrotate)
       call nve_lf(step, flip, i, lrotate)
@@ -1054,10 +1065,12 @@
           ! write(*,*) 'countmk_d /= countrm_d ->', countmk_d, countrm_d
           ! stop_d = __LINE__
         endif
-        
+
         countmk_d = 0
         countrm_d = 0
         countn2p_d = 0
+        countp2n1_d = 0
+        countp2n2_d = 0
       endif
     end subroutine time_step_force_particles
 
@@ -1167,6 +1180,23 @@
       real :: fxb,fyb,fzb, fxbo,fybo,fzbo
       real :: tqx,tqy,tqz
       real :: txb,tyb,tzb, txbo,tybo,tzbo
+
+      ! !Zero forces
+      ! myf_d(1,i) = 0.0
+      ! myf_d(2,i) = 0.0
+      ! myf_d(3,i) = 0.0
+      ! myf2_d(1,i) = 0.0
+      ! myf2_d(2,i) = 0.0
+      ! myf2_d(3,i) = 0.0
+
+      ! if (lrotate) then
+      !   myt_d(1,i) = 0.0
+      !   myt_d(2,i) = 0.0
+      !   myt_d(3,i) = 0.0
+      !   myt2_d(1,i) = 0.0
+      !   myt2_d(2,i) = 0.0
+      !   myt2_d(3,i) = 0.0
+      ! endif
 
       ! if (1==step) write(*,*) 'CUDA addForce_particle_bounce_back] i:',i
 
@@ -1294,7 +1324,7 @@
       mxrsqcut = max(rsrparcut,rsqcut)
       rparcap = rpar + lubric_rcap
 
-      if (1==step.and.2==iatm*jatm) write(*,*) 'Hz]', mxrsqcut, rparcap, gmin
+      if (offset_d(3)==1 .and. 1==step.and.2==iatm*jatm) write(*,*) 'Hz]', mxrsqcut, rparcap, gmin
 
       xi(1) = pos_d(1, iatm, flip)
       xi(2) = pos_d(2, iatm, flip)
@@ -1311,7 +1341,7 @@
       ! write(*,*) 'Hz] xdf:', xdf,ydf,zdf
       if (xperiodic) xdf = xdf - nx*nint(xdf / nx)
       if (yperiodic) ydf = ydf - ny*nint(ydf / ny)
-      if (zperiodic) zdf = zdf - nz_d*nint(zdf / nz_d)
+      if (zperiodic) zdf = zdf - glz*nint(zdf / glz)
 
       rsq = xdf*xdf + ydf*ydf + zdf*zdf
       if (rsq <= mxrsqcut) then
@@ -1480,7 +1510,7 @@
       endif
       if (zperiodic) then
         zzz = pbc_images_centeredz(zzz, cz_d)
-        if (zzz< 0.5 .or. zzz>nz_d+0.5) then
+        if (zzz< 0.5 .or. zzz>glz+0.5) then
           write(*,*) 'nve]z step,i,pos', step, i, zzz
           stop_d = __LINE__
         endif
@@ -1796,15 +1826,15 @@
         
         rversor(1) = i - pos_d(1,iatm,flip)
         rversor(2) = j - pos_d(2,iatm,flip)
-        rversor(3) = k - pos_d(3,iatm,flip)
+        rversor(3) = k+ offset_d(3) - pos_d(3,iatm,flip)
 
         ! PBC treatment
         aaa = ONE/real(nx)
         bbb = ONE/real(ny)
-        ccc = ONE/real(nz_d)
+        ccc = ONE/real(glz)
         rversor(1) = rversor(1) - real(nx)*nint(aaa*rversor(1))
         rversor(2) = rversor(2) - real(ny)*nint(bbb*rversor(2))
-        rversor(3) = rversor(3) - real(nz_d)*nint(ccc*rversor(3))
+        rversor(3) = rversor(3) - real(glz)*nint(ccc*rversor(3))
 
         modr = sqrt( rversor(1)*rversor(1) + rversor(2)*rversor(2) + rversor(3)*rversor(3) )
         rversor(1:3) = rdim / modr * rversor(1:3)
@@ -1814,13 +1844,15 @@
         indlow = iloop*2 - 1
         indhig = iloop*2
       
-        ii = pimage(i + ex(indlow), nx)
-        jj = pimage(j + ey(indlow), ny)
-        kk = pimage(k + ez(indlow), nz_d)
+        ii = i + ex(indlow)
+        jj = j + ey(indlow)
+        kk = k + ez(indlow)
+        if (kk<0 .or. kk>nz_d+1) cycle
 
-        io = pimage(i + ex(indhig), nx)
-        jo = pimage(j + ey(indhig), ny)
-        ko = pimage(k + ez(indhig), nz_d)
+        io = i + ex(indhig)
+        jo = j + ey(indhig)
+        ko = k + ez(indhig)
+        if (ko<0 .or. ko>nz_d+1) cycle
       
         if (myfluid_d(ii,jj,kk, flip)==fluid_fluid .and. myfluid_d(io,jo,ko, flip)/=fluid_fluid) then
           deltai = getDeltai(ii, xxx)
@@ -2036,22 +2068,30 @@
       integer, value    :: step, flip
       integer, value    :: i,j,k
       integer           :: iloop, ii,jj,kk, io,jo,ko, indlow,indhig
+      integer    :: tempInt
       
       do iloop = 1, 9
         indlow = iloop*2 - 1
         indhig = iloop*2
 
-        ii = pimage(i + ex(indlow), nx)
-        jj = pimage(j + ey(indlow), ny)
-        kk = pimage(k + ez(indlow), nz_d)
+        ii = i + ex(indlow)
+        jj = j + ey(indlow)
+        kk = k + ez(indlow)
+        if (kk<0 .or. kk>nz_d+1) cycle
 
-        io = pimage(i + ex(indhig), nx)
-        jo = pimage(j + ey(indhig), ny)
-        ko = pimage(k + ez(indhig), nz_d)
+        io = i + ex(indhig)
+        jo = j + ey(indhig)
+        ko = k + ez(indhig)
+        if (ko<0 .or. ko>nz_d+1) cycle
 
         if(myfluid_d(ii,jj,kk, flip)==fluid_fluid .and. myfluid_d(io,jo,ko, flip)/=fluid_fluid)then
 #ifdef DEBUG_P2N
-          write(*,*) 'p2n1]',linear(ii,jj,kk), indhig, linear(i,j,k), indlow
+          tempInt = 1 + atomicadd( countp2n1_d, 1)
+          debugp2n1_d(tempInt, 1) = linear(ii,jj,kk+ offset_d(3))
+          debugp2n1_d(tempInt, 2) = indhig
+          debugp2n1_d(tempInt, 3) = linear(i,j,k+ offset_d(3))
+          debugp2n1_d(tempInt, 4) = indlow
+          ! write(*,*) 'p2n1]',linear(ii,jj,kk), indhig, linear(i,j,k), indlow
 #endif
           popsR_d(i,j,k,indlow, flip) = popsR_d(ii,jj,kk,indhig, flip)
           popsB_d(i,j,k,indlow, flip) = popsB_d(ii,jj,kk,indhig, flip)
@@ -2059,7 +2099,12 @@
 
         if(myfluid_d(ii,jj,kk, flip)/=fluid_fluid .and. myfluid_d(io,jo,ko, flip)==fluid_fluid)then
 #ifdef DEBUG_P2N
-          write(*,*) 'p2n1]',linear(io,jo,ko), indlow, linear(i,j,k), indhig
+          tempInt = 1 + atomicadd( countp2n1_d, 1)
+          debugp2n1_d(tempInt, 1) = linear(io,jo,ko+ offset_d(3))
+          debugp2n1_d(tempInt, 2) = indlow
+          debugp2n1_d(tempInt, 3) = linear(i,j,k+ offset_d(3))
+          debugp2n1_d(tempInt, 4) = indhig
+          ! write(*,*) 'p2n1]',linear(io,jo,ko), indlow, linear(i,j,k), indhig
 #endif
           popsR_d(i,j,k,indhig, flip) = popsR_d(io,jo,ko,indlow, flip)
           popsB_d(i,j,k,indhig, flip) = popsB_d(io,jo,ko,indlow, flip)
@@ -2076,6 +2121,7 @@
       real              :: vx,vy,vz, vxs,vys,vzs
       real              :: aaa,bbb,ccc
       integer           :: iloop, ii,jj,kk, io,jo,ko, indlow,indhig
+      integer    :: tempInt
       
       vxs = pos_d(4,iatm,flip)
       vys = pos_d(5,iatm,flip)
@@ -2100,14 +2146,14 @@
         
         rversor(1) = i - pos_d(1,iatm,flip)
         rversor(2) = j - pos_d(2,iatm,flip)
-        rversor(3) = k - pos_d(3,iatm,flip)
+        rversor(3) = k+ offset_d(3) - pos_d(3,iatm,flip)
         ! PBC treatment
         aaa = ONE/real(nx)
         bbb = ONE/real(ny)
-        ccc = ONE/real(nz_d)
+        ccc = ONE/real(glz)
         rversor(1) = rversor(1) - real(nx)*nint(aaa*rversor(1))
         rversor(2) = rversor(2) - real(ny)*nint(bbb*rversor(2))
-        rversor(3) = rversor(3) - real(nz_d)*nint(ccc*rversor(3))
+        rversor(3) = rversor(3) - real(glz)*nint(ccc*rversor(3))
         
         modr = sqrt( rversor(1)*rversor(1) + rversor(2)*rversor(2) + rversor(3)*rversor(3) )
         rversor(1:3) = rdim / modr * rversor(1:3)
@@ -2117,13 +2163,15 @@
         indlow = iloop*2 - 1
         indhig = iloop*2
       
-        ii = pimage(i + ex(indlow), nx)
-        jj = pimage(j + ey(indlow), ny)
-        kk = pimage(k + ez(indlow), nz_d)
+        ii = i + ex(indlow)
+        jj = j + ey(indlow)
+        kk = k + ez(indlow)
+        if (kk<0 .or. kk>nz_d+1) cycle
 
-        io = pimage(i + ex(indhig), nx)
-        jo = pimage(j + ey(indhig), ny)
-        ko = pimage(k + ez(indhig), nz_d)
+        io = i + ex(indhig)
+        jo = j + ey(indhig)
+        ko = k + ez(indhig)
+        if (ko<0 .or. ko>nz_d+1) cycle
 
         if (myfluid_d(ii,jj,kk, flip)==fluid_fluid .and. myfluid_d(io,jo,ko, flip)/=fluid_fluid)then
           if (lrotate) then
@@ -2141,7 +2189,12 @@
           f2pB = p_d(indhig)*buz_d*rhoB_d(ii,jj,kk) * (ex_d(indhig)*vx + ey_d(indhig)*vy + ez_d(indhig)*vz)
           popsB_d(i,j,k,indlow, flip) = popsB_d(i,j,k,indlow, flip) - f2pB
 #ifdef DEBUG_P2N
-          write(*,*) 'R+B p2nx]', linear(ii,jj,kk), indhig, f2pR, f2pB
+          tempInt = 1 + atomicadd( countp2n2_d, 1)
+          debugp2n2_d(tempInt, 1) = linear(ii,jj,kk+ offset_d(3))
+          debugp2n2_d(tempInt, 2) = indhig
+          debugp2n2_d(tempInt, 3) = f2pR
+          debugp2n2_d(tempInt, 4) = f2pB
+          ! write(*,*) 'R+B p2nx]', linear(ii,jj,kk), indhig, f2pR, f2pB
 #endif
         endif
 
@@ -2161,7 +2214,12 @@
           f2pB = p_d(indlow)*buz_d*rhoB_d(io,jo,ko) * (ex_d(indlow)*vx + ey_d(indlow)*vy + ez_d(indlow)*vz)
           popsB_d(i,j,k,indhig, flip)= popsB_d(i,j,k,indhig, flip) - f2pB
 #ifdef DEBUG_P2N
-          write(*,*) 'R+B p2nx]', linear(io,jo,ko), indlow, f2pR, f2pB
+          tempInt = 1 + atomicadd( countp2n2_d, 1)
+          debugp2n2_d(tempInt, 1) = linear(io,jo,ko+ offset_d(3))
+          debugp2n2_d(tempInt, 2) = indlow
+          debugp2n2_d(tempInt, 3) = f2pR
+          debugp2n2_d(tempInt, 4) = f2pB
+          ! write(*,*) 'R+B p2nx]', linear(io,jo,ko), indlow, f2pR, f2pB
 #endif
         endif
       enddo
@@ -2246,13 +2304,13 @@
         endif
 
         ! z-component
-        if (zperiodic .and. boxatom(3,1)< 1) then 
+        if (zperiodic .and. nz_d==glz .and. boxatom(3,1)< 1) then 
           splitted(3) = .true.
           boxatom(3,1) = 1
           boxatom(3,2) = k+rdim
           boxatom(3,3) = k-rdim + nz_d
           boxatom(3,4) = nz_d
-        elseif (zperiodic .and. boxatom(3, 2) > nz_d) then 
+        elseif (zperiodic .and. nz_d==glz .and. boxatom(3, 2) > nz_d) then 
           splitted(3) = .true.
           boxatom(3,1) = 1
           boxatom(3,2) = k+rdim - nz_d
@@ -2264,12 +2322,15 @@
           boxatom(3,4) = -TILE_DIMz
         endif
  
+      ! write(*,*) "atom",l, "x", boxatom(1,1),boxatom(1,2)
+      ! write(*,*) "atom",l, "y", boxatom(2,1),boxatom(2,2)
+      ! write(*,*) "atom",l, "z", boxatom(3,1),boxatom(3,2)
       do loopk=0, 1
-	mink = (boxatom(3,2*loopk+1)-1) / TILE_DIMz + 1
-	maxk = (boxatom(3,2*loopk+2)-1) / TILE_DIMz + 1
+	mink = (boxatom(3,2*loopk+1)-1 - offset_d(3)) / TILE_DIMz + 1
+	maxk = (boxatom(3,2*loopk+2)-1 - offset_d(3)) / TILE_DIMz + 1
 	do k = mink, maxk
-	  ! write(*,*) "atom",l," k:", k, "loopk:",loopk
 	  if (k<1 .or. k > nz_d/TILE_DIMz) cycle
+	  ! write(*,*) "atom",l," k:", k, "loopk:",loopk
 
       	  do loopj=0, 1
       	    minj = (boxatom(2,2*loopj+1)-1) / TILE_DIMy + 1
@@ -2292,7 +2353,7 @@
 		  endif
 
 		  matrixAtoms_d(tempInt, i,j,k) = l
-		  ! write(*,*) "atom",l,"@",i,j,k
+		  ! write(*,*) "atom",l,"@",linear(i,j,k),'offs',offset_d(3)
       	        enddo
       	      enddo
 

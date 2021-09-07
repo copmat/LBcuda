@@ -30,15 +30,19 @@
 
     integer, device :: stop_d, countmk_d, countrm_d
     integer, device, allocatable :: partVol_d(:), oldpartVol_d(:)
-    integer, device :: countn2p_d
+    integer, device :: countn2p_d, countp2n1_d,countp2n2_d
 
     real, device :: minRho = -0.1, minPops = -0.1
 
     ! Debug
     real, allocatable, device :: debugline_d(:,:,:)
-    real, device :: debugn2pf_d(2000,5)
-    real, device :: debugn2pt_d(2000,5)
-    real, device :: debug_rm_d(2000,4)
-    real, device :: debug_mk_d(2000,4)
+    real, device :: debugn2pf_d(20000,5)
+    real, device :: debugn2pt_d(20000,5)
+
+    real, device :: debugp2n1_d(20000,4)
+    real, device :: debugp2n2_d(20000,4)
+
+    real, device :: debug_rm_d(20000,4)
+    real, device :: debug_mk_d(20000,4)
     integer(2), allocatable, device :: debugfluid_d(:,:,:)
   end module
