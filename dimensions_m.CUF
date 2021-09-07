@@ -4,7 +4,7 @@
     implicit none
 
     ! integer(4), parameter :: glx = 32, gly = glx, glz = glx
-    integer(4), parameter :: glx = 256, gly = glx, glz = glx
+    integer(4), parameter :: glx = 512, gly = glx, glz = glx
     integer(4), parameter :: nx = glx, ny = gly
     !integer(4) :: nz
 !
