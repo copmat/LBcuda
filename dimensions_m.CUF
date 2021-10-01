@@ -3,14 +3,14 @@
   module dimensions_m
     implicit none
 
-    ! integer(4), parameter :: nx = 32, ny = nx, nz = nx
+    ! integer(4), parameter :: glx = 64, gly = glx, glz = glx
     integer(4), parameter :: glx = 128, gly = glx, glz = glx
     integer(4), parameter :: nx = glx, ny = gly
     !integer(4) :: nz
 !
 ! mpi stuff
     integer:: nprocs, myrank, ierr
-    integer:: xyplane
+    integer:: xyplane, xyplane_int1
     integer, parameter::  mpid=3
     integer:: front(2),rear(2),right(2)
     integer:: up(2),down(2),left(2)
@@ -60,6 +60,7 @@
     real, parameter    :: rmass = 1.0 / 1500.0   ! 1/mass for particles
 
     logical, parameter :: lfix_moment = .false.
+    real               :: max_vel = 0.0
     
     ! External particle forces
     real    :: ext_fxx, ext_fyy, ext_fzz
@@ -72,9 +73,9 @@
 
     ! Hertzian
     logical, parameter :: withHz = .true.
-    real, parameter    :: hz_k = 10
-    real, parameter    :: hz_rmin = 10.5
-    real, parameter    :: hz_rcap = 9.0
+    real, parameter    :: hz_k = 25
+    real, parameter    :: hz_rmin = 12.5
+    real, parameter    :: hz_rcap = 11.0
     logical, parameter :: llubrication = .false.
     real, parameter    :: lubric_k = 10
     real, parameter    :: lubric_rmin = 10.0
@@ -185,11 +186,11 @@
     real, constant    :: ext_fxx_d, ext_fyy_d, ext_fzz_d
     real, constant    :: ext_tqx_d, ext_tqy_d, ext_tqz_d
 
-    integer, parameter :: TILE_DIM = 8
-    integer, parameter :: TILE_DIMx = 4
-    integer, parameter :: TILE_DIMy = 4
-    integer, parameter :: TILE_DIMz = 4
-    integer, parameter :: TILE_DIMPART = 16
+    integer, parameter :: TILE_DIM = 16
+    integer, parameter :: TILE_DIMx = 128
+    integer, parameter :: TILE_DIMy = 1
+    integer, parameter :: TILE_DIMz = 1
+    integer, parameter :: TILE_DIMPART = 32
 
     ! MPI
     integer, constant  :: offset_d(3)

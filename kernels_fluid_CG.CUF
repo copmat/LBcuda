@@ -115,7 +115,7 @@
       glj = j + offset_d(2)
       glk = k + offset_d(3)
 
-      if (1==i*j*k) write(*,*) 'CUDA setup2] offset:', gli, glj, glk
+      if (1==i*j*k+offset_d(3)) write(*,*) 'CUDA setup2] offset:', gli, glj, glk
 
       distx = gli - (glx/2 + 0.5)
       disty = glj - (gly/2 + 0.5)
@@ -124,6 +124,7 @@
 !
       rdist = sqrt(distx*distx + disty*disty + distz*distz)
       tempr = fcut(rdist, radius, radius+0.1)
+
       rhoR = tempr
       rhoB = 1.0 - tempr
 
@@ -171,8 +172,44 @@
       countmk_d = 0
       countrm_d = 0
       countn2p_d = 0
+      countp2n1_d = 0
+      countp2n2_d = 0
     end subroutine setup2
 
+    attributes(global) subroutine setupPops(u,v,w)
+      real, value :: u,v,w
+      integer :: i,j,k, l
+      integer :: gli,glj,glk
+      real    :: rhoR,rhoB, eqR,eqB
+
+  
+      i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
+      j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
+      k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
+
+      rhoR = rhoR_d(i,j,k)
+      rhoB = rhoB_d(i,j,k)
+      do l = 0, npops-1
+	      eqR = equil(rhoR, u,v,w, l)
+        popsR_d(i,j,k, l, 1) = eqR
+	      eqB = equil(rhoB, u,v,w, l)
+        popsB_d(i,j,k, l, 1) = eqB
+
+        ! Clears other stuff
+        popsR_d(i,j,k, l, 2) = 0.0
+        popsB_d(i,j,k, l, 2) = 0.0
+      end do
+
+      myfluid_d(i,j,k, 1) = fluid_fluid
+      myfluid_d(i,j,k, 2) = fluid_fluid
+      debugfluid_d(i,j,k) = 0
+
+      countmk_d = 0
+      countrm_d = 0
+      countn2p_d = 0
+      countp2n1_d = 0
+      countp2n2_d = 0
+    end subroutine setupPops
 
     !!!!!!!!!!!!!!!!!!! Color gradient !!!!!!!!!!!!!!!!!!!
 
@@ -190,6 +227,8 @@
       j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
       k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
 
+      if (step==1 .and. 1==i*j*k+offset_d(3)) write(*,*) 'CUDA init_rho_CG]'
+
       ! Only on fluid nodes
       if (myfluid_d(i,j,k, flip) == fluid_fluid) then
         rhoR = manual_rho(popsR_d)		! compute_rho(popsR_d,i,j,k,flip)
@@ -204,6 +243,9 @@
           stop_d = __LINE__
         endif
 
+        if (rhoR < MINDENS) rhoR = MINDENS
+        if (rhoB < MINDENS) rhoB = MINDENS
+
         rhoR_d(i,j,k) = rhoR
         rhoB_d(i,j,k) = rhoB
       else
@@ -215,14 +257,17 @@
     attributes(global) subroutine init_rhoR_CG(step, flip)
       integer, value :: step,flip
       integer :: i,j,k
+      real    :: rhoR
 
       i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
       j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
       k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
 
+      if (step==1 .and. 1==i*j*k+offset_d(3)) write(*,*) 'CUDA init_rhoR_CG]'
+
       ! Only on fluid nodes
       if (myfluid_d(i,j,k, flip) == fluid_fluid) then
-        rhoR_d(i,j,k) = popsR_d(i,j,k,0, flip) + popsR_d(i,j,k,1, flip) + &
+        rhoR = popsR_d(i,j,k,0, flip) + popsR_d(i,j,k,1, flip) + &
                popsR_d(i,j,k,2, flip) + popsR_d(i,j,k,3, flip) + &
                popsR_d(i,j,k,4, flip) + popsR_d(i,j,k,5, flip) + &
                popsR_d(i,j,k,6, flip) + popsR_d(i,j,k,7, flip) + &
@@ -232,6 +277,18 @@
                popsR_d(i,j,k,14,flip) + popsR_d(i,j,k,15,flip) + &
                popsR_d(i,j,k,16,flip) + popsR_d(i,j,k,17,flip) + &
                popsR_d(i,j,k,18,flip)
+
+        if (rhoR<minRho .or. rhoR>10) then
+          write(*,*) 'init_rhoR_CG]Range error rhoR', step, linear(i,j,k), rhoR
+          stop_d = __LINE__
+        endif
+
+        if (rhoR < MINDENS) then
+          ! write(*,*) 'init_rhoR_CG] rhoR fixed from', step, linear(i,j,k), rhoR
+          rhoR = MINDENS
+        endif
+
+        rhoR_d(i,j,k) = rhoR
       else
         rhoR_d(i,j,k) = MINDENS
       endif
@@ -241,14 +298,17 @@
     attributes(global) subroutine init_rhoB_CG(step, flip)
       integer, value :: step,flip
       integer :: i,j,k
+      real    :: rhoB
 
       i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
       j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
       k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
 
+      if (step==1 .and. 1==i*j*k+offset_d(3)) write(*,*) 'CUDA init_rhoB_CG]'
+
       ! Only on fluid nodes
       if (myfluid_d(i,j,k, flip) == fluid_fluid) then
-        rhoB_d(i,j,k) = popsB_d(i,j,k,0, flip) + popsB_d(i,j,k,1, flip) + &
+        rhoB = popsB_d(i,j,k,0, flip) + popsB_d(i,j,k,1, flip) + &
                popsB_d(i,j,k,2, flip) + popsB_d(i,j,k,3, flip) + &
                popsB_d(i,j,k,4, flip) + popsB_d(i,j,k,5, flip) + &
                popsB_d(i,j,k,6, flip) + popsB_d(i,j,k,7, flip) + &
@@ -258,6 +318,17 @@
                popsB_d(i,j,k,14,flip) + popsB_d(i,j,k,15,flip) + &
                popsB_d(i,j,k,16,flip) + popsB_d(i,j,k,17,flip) + &
                popsB_d(i,j,k,18,flip)
+
+        if (rhoB<minRho .or. rhoB>10) then
+          write(*,*) 'init_rhoB_CG]Range error rhoB', step, linear(i,j,k), rhoB
+          stop_d = __LINE__
+        endif
+
+        if (rhoB < MINDENS) then
+          ! write(*,*) 'init_rhoB_CG] rhoB fixed from', step, linear(i,j,k), rhoB
+          rhoB = MINDENS
+        endif
+        rhoB_d(i,j,k) = rhoB
       else
         rhoB_d(i,j,k) = MINDENS
       endif
@@ -296,11 +367,13 @@
       real :: loc_tempR(0:18),loc_tempB(0:18),loc_fdum(0:18)
       integer :: i,j,k, i1,j1,k1,l
       integer :: li,lj,lk
-      
-  
+
+
       i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
       j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
       k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
+
+      if (step==1 .and. 1==i*j*k+offset_d(3)) write(*,*) 'CUDA time_step_CG]'
 
       li = threadIdx%x
       lj = threadIdx%y
@@ -485,22 +558,48 @@
     end subroutine time_step_CG
 
 
-    attributes(global) subroutine copy_CG(step, flip)
+    attributes(global) subroutine flipflopPop0_CG(step, flip)
       integer, value :: step,flip
-      integer :: i,j,k, l, flop
+      integer :: i,j,k, flop
 
       i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
       j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
       k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
-      ! if (step==1 .and. 1==i*j*k) write(*,*) 'CUDA copy_CG] i,k:',i,j,k
+      if (step==1 .and. 1==i*j*k+offset_d(3)) write(*,*) 'CUDA flipflopPop0_CG]'
 
       flop = 3 - flip
       
-      do l = 0, npops-1
-        popsR_d(i,j,k,l, flop) = popsR_d(i,j,k,l, flip)
-        popsB_d(i,j,k,l, flop) = popsB_d(i,j,k,l, flip)
-      enddo
-    end subroutine copy_CG
+      popsR_d(i,j,k,0, flop) = popsR_d(i,j,k,0, flip)
+      popsB_d(i,j,k,0, flop) = popsB_d(i,j,k,0, flip)
+    end subroutine flipflopPop0_CG
+
+    attributes(global) subroutine flipflopRPop0_CG(step, flip)
+      integer, value :: step,flip
+      integer :: i,j,k, flop
+
+      i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
+      j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
+      k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
+      if (step==1 .and. 1==i*j*k+offset_d(3)) write(*,*) 'CUDA flipflopRPop0_CG]'
+
+      flop = 3 - flip
+      
+      popsR_d(i,j,k,0, flop) = popsR_d(i,j,k,0, flip)
+    end subroutine flipflopRPop0_CG
+    
+    attributes(global) subroutine flipflopBPop0_CG(step, flip)
+      integer, value :: step,flip
+      integer :: i,j,k, flop
+
+      i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
+      j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
+      k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
+      if (step==1 .and. 1==i*j*k+offset_d(3)) write(*,*) 'CUDA flipflopBPop0_CG]'
+
+      flop = 3 - flip
+      
+      popsB_d(i,j,k,0, flop) = popsB_d(i,j,k,0, flip)
+    end subroutine flipflopBPop0_CG    
 
 
     attributes(global) subroutine stream_CG(step, flip)
@@ -513,7 +612,7 @@
       i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
       j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
       k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
-      ! if (step==1 .and. 1==i*j*k) write(*,*) 'CUDA stream_CG] i,k:',i,j,k
+      if (step==1 .and. 1==i*j*k+offset_d(3)) write(*,*) 'CUDA stream_CG]'
 
       flop = 3 - flip
 
@@ -544,7 +643,7 @@
       i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
       j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
       k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
-      ! if (step==1 .and. 1==i*j*k) write(*,*) 'CUDA stream_CG] i,k:',i,j,k
+      if (step==1 .and. 1==i*j*k+offset_d(3)) write(*,*) 'CUDA streamR_CG]'
 
       flop = 3 - flip
 
@@ -578,7 +677,7 @@
       i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
       j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
       k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
-      ! if (step==1 .and. 1==i*j*k) write(*,*) 'CUDA stream_CG] i,k:',i,j,k
+      if (step==1 .and. 1==i*j*k+offset_d(3)) write(*,*) 'CUDA streamB_CG]'
 
       flop = 3 - flip
 
