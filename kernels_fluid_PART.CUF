@@ -91,13 +91,12 @@
       i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
       j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
       k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
-      ! if (step==1 .and. 1==i*j*k) write(*,*) 'CUDA init_rho_isfluid_CG] i,k:',i,j,k
+      if (step==0 .and. 1==i*j*k+offset_d(3)) write(*,*) 'CUDA init_rho_isfluid_CG] i,k:',i,j,k
       
       atm_i = blockIdx%x
       atm_j = blockIdx%y
       atm_k = blockIdx%z
-      ! atm_st = findAtoms_d(1, atm_i,atm_j,atm_k)
-      ! atm_en = findAtoms_d(2, atm_i,atm_j,atm_k)
+      
       atm_st = 1
       atm_en = dim_matAtm_d(atm_i,atm_j,atm_k)
 
@@ -106,7 +105,6 @@
       debugfluid_d(i,j,k) = 0
       if (atm_st>0) then
         do i_list = atm_st, atm_en
-          ! i_atm = listAtoms_d(i_list)
           i_atm = matrixAtoms_d(i_list, atm_i,atm_j,atm_k)
 
           if (.not. updated) then
@@ -188,9 +186,9 @@
       getDeltai = i - xxx
       if (xperiodic) then
         if (xxx-rdim < 1 .or. xxx+rdim > nx) then
-          if (xxx+rdim > nx .and. i < 2*rdim) then
+          if (xxx+rdim > nx .and. i < rdim) then
             getDeltai = i - xxx + nx
-          else if (xxx-rdim < 1 .and. i > nx - 2*rdim) then
+          else if (xxx-rdim < 1 .and. i > nx - rdim) then
             getDeltai = i - xxx - nx
           endif
         endif
@@ -204,9 +202,9 @@
       getDeltaj = j - yyy
       if (yperiodic) then
         if (yyy-rdim < 1 .or. yyy+rdim > ny) then
-          if (yyy+rdim > ny .and. j < 2*rdim) then
+          if (yyy+rdim > ny .and. j < rdim) then
             getDeltaj = j - yyy + ny
-          else if (yyy-rdim < 1 .and. j > ny - 2*rdim) then
+          else if (yyy-rdim < 1 .and. j > ny - rdim) then
             getDeltaj = j - yyy - ny
           endif
         endif
@@ -219,11 +217,11 @@
     
       getDeltak = k - zzz
       if (zperiodic) then
-        if (zzz-rdim < 1 .or. zzz+rdim > nz_d) then
-          if (zzz+rdim > nz_d .and. k < 2*rdim) then
-            getDeltak = k - zzz + nz_d
-          else if (zzz-rdim < 1 .and. k > nz_d - 2*rdim) then
-            getDeltak = k - zzz - nz_d
+        if (zzz-rdim < 1 .or. zzz+rdim > glz) then
+          if (zzz+rdim > glz .and. k < rdim) then
+            getDeltak = k - zzz + glz
+          else if (zzz-rdim < 1 .and. k > glz - rdim) then
+            getDeltak = k - zzz - glz
           endif
         endif
       endif
@@ -256,8 +254,12 @@
           myfluid_d(i,j,k, flip) = val
           tempInt = atomicadd( partVol_d(iatm), 1)
           debugfluid_d(i,j,k) = iatm
-          ! write(*,*) 'isfl',step, i,j,k, myfluid_d(i,j,k, flip)+0
+          ! write(*,*) 'sf1',linear(i,j,k), val+0
+        else
+          ! write(*,*) 'sf2',linear(i,j,k)
         endif
+      else
+        ! write(*,*) 'sf3',linear(i,j,k), deltai,deltaj,deltak
       endif
     end function setmyfluid
 
@@ -293,6 +295,61 @@
         endif
       endif
     end subroutine compute_densities_wall
+
+    attributes(global) subroutine compute_virtual_rho(step, flip)
+      integer, value :: step,flip
+      integer :: i,j,k, l
+      integer :: iatm
+      real              :: rtemp(3), ftemp(3),ttemp(3), modr, tempFoo
+      real              :: rhoR,rhoB, angleCos
+      real              :: aaa,bbb,ccc
+      real, dimension(0:3), parameter :: qversor = (/ ZERO , ONE , ZERO , ZERO /)
+      real, dimension(0:3) :: qtemp,qtemp2, tempconj
+
+  
+      i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
+      j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
+      k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
+      if (step==1 .and. 1==i*j*k+offset_d(3)) write(*,*) 'CUDA compute_virtual_rho]'
+      
+      if(myfluid_d(i,j,k, flip)==fluid_spherelist) then
+        iatm = debugfluid_d(i,j,k)
+
+        rtemp(1) = i - pos_d(1,iatm,flip)
+        rtemp(2) = j - pos_d(2,iatm,flip)
+        rtemp(3) = k+ offset_d(3) - pos_d(3,iatm,flip)
+
+        aaa = ONE/real(nx)
+        bbb = ONE/real(ny)
+        ccc = ONE/real(glz)
+        
+        rtemp(1) = rtemp(1) - real(nx)*nint(aaa*rtemp(1))
+        rtemp(2) = rtemp(2) - real(ny)*nint(bbb*rtemp(2))
+        rtemp(3) = rtemp(3) - real(glz)*nint(ccc*rtemp(3))
+
+        modr = sqrt( rtemp(1)*rtemp(1) + rtemp(2)*rtemp(2) + rtemp(3)*rtemp(3))
+        rtemp(1:3) = rtemp(1:3)/ modr
+
+        ! Get particle x-versor
+        qtemp(0) = pos_d(10,iatm,flip)
+        qtemp(1) = pos_d(11,iatm,flip)
+        qtemp(2) = pos_d(12,iatm,flip)
+        qtemp(3) = pos_d(13,iatm,flip)
+        
+        tempconj = qconj(qtemp)
+        qtemp2 = qtrimult(qtemp,qversor,tempconj)
+
+        ! Calc angle cosine
+        angleCos = qtemp2(1)*rtemp(1)+ qtemp2(2)*rtemp(2)+ qtemp2(3)*rtemp(3)
+        if (angleCos<0) then
+          rhoR_d(i,j,k) = 0.0
+          rhoB_d(i,j,k) = 1.0
+        else
+          rhoR_d(i,j,k) = 1.0
+          rhoB_d(i,j,k) = 0.0
+        endif
+      endif
+    end subroutine compute_virtual_rho
 
     ! pos(1:3) -> xxx,yyy,zzz
     ! pos(4:6) -> vxx,vyy,vzz
@@ -338,14 +395,12 @@
 
       ! if (1==step) write(*,*) 'CUDA-mk-del-fl]', linear(i,j,k), iatm
 
-      ! apply periodic conditions if necessary
-      ! i=pimage(ixpbc,i,nx)
-      ! j=pimage(iypbc,j,ny)
-      ! k=pimage(izpbc,k,nz_d)
+      ! Here i,j,k are already periodic-wrapped
 
-      xxx = nint(pos_d(1,iatm, flip))
-      yyy = nint(pos_d(2,iatm, flip))
-      zzz = nint(pos_d(3,iatm, flip))
+      ! We check the distance from old atom position
+      xxx = nint(pos_d(1,iatm, 3-flip))
+      yyy = nint(pos_d(2,iatm, 3-flip))
+      zzz = nint(pos_d(3,iatm, 3-flip))
 
       deltai = getDeltai(i, xxx)
       deltaj = getDeltaj(j, yyy)
@@ -394,6 +449,7 @@
         debug_rm_d (tempInt, 2) = ftemp(1)
         debug_rm_d (tempInt, 3) = ftemp(2)
         debug_rm_d (tempInt, 4) = ftemp(3)
+        debug_rm_d (tempInt, 5) = iatm
         ! write(*,*) 'rm-fl]', linear(i,j,k), ftemp(1),ftemp(2),ftemp(3)
         ! write(*,*) 'myrm]', linear(i,j,k), myu,myv,myw
         ! write(*,*) 'myrm]', linear(i,j,k), rhoR,rhoB
@@ -472,6 +528,7 @@
         debug_rm_d (tempInt, 2) = ftemp(1)
         debug_rm_d (tempInt, 3) = ftemp(2)
         debug_rm_d (tempInt, 4) = ftemp(3)
+        debug_rm_d (tempInt, 5) = iatm
         ! write(*,*) 'rm-fl2]', linear(i,j,k), ftemp(1),ftemp(2),ftemp(3)
         ! write(*,*) 'myrm2]', linear(i,j,k), myu,myv,myw
         ! write(*,*) 'myrm2]', linear(i,j,k), rhoR,rhoB
@@ -520,15 +577,17 @@
 
       ! Here i,j,k are already periodic-wrapped
 
-      xxx = nint(pos_d(1,iatm, flip))
-      yyy = nint(pos_d(2,iatm, flip))
-      zzz = nint(pos_d(3,iatm, flip))
+      ! We check the distance from old atom position
+      xxx = nint(pos_d(1,iatm, 3-flip))
+      yyy = nint(pos_d(2,iatm, 3-flip))
+      zzz = nint(pos_d(3,iatm, 3-flip))
 
       deltai = getDeltai(i, xxx)
       deltaj = getDeltaj(j, yyy)
       deltak = getDeltak(k+ offset_d(3), zzz)       ! MPI over z
 
       atmDist = deltai*deltai + deltaj*deltaj + deltak*deltak
+
       ! only remove fluid if near THIS atom...
       if (atmDist > sphereMax_d) return
 
@@ -575,6 +634,7 @@
         debug_mk_d (tempInt, 2) = ftemp(1)
         debug_mk_d (tempInt, 3) = ftemp(2)
         debug_mk_d (tempInt, 4) = ftemp(3)
+        debug_mk_d (tempInt, 5) = iatm
         ! write(*,*) 'mk-fl]', linear(i,j,k), ftemp(1),ftemp(2),ftemp(3)
 #endif        
 
@@ -655,6 +715,7 @@
         debug_mk_d (tempInt, 2) = ftemp(1)
         debug_mk_d (tempInt, 3) = ftemp(2)
         debug_mk_d (tempInt, 4) = ftemp(3)
+        debug_mk_d (tempInt, 5) = iatm
         ! write(*,*) 'mk-fl2]', linear(i,j,k), ftemp(1),ftemp(2),ftemp(3)
 #endif        
 
@@ -797,7 +858,7 @@
       integer, intent(out) :: Dsum
 
       ! TODO
-      write (*,*) "fix_onebelt_density_twofluids]TO BE IMPL'ED"
+      ! write (*,*) "fix_onebelt_density_twofluids]TO BE IMPL'ED"
     end subroutine fix_onebelt_density_twofluids
 
     attributes(device) subroutine compute_onebelt_density_2fl_weights(i,j,k, flip, Rsum, Bsum, Dsum)
@@ -864,7 +925,7 @@
       i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
       j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
       k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
-      ! if (step==1 .and. 1==i*j*k) write(*,*) 'CUDA partBB_CG] i,k:',i,j,k
+      if (step==1 .and. 1==i*j*k+offset_d(3)) write(*,*) 'CUDA partBB_CG] i,k:',i,j,k
 
       atm_i = blockIdx%x 
       atm_j = blockIdx%y 
@@ -919,7 +980,7 @@
       i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
       j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
       k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
-      ! if (step==1 .and. 1==i*j*k) write(*,*) 'CUDA partBB_CG] i,k:',i,j,k
+      if (step==1 .and. 1==i*j*k+offset_d(3)) write(*,*) 'CUDA partBB_CG_p2n] i,k:',i,j,k
 
       if ( myfluid_d(i,j,k, flip)==fluid_spherelist ) then
         call particle_to_node_bounce_back_bc2_phase1(step, flip, i,j,k)
@@ -938,7 +999,7 @@
       i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
       j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
       k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
-      ! if (step==1 .and. 1==i*j*k) write(*,*) 'CUDA partBB_CG] i,k:',i,j,k
+      if (step==1 .and. 1==i*j*k+offset_d(3)) write(*,*) 'CUDA partBB_CG_p2n2] i,k:',i,j,k
 
       atm_i = blockIdx%x 
       atm_j = blockIdx%y 
@@ -995,7 +1056,7 @@
       i = (blockIdx%x-1) * TILE_DIMPART + threadIdx%x
       if (i>numAtoms) return
 
-      if (offset_d(3)==1 .and. 1==step .and. 1==i) write(*,*) 'CUDA inter_force_particles] i:',i
+      if (offset_d(3)==0 .and. 1==step .and. 1==i) write(*,*) 'CUDA inter_force_particles] i:',i
 
       if (withSidewall) call add_sidewall(step, flip, i)
 
@@ -1015,7 +1076,7 @@
       i = (blockIdx%x-1) * TILE_DIMPART + threadIdx%x
       if (i>numAtoms) return
 
-      if (offset_d(3)==1 .and. 1==step .and. 1==i) write(*,*) 'CUDA time_step_force_particles] i:',i
+      if (offset_d(3)==0 .and. 1==step .and. 1==i) write(*,*) 'CUDA time_step_force_particles] i:',i
 
       call addForce_particle_bounce_back(step, flip, i, lrotate)
       call nve_lf(step, flip, i, lrotate)
@@ -1054,7 +1115,7 @@
       endif
 
       if (oldpartVol_d(i)>0 .and. partVol_d(i) /= oldpartVol_d(i)) then        
-        write(*,*) 'partVol_d /= oldpartVol_d ->Atom', i, partVol_d(i), oldpartVol_d(i)
+        ! write(*,*) 'partVol_d /= oldpartVol_d ->Atom', i, partVol_d(i), oldpartVol_d(i)
         ! stop_d = __LINE__      
       endif
       oldpartVol_d(i) = partVol_d(i)
@@ -1324,7 +1385,7 @@
       mxrsqcut = max(rsrparcut,rsqcut)
       rparcap = rpar + lubric_rcap
 
-      if (offset_d(3)==1 .and. 1==step.and.2==iatm*jatm) write(*,*) 'Hz]', mxrsqcut, rparcap, gmin
+      if (offset_d(3)==0 .and. 1==step.and.2==iatm*jatm) write(*,*) 'Hz]', mxrsqcut, rparcap, gmin
 
       xi(1) = pos_d(1, iatm, flip)
       xi(2) = pos_d(2, iatm, flip)
@@ -1437,6 +1498,7 @@
       real :: bxx,byy,bzz, vxx,vyy,vzz
       real :: xxx,yyy,zzz, xxo,yyo,zzo
       logical :: lfix_moment = .false.
+      real :: velMag
 
       ! if (1==step) write(*,*) 'CUDA nve_lf] i:', i
 
@@ -1464,6 +1526,13 @@
       bxx = vxx + rmass * fxx
       byy = vyy + rmass * fyy
       bzz = vzz + rmass * fzz
+
+      velMag = sqrt(bxx*bxx + byy*byy + bzz*bzz)
+      if (velMag > max_vel_d) then
+        write(*,*) 'CUDA nve_lf] i:', i
+        write(*,*) 'Extreme vel:', velMag, bxx,byy,bzz
+        stop_d = __LINE__
+      endif
       
       if(lfix_moment)then
       endif
@@ -1810,6 +1879,10 @@
       vxs = pos_d(4,iatm,flip)
       vys = pos_d(5,iatm,flip)
       vzs = pos_d(6,iatm,flip)
+
+      vx = vxs
+      vy = vys
+      vz = vzs
 
       if (lrotate) then
         qtemp(0) = pos_d(10,iatm,flip)
@@ -2304,43 +2377,42 @@
         endif
 
         ! z-component
-        if (zperiodic .and. nz_d==glz .and. boxatom(3,1)< 1) then 
+        if (zperiodic .and. boxatom(3,1)< 1) then 
           splitted(3) = .true.
           boxatom(3,1) = 1
           boxatom(3,2) = k+rdim
-          boxatom(3,3) = k-rdim + nz_d
-          boxatom(3,4) = nz_d
-        elseif (zperiodic .and. nz_d==glz .and. boxatom(3, 2) > nz_d) then 
+          boxatom(3,3) = k-rdim + glz
+          boxatom(3,4) = glz
+        elseif (zperiodic .and. boxatom(3, 2) > glz) then 
           splitted(3) = .true.
           boxatom(3,1) = 1
-          boxatom(3,2) = k+rdim - nz_d
+          boxatom(3,2) = k+rdim - glz
           boxatom(3,3) = k-rdim
-          boxatom(3,4) = nz_d
+          boxatom(3,4) = glz
         else
           splitted(3) = .false.
           boxatom(3,3) = TILE_DIMz	! This avoid loopk==1
           boxatom(3,4) = -TILE_DIMz
         endif
- 
-      ! write(*,*) "atom",l, "x", boxatom(1,1),boxatom(1,2)
-      ! write(*,*) "atom",l, "y", boxatom(2,1),boxatom(2,2)
-      ! write(*,*) "atom",l, "z", boxatom(3,1),boxatom(3,2)
+
       do loopk=0, 1
-	mink = (boxatom(3,2*loopk+1)-1 - offset_d(3)) / TILE_DIMz + 1
-	maxk = (boxatom(3,2*loopk+2)-1 - offset_d(3)) / TILE_DIMz + 1
-	do k = mink, maxk
+	mink = ( boxatom(3,2*loopk+1)-1 ) / TILE_DIMz + 1
+	maxk = ( boxatom(3,2*loopk+2)-1 ) / TILE_DIMz + 1
+  
+	do k = mink- offset_d(3), maxk- offset_d(3)
 	  if (k<1 .or. k > nz_d/TILE_DIMz) cycle
-	  ! write(*,*) "atom",l," k:", k, "loopk:",loopk
 
       	  do loopj=0, 1
       	    minj = (boxatom(2,2*loopj+1)-1) / TILE_DIMy + 1
       	    maxj = (boxatom(2,2*loopj+2)-1) / TILE_DIMy + 1
+            
       	    do j = minj, maxj
 	      if (j<1 .or. j > ny/TILE_DIMy) cycle
 
       	      do loopi=0, 1
       	        mini = (boxatom(1,2*loopi+1)-1) / TILE_DIMx + 1
       	        maxi = (boxatom(1,2*loopi+2)-1) / TILE_DIMx + 1
+
       	        do i = mini, maxi
 	          if (i<1 .or. i > nx/TILE_DIMx) cycle
 
@@ -2353,7 +2425,6 @@
 		  endif
 
 		  matrixAtoms_d(tempInt, i,j,k) = l
-		  ! write(*,*) "atom",l,"@",linear(i,j,k),'offs',offset_d(3)
       	        enddo
       	      enddo
 

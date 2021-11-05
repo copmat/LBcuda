@@ -175,23 +175,26 @@
     write(iotest,fmt=103) iatm !Only Spheres...
   enddo
 
-  ! write(iotest,fmt=100) ''
-  ! write(iotest,fmt=100) 'VECTORS vel float'
-  ! do iatm = 1 ,numAtoms
-  !   write(iotest,*) v_atm(1, iatm), v_atm(2, iatm), v_atm(3, iatm)
-  ! enddo
+  write(iotest,fmt=100) ''
+  write(iotest,fmt=100) 'VECTORS vel float'
+  do iatm = 1 ,numAtoms
+    write(iotest,*) v_atm(1, iatm), v_atm(2, iatm), v_atm(3, iatm)
+  enddo
 
   if (lrotate) then
+    write(iotest,fmt=100) ''
     write(iotest,fmt=100) 'VECTORS Vectx float'
     do iatm = 1 ,numAtoms
       write(iotest,201)take_rotversorx(q(1,iatm),q(2,iatm),q(3,iatm),q(4,iatm))
     enddo
     
+    write(iotest,fmt=100) ''
     write(iotest,fmt=100) 'VECTORS Vecty float'
     do iatm = 1 ,numAtoms
       write(iotest,201)take_rotversory(q(1,iatm),q(2,iatm),q(3,iatm),q(4,iatm))
     enddo
     
+    write(iotest,fmt=100) ''
     write(iotest,fmt=100) 'VECTORS Vectz float'
     do iatm = 1 ,numAtoms
       write(iotest,201)take_rotversorz(q(1,iatm),q(2,iatm),q(3,iatm),q(4,iatm))
@@ -487,20 +490,20 @@
   enddo
  end subroutine moments2Fl
 
- subroutine writeImageDataVTI_isfluid(nz, fname, step, myfluid, flip, textual)
+ subroutine writeImageDataVTI_isfluid(nz, fname, step, myfluid, flip, textual, totSphere)
   use dimensions_m
   use kernels_fluid
   implicit none
   integer(4), intent(in) :: nz
   character(len=*),intent(in) :: fname
-  integer,intent(in) :: step, flip
+  integer,intent(in) :: step, flip, totSphere
   integer(1), allocatable, intent(in) :: myfluid(:,:,:,:)
   logical,intent(in) :: textual
   character(len=120) :: fnameFull,extent
   integer i,j,k, iotest
   integer(4)         :: length
   real(8)            :: totSumR
-  integer(8)         :: totSumI
+  integer(8)         :: totSumI, totCenters, isFlCent(3,numAtoms)
 
   iotest = 55
 
@@ -508,19 +511,36 @@
   ! open(unit=iotest,file=trim(fnameFull),status='replace',action='write')
 
   totSumI = 0
+  totCenters = 0
   do k=1,nz
     do j=1,ny
       do i=1,nx
         if (myfluid(i,j,k, flip) /= fluid_fluid) then
           totSumI = totSumI + 1
-          ! write(iotest,fmt='(3I5, I3)') i,j,k, myfluid(i,j,k, flip)
+          if (myfluid(i,j,k, flip) == fluid_particleCM) then
+            totCenters = totCenters + 1
+            isFlCent(1,totCenters) = i
+            isFlCent(2,totCenters) = j
+            isFlCent(3,totCenters) = k + offset_d(3)
+          endif
         endif
       enddo
     enddo
   enddo
-  if (myrank== 0) write(*,fmt='(A,I5, A,I10)') 'writeImageDataVTI] step=', step, ' myfluid=', totSumI
+  write(*,fmt=200) step, myrank, totSumI,totCenters
+  200     format('isfluid] step=', I8, ' rank=', I6,' myfluid=', I10,' CM=', I10)
 
-  ! close(iotest)
+  if (myrank==0 .and. totCenters /= numAtoms) then
+    write(*,fmt=201) step, totCenters, numAtoms
+    ! stop
+    201     format('isfluid] step=', I8, ' ERROR!!!!!!!!!!   particle number diff:',I8,' vs ',I8)
+  endif
+
+  if (myrank==0 .and. totSumI /= totSphere*numAtoms) then
+    write(*,fmt=202) step, totSumI, totSphere*numAtoms    
+    202     format('isfluid] step=', I8, ' ERROR!!!!!!!!!!   particle volume diff:',I8,' vs ',I8)
+    if (step<2) stop
+  endif
   
   
   fnameFull = 'output/' // trim(fname) // '_' // trim(write_fmtnumb(myrank)) // '_' // trim(write_fmtnumb(step)) // '.vti'
