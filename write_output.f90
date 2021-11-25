@@ -2,13 +2,14 @@
     use dimensions_m
     implicit none
 
-    integer(1)  :: debugInt1(0:nx+1,0:ny+1,0:nz+1)
-    real        :: debugReal(0:nx+1,0:ny+1,0:nz+1)
+    ! integer(1)  :: debugInt1(0:nx+1,0:ny+1,0:nz+1)
+    ! real        :: debugReal(0:nx+1,0:ny+1,0:nz+1)
  contains
 
- subroutine writeImageDataVTI(fname, step, varname, rhoR, textual)
+ subroutine writeImageDataVTI(nz, fname, step, varname, rhoR, textual)
   use dimensions_m
   implicit none
+  integer(4), intent(in) :: nz
   character(len=*),intent(in) :: fname, varname
   integer,intent(in) :: step
   real(4),allocatable,intent(in) :: rhoR(:,:,:)
@@ -19,12 +20,12 @@
 
 
   iotest = 55
-  fnameFull = 'output/' // trim(fname) // '_' // trim(write_fmtnumb(step)) // '.vti'
+  fnameFull = 'output/' // trim(fname) // '_' // trim(write_fmtnumb(myrank)) // '.' //trim(write_fmtnumb(step)) // '.vti'
   open(unit=iotest,file=trim(fnameFull),status='replace',action='write')
 
   extent =  trim(write_fmtnumb(1)) // ' ' // trim(write_fmtnumb(nx)) // ' ' &
         // trim(write_fmtnumb(1)) // ' ' // trim(write_fmtnumb(ny)) // ' ' &
-        // trim(write_fmtnumb(1)) // ' ' // trim(write_fmtnumb(nz))
+        // trim(write_fmtnumb(offset(3) + 1)) // ' ' // trim(write_fmtnumb(offset(3) +nz))
 
   write(iotest,*) '<VTKFile type="ImageData" version="1.0" byte_order="LittleEndian" >'
   write(iotest,*) ' <ImageData WholeExtent="' // trim(extent) // '" >'
@@ -72,9 +73,10 @@
  end subroutine writeImageDataVTI
 
 
- subroutine writeImageDataVTI_3d(fname, step, vel, textual)
+ subroutine writeImageDataVTI_3d(nz, fname, step, vel, textual)
   use dimensions_m
   implicit none
+  integer(4), intent(in) :: nz
   character(len=*),intent(in) :: fname
   integer,intent(in) :: step
   real(4),allocatable,intent(in) :: vel(:,:,:,:)
@@ -85,12 +87,13 @@
 
 
   iotest = 55
-  fnameFull = 'output/' // trim(fname) // '_' // trim(write_fmtnumb(step)) // '.vti'
+  fnameFull = 'output/' // trim(fname) // '_' // trim(write_fmtnumb(myrank)) // '.' //trim(write_fmtnumb(step)) // '.vti'
+
   open(unit=iotest,file=trim(fnameFull),status='replace',action='write')
 
   extent =  trim(write_fmtnumb(1)) // ' ' // trim(write_fmtnumb(nx)) // ' ' &
         // trim(write_fmtnumb(1)) // ' ' // trim(write_fmtnumb(ny)) // ' ' &
-        // trim(write_fmtnumb(1)) // ' ' // trim(write_fmtnumb(nz))
+        // trim(write_fmtnumb(offset(3) + 1)) // ' ' // trim(write_fmtnumb(offset(3) + nz))
 
   write(iotest,*) '<VTKFile type="ImageData" version="1.0">'
   write(iotest,*) ' <ImageData WholeExtent="' // trim(extent) // '" >'
@@ -172,23 +175,26 @@
     write(iotest,fmt=103) iatm !Only Spheres...
   enddo
 
-  ! write(iotest,fmt=100) ''
-  ! write(iotest,fmt=100) 'VECTORS vel float'
-  ! do iatm = 1 ,numAtoms
-  !   write(iotest,*) v_atm(1, iatm), v_atm(2, iatm), v_atm(3, iatm)
-  ! enddo
+  write(iotest,fmt=100) ''
+  write(iotest,fmt=100) 'VECTORS vel float'
+  do iatm = 1 ,numAtoms
+    write(iotest,*) v_atm(1, iatm), v_atm(2, iatm), v_atm(3, iatm)
+  enddo
 
   if (lrotate) then
+    write(iotest,fmt=100) ''
     write(iotest,fmt=100) 'VECTORS Vectx float'
     do iatm = 1 ,numAtoms
       write(iotest,201)take_rotversorx(q(1,iatm),q(2,iatm),q(3,iatm),q(4,iatm))
     enddo
     
+    write(iotest,fmt=100) ''
     write(iotest,fmt=100) 'VECTORS Vecty float'
     do iatm = 1 ,numAtoms
       write(iotest,201)take_rotversory(q(1,iatm),q(2,iatm),q(3,iatm),q(4,iatm))
     enddo
     
+    write(iotest,fmt=100) ''
     write(iotest,fmt=100) 'VECTORS Vectz float'
     do iatm = 1 ,numAtoms
       write(iotest,201)take_rotversorz(q(1,iatm),q(2,iatm),q(3,iatm),q(4,iatm))
@@ -358,9 +364,10 @@
  end function write_fmtnumb8
 
 
- subroutine moments1Fl(pops, rhoR,vel)
+ subroutine moments1Fl(nz, pops, rhoR,vel)
   use dimensions_m
   implicit none
+  integer(4), intent(in) :: nz
   real(4), allocatable, pinned,intent(in) :: pops(:,:,:,:)
   real(4), allocatable :: rhoR(:,:,:), vel(:,:,:,:)
   integer i,j,k, l
@@ -415,9 +422,10 @@
   ! write (*,*) 1,1,1, rhoR(1,1,1), (pops(1,1,1,l), l=0,18)
  end subroutine moments1Fl
 
- subroutine moments2Fl(pops,rhoR, popsB,rhoB, vel, phase, myfluid, flip)
+ subroutine moments2Fl(nz, pops,rhoR, popsB,rhoB, vel, phase, myfluid, flip)
   use dimensions_m
   implicit none
+  integer(4), intent(in) :: nz
   real(4), allocatable, pinned,intent(in) :: pops(:,:,:,:), popsB(:,:,:,:)
   real(4), allocatable :: rhoR(:,:,:), rhoB(:,:,:), vel(:,:,:,:), phase(:,:,:)
   integer(1), allocatable, intent(in) :: myfluid(:,:,:,:)
@@ -482,47 +490,71 @@
   enddo
  end subroutine moments2Fl
 
- subroutine writeImageDataVTI_islfuid(fname, step, myfluid, flip, textual)
+ subroutine writeImageDataVTI_isfluid(nz, fname, step, myfluid, flip, textual, totSphere)
   use dimensions_m
   use kernels_fluid
   implicit none
+  integer(4), intent(in) :: nz
   character(len=*),intent(in) :: fname
-  integer,intent(in) :: step, flip
-  integer(1), intent(in) :: myfluid(:,:,:,:)
+  integer,intent(in) :: step, flip, totSphere
+  integer(1), allocatable, intent(in) :: myfluid(:,:,:,:)
   logical,intent(in) :: textual
   character(len=120) :: fnameFull,extent
   integer i,j,k, iotest
   integer(4)         :: length
   real(8)            :: totSumR
-  integer(8)         :: totSumI
+  integer(8)         :: totSumI, totCenters, isFlCent(3,numAtoms)
 
   iotest = 55
 
-  ! fnameFull = 'output/' // 'partVol_' // trim(write_fmtnumb(step)) // '.txt'
+  ! fnameFull = 'output/' // 'partisfluid_' // trim(write_fmtnumb(step)) // '.txt'
   ! open(unit=iotest,file=trim(fnameFull),status='replace',action='write')
 
-  totSumI = 0.0
+  totSumI = 0
+  totCenters = 0
   do k=1,nz
     do j=1,ny
       do i=1,nx
         if (myfluid(i,j,k, flip) /= fluid_fluid) then
           totSumI = totSumI + 1
-          ! write(iotest,fmt='(3I5, I3)') i,j,k, myfluid(i,j,k, flip)
+          if (myfluid(i,j,k, flip) == fluid_particleCM) then
+            totCenters = totCenters + 1
+            isFlCent(1,totCenters) = i
+            isFlCent(2,totCenters) = j
+            isFlCent(3,totCenters) = k + offset_d(3)
+          endif
         endif
       enddo
     enddo
   enddo
-  write(*,fmt='(I5, A, I10)') step, ' myfluid=', totSumI
+  write(*,fmt=200) step, myrank, totSumI,totCenters
+  200     format('isfluid] step=', I8, ' rank=', I6,' myfluid=', I10,' CM=', I10)
 
-  ! close(iotest)
+  if (nprocs==1) then
+    if (myrank==0 .and. totCenters /= numAtoms) then
+      write(*,fmt=201) step, totCenters, numAtoms
+      201     format('isfluid] step=', I8, ' ERROR!!!!!!!!!!   particle number diff:',I8,' vs ',I8)
+
+      if (step<2) call mystop
+    endif
+
+    if (myrank==0 .and. totSumI /= totSphere*numAtoms) then
+      write(*,fmt=202) step, totSumI, totSphere*numAtoms
+      202     format('isfluid] step=', I8, ' ERROR!!!!!!!!!!   particle volume diff:',I8,' vs ',I8)
+      if (step<2) call mystop
+    endif
+  else
+    ! write(*,fmt=201) step, totCenters, numAtoms
+    ! write(*,fmt=202) step, totSumI, totSphere*numAtoms
+  endif
   
   
-  fnameFull = 'output/' // trim(fname) // '_' // trim(write_fmtnumb(step)) // '.vti'
+  fnameFull = 'output/' // trim(fname) // '_' // trim(write_fmtnumb(myrank)) // '_' // trim(write_fmtnumb(step)) // '.vti'
   open(unit=iotest,file=trim(fnameFull),status='replace',action='write')
 
   extent =  trim(write_fmtnumb(1)) // ' ' // trim(write_fmtnumb(nx)) // ' ' &
         // trim(write_fmtnumb(1)) // ' ' // trim(write_fmtnumb(ny)) // ' ' &
-        // trim(write_fmtnumb(1)) // ' ' // trim(write_fmtnumb(nz))
+        // trim(write_fmtnumb(offset(3) + 1)) // ' ' // trim(write_fmtnumb(offset(3) + nz))
 
   write(iotest,*) '<VTKFile type="ImageData" version="1.0" byte_order="LittleEndian" >'
   write(iotest,*) ' <ImageData WholeExtent="' // trim(extent) // '" >'
@@ -685,7 +717,7 @@
 
   ! write(iotest,*) '</VTKFile >'
   ! close(iotest)
- end subroutine writeImageDataVTI_islfuid
+ end subroutine writeImageDataVTI_isfluid
 
 end module write_output
 

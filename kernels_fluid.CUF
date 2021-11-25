@@ -2,6 +2,9 @@
     use dimensions_m
     implicit none
 
+    integer(4), constant :: nz_d
+    real,constant        :: cz_d
+
     ! device arrays
     real(4), allocatable, device :: popsR_d(:,:,:,:,:), popsB_d(:,:,:,:,:)
     real(4), allocatable, device :: force_d(:, :,:,:)
@@ -11,8 +14,12 @@
     real(4), allocatable, device :: forceAtoms_d(:,:,:)
     real(8), allocatable, device :: myf_d(:,:), myt_d(:,:)
     real(8), allocatable, device :: myf2_d(:,:), myt2_d(:,:)
-    integer(2), allocatable, device :: listAtoms_d(:)
-    integer(2), allocatable, device :: findAtoms_d(:,:,:,:)
+    ! integer(2), allocatable, device :: listAtoms_d(:)
+    ! integer(2), allocatable, device :: findAtoms_d(:,:,:,:)
+
+    integer, allocatable, device :: matrixAtoms_d(:,:,:,:)
+    integer, allocatable, device :: dim_matAtm_d(:,:,:)
+    integer, parameter :: maxAtomInBlock = 1000
 
     integer(1), allocatable, device :: issub_d(:, :, :)
     integer, device :: rmax_issub_d, sphereMax_d
@@ -21,48 +28,24 @@
     integer, device :: ndouble
     integer, device, allocatable :: exdouble(:), eydouble(:), ezdouble(:)
 
-    integer, device :: stop_d, countmk_d, countrm_d, partVol_d, oldpartVol_d
-    integer, device :: countn2p_d
+    integer, device :: stop_d, countmk_d, countrm_d
+    integer, device, allocatable :: partVol_d(:), oldpartVol_d(:)
+    integer, device :: countn2p_d, countp2n1_d,countp2n2_d
 
     real, device :: minRho = -0.1, minPops = -0.1
+    real, device :: max_vel_d = 0.0
 
     ! Debug
     real, allocatable, device :: debugline_d(:,:,:)
-    real, device :: debugn2pf_d(2000,5)
-    real, device :: debugn2pt_d(2000,5)
+    real, device :: debugn2pf_d(20000,5)
+    real, device :: debugn2pt_d(20000,5)
+
+    real, device :: debugp2n1_d(20000,4)
+    real, device :: debugp2n2_d(20000,4)
+
+    real, device :: debug_rm_d(20000,5)
+    real, device :: debug_mk_d(20000,5)
     integer(2), allocatable, device :: debugfluid_d(:,:,:)
-  
-  contains
 
-    attributes(global) subroutine debug_issub
-      integer :: i,j,k, id, val
-
-      id = threadIdx%x
-
-      do k = -rmax_issub_d,rmax_issub_d
-        do j = -rmax_issub_d,rmax_issub_d
-          do i = -rmax_issub_d,rmax_issub_d
-            val = issub_d(i,j,k)
-            write(*,*) 'CUDA-issub', i,j,k, val
-          enddo
-        enddo
-      enddo
-
-    end subroutine debug_issub
-
-    attributes(device) pure function linear(i,j,k)
-      integer, intent(in) :: i,j,k
-      integer :: linear
-
-      linear = i*1000**2 + j*1000 + k
-    end function linear
-
-    attributes(device) pure function linear2(i,j,k)
-      integer, intent(in) :: i,j,k
-      integer :: linear2
-
-      linear2 = (50+i)*1000**2 + (50+j)*1000 + (50+k)
-    end function linear2
-
-
+    integer(4), constant :: zelvl_d
   end module
