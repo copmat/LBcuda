@@ -4,7 +4,7 @@ FC=mpif90
 CUDAFLAGS = -cuda -gpu=cc70 -O0 -g -Mbounds -Mchkptr -Mchkstk
 CUDAFLAGS = -cuda -gpu=cc70,keepptx -O0 -g
 CUDAFLAGS = -cuda -fast -gpu=cc80,cuda11.4 -DMYDIMESION=128 -DTILE1=128 -DTILE2=1 -DTILE3=1
-CUDAFLAGS = -cuda -fast -gpu=cc70,cuda11.4 -DMYDIMESION=128 -DTILE1=128 -DTILE2=1 -DTILE3=1
+CUDAFLAGS = -cuda -fast -gpu=cc70,cuda11.0 -DMYDIMESION=64 -DTILE1=64 -DTILE2=1 -DTILE3=1
 
 
 

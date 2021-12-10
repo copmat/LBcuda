@@ -96,3 +96,174 @@
        call mpi_abort(MPI_COMM_WORLD, 10, ierr)
 #endif
       end subroutine mystop
+      
+      subroutine open_file_vtk_par(iotest,nn,myname,e_io)
+ 
+!***********************************************************************
+!     
+!     LBsoft subroutine for opening the vtk legacy file
+!     in parallel IO
+!     
+!     licensed under the 3-Clause BSD License (BSD-3-Clause)
+!     author: M. Lauricella
+!     last modification October 2019
+!     
+!***********************************************************************
+  use mpi
+  implicit none
+  
+  integer :: iotest,nn
+  character(len=nn) :: myname
+  integer, intent(out) :: e_io
+  
+  call MPI_FILE_OPEN(MPI_COMM_WORLD,trim(myname), &
+                       MPI_MODE_WRONLY + MPI_MODE_CREATE, &
+                       MPI_INFO_NULL,iotest,e_io)
+  return
+  
+ endsubroutine open_file_vtk_par
+ 
+ subroutine print_header_vtk_par(iotest,offsetsub,nn,header,e_io)
+ 
+!***********************************************************************
+!     
+!     LBsoft subroutine for writing the header part of
+!     in VTK legacy file in parallel IO
+!     
+!     licensed under the 3-Clause BSD License (BSD-3-Clause)
+!     author: M. Lauricella
+!     last modification October 2019
+!     
+!***********************************************************************
+  use mpi
+  implicit none
+  
+  integer, intent(in) :: iotest,offsetsub,nn
+  character(len=500) :: header
+  integer, intent(out) :: e_io
+  
+  integer(kind=MPI_OFFSET_KIND) :: myoffset
+  
+  myoffset=int(offsetsub,kind=MPI_OFFSET_KIND)
+  
+  call MPI_File_write_at(iotest,myoffset,header(1:nn),nn, &
+   MPI_CHARACTER,MPI_STATUS_IGNORE,e_io)
+  
+  return
+  
+ endsubroutine print_header_vtk_par
+ 
+ subroutine print_footer_vtk_par(iotest,offsetsub,footer,e_io)
+ 
+!***********************************************************************
+!     
+!     LBsoft subroutine for writing the footer part of
+!     in VTK legacy file in parallel IO
+!     
+!     licensed under the 3-Clause BSD License (BSD-3-Clause)
+!     author: M. Lauricella
+!     last modification October 2019
+!     
+!***********************************************************************
+  use mpi
+  implicit none
+  
+  integer, intent(in) :: iotest,offsetsub
+  character(len=30) :: footer
+  integer, intent(out) :: e_io
+  
+  integer(kind=MPI_OFFSET_KIND) :: myoffset
+  
+  myoffset=int(offsetsub,kind=MPI_OFFSET_KIND)
+  
+  call MPI_File_write_at(iotest,myoffset,footer(1:30),30, &
+   MPI_CHARACTER,MPI_STATUS_IGNORE,e_io)
+  
+  return
+  
+ end subroutine print_footer_vtk_par
+ 
+ subroutine close_file_vtk_par(iotest,e_io)
+ 
+!***********************************************************************
+!     
+!     LBsoft subroutine for closing the vtk legacy file
+!     in parallel IO
+!     
+!     licensed under the 3-Clause BSD License (BSD-3-Clause)
+!     author: M. Lauricella
+!     last modification October 2019
+!     
+!***********************************************************************
+  use mpi
+  implicit none
+  
+  integer :: iotest
+  integer, intent(out) :: e_io
+  
+  call MPI_FILE_CLOSE(iotest, e_io)
+  
+  return
+  
+ endsubroutine close_file_vtk_par
+ 
+ 
+ subroutine print_binary_1d_vtk_col(iotest,headoff,nbyte,nn,myrank, &
+  globalDims,lDims,mymin,myvar,e_io)
+ 
+!***********************************************************************
+!     
+!     LBsoft subroutine for writing a scalar field with single
+!     precision in VTK legacy binary format in parallel IO
+!     
+!     licensed under the 3-Clause BSD License (BSD-3-Clause)
+!     author: M. Lauricella
+!     last modification October 2019
+!     
+!***********************************************************************
+  use mpi
+  implicit none
+  
+  integer, intent(in) :: iotest,headoff,nbyte,nn,myrank
+  integer, intent(in), dimension(3) :: globalDims,lDims,mymin
+  real(4), intent(in), dimension(:,:,:) :: myvar
+  integer, intent(out) :: e_io
+  
+  integer(kind=MPI_OFFSET_KIND) :: myoffset
+  
+  integer, parameter :: byteint=4
+  
+  integer :: filetypesub
+  integer, parameter :: nbuffsub=0
+  
+  integer :: memDims(3),memOffs(3),mystarts(3),imemtype
+  
+  myoffset=int(headoff,kind=MPI_OFFSET_KIND)
+  
+  mystarts = mymin - 1
+  
+  if(myrank==0)call MPI_File_write_at(iotest,myoffset,int(nbyte,kind=4),1, &
+     MPI_INTEGER,MPI_STATUS_IGNORE,e_io)
+  myoffset = myoffset + 1 * byteint
+  
+  call MPI_Type_create_subarray(3,globalDims,lDims,mystarts, &
+    MPI_ORDER_FORTRAN,MPI_REAL4,filetypesub,e_io)
+        
+  call MPI_Type_commit(filetypesub, e_io)
+   
+  call MPI_File_Set_View(iotest,myoffset,MPI_REAL4,filetypesub, &
+    "native",MPI_INFO_NULL,e_io)
+  ! We need full local sizes: memDims
+  memDims = lDims + 2*nbuffsub
+  memOffs = [ nbuffsub, nbuffsub, nbuffsub ]
+
+  call MPI_TYPE_CREATE_SUBARRAY(3,memDims,lDims,memOffs, &
+   MPI_ORDER_FORTRAN,MPI_REAL4,imemtype,e_io)
+
+  call MPI_TYPE_COMMIT(imemtype,e_io)
+
+  call MPI_FILE_WRITE_ALL(iotest,myvar,1,imemtype,MPI_STATUS_IGNORE,e_io)
+  
+  return
+  
+ end subroutine print_binary_1d_vtk_col

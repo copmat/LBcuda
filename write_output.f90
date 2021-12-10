@@ -1,10 +1,116 @@
  module write_output
     use dimensions_m
+    use, intrinsic ::  iso_c_binding
     implicit none
+    
+    logical, save :: lelittle
 
     ! integer(1)  :: debugInt1(0:nx+1,0:ny+1,0:nz+1)
     ! real        :: debugReal(0:nx+1,0:ny+1,0:nz+1)
  contains
+ 
+ subroutine test_little_endian(ltest)
+ 
+!***********************************************************************
+!     
+!     LBsoft subroutine for checking if the computing architecture
+!     is working in little-endian or big-endian
+!     
+!     licensed under the 3-Clause BSD License (BSD-3-Clause)
+!     author: M. Lauricella
+!     last modification October 2019
+!     
+!***********************************************************************
+ 
+  implicit none 
+  integer, parameter :: ik1 = selected_int_kind(2) 
+  integer, parameter :: ik4 = selected_int_kind(9) 
+   
+  logical, intent(out) :: ltest
+   
+  if(btest(transfer(int((/1,0,0,0/),ik1),1_ik4),0)) then 
+    !it is little endian
+    ltest=.true.
+  else 
+    !it is big endian
+    ltest=.false.
+  end if 
+   
+  return
+   
+ end subroutine test_little_endian 
+ 
+ function space_fmtnumb(inum)
+ 
+!***********************************************************************
+!     
+!     LBsoft function for returning the string of six characters 
+!     with integer digits and leading spaces to the left
+!     originally written in JETSPIN by M. Lauricella et al.
+!     
+!     licensed under the 3-Clause BSD License (BSD-3-Clause)
+!     author: M. Lauricella
+!     last modification October 2019
+!     
+!***********************************************************************
+ 
+  implicit none
+
+  integer,intent(in) :: inum
+  character(len=6) :: space_fmtnumb
+  integer :: numdigit,irest
+  real(kind=8) :: tmp
+  character(len=22) :: cnumberlabel
+
+  numdigit=dimenumb(inum)
+  irest=6-numdigit
+  if(irest>0)then
+    write(cnumberlabel,"(a,i8,a,i8,a)")"(a",irest,",i",numdigit,")"
+    write(space_fmtnumb,fmt=cnumberlabel)repeat(' ',irest),inum
+  else
+    write(cnumberlabel,"(a,i8,a)")"(i",numdigit,")"
+    write(space_fmtnumb,fmt=cnumberlabel)inum
+  endif
+  
+  return
+
+ end function space_fmtnumb
+ 
+ function space_fmtnumb12(inum)
+ 
+!***********************************************************************
+!     
+!     LBsoft function for returning the string of six characters 
+!     with integer digits and leading TWELVE spaces to the left
+!     originally written in JETSPIN by M. Lauricella et al.
+!     
+!     licensed under the 3-Clause BSD License (BSD-3-Clause)
+!     author: M. Lauricella
+!     last modification October 2019
+!     
+!***********************************************************************
+ 
+  implicit none
+
+  integer,intent(in) :: inum
+  character(len=12) :: space_fmtnumb12
+  integer :: numdigit,irest
+  real(kind=8) :: tmp
+  character(len=22) :: cnumberlabel
+
+  numdigit=dimenumb(inum)
+  irest=12-numdigit
+  if(irest>0)then
+    write(cnumberlabel,"(a,i8,a,i8,a)")"(a",irest,",i",numdigit,")"
+    write(space_fmtnumb12,fmt=cnumberlabel)repeat(' ',irest),inum
+  else
+    write(cnumberlabel,"(a,i8,a)")"(i",numdigit,")"
+    write(space_fmtnumb12,fmt=cnumberlabel)inum
+  endif
+  
+  return
+
+ end function space_fmtnumb12
 
  subroutine writeImageDataVTI(nz, fname, step, varname, rhoR, textual)
   use dimensions_m
@@ -15,11 +121,35 @@
   real(4),allocatable,intent(in) :: rhoR(:,:,:)
   logical,intent(in) :: textual
   character(len=120) :: fnameFull,extent
-  integer i,j,k, iotest
+  integer i,j,k,kk, iotest
   integer(4)         :: length
-
-
+  integer :: e_io
+  
+  character(1), parameter:: end_rec = char(10)
+  character(1) :: string1
+  character(len=500) :: headervtk
+  character(len=30) :: footervtk
+  integer :: iend,iini,nele,toffset,new_toffset,bytechar,byter4,byter8
+  integer :: indent,ioffset,vtkoffset,ndatavtk,nn,nheadervtk,endoff
+  integer :: new_myoffset,nnloc,byteint
+  character(len=8) :: namevar
+  integer, parameter :: ncomp=1
+  integer, parameter :: ndimvtk=1
+  character(len=*),parameter :: topology='ImageData' 
+  real(kind=4), allocatable, dimension(:,:,:) :: service1
+  
+  iini=0
+  bytechar=kind(end_rec)
+  byteint=kind(iini)
+  byter4  = 4
+  byter8  = 8
+  
+  nn=glx*gly*glz
+  
   iotest = 55
+  
+  if (nprocs==1) then
+  
   fnameFull = 'output/' // trim(fname) // '_' // trim(write_fmtnumb(myrank)) // '.' //trim(write_fmtnumb(step)) // '.vti'
   open(unit=iotest,file=trim(fnameFull),status='replace',action='write')
 
@@ -70,8 +200,198 @@
 
   write(iotest,*) '</VTKFile >'
   close(iotest)
- end subroutine writeImageDataVTI
+  
+  else
+  
+  fnameFull=repeat(' ',120)
+  fnameFull = 'output/' // trim(fname) // '.' //trim(write_fmtnumb8(step)) // '.vti'
+  
+  call open_file_vtk_par(iotest,120,fnameFull,e_io)
+  
+  
+  
+    
+  namevar=repeat(' ',8)
+  namevar=trim(fname)
+    
+  extent =  space_fmtnumb(1) // ' ' // space_fmtnumb(glx) // ' ' &
+      // space_fmtnumb(1) // ' ' // space_fmtnumb(gly) // ' ' &
+      // space_fmtnumb(1) // ' ' // space_fmtnumb(glz)
+    
+  indent=0
+    
+  toffset=0
+  headervtk=repeat(' ',500)
+  iend=0
+  
+  iini=iend+1
+  nele=22
+  iend=iend+nele
+  headervtk(iini:iend)='<?xml version="1.0"?>'//end_rec
+  new_toffset=toffset
+  new_toffset = new_toffset + nele * bytechar
+    
+  iini=iend+1
+  nele=67
+  iend=iend+nele
+  if(lelittle)then  
+    headervtk(iini:iend) = '<VTKFile type="'//trim(topology)// &
+     '" version="0.1" byte_order="LittleEndian">'//end_rec
+  else
+    headervtk(iini:iend) = '<VTKFile type="'//trim(topology)// &
+     '" version="0.1" byte_order="BigEndian">   '//end_rec
+  endif
+  
+  new_toffset = new_toffset + 67 * bytechar
+  
+  indent = indent + 2
+  iini=iend+1
+  nele=70
+  iend=iend+nele
+  headervtk(iini:iend) = repeat(' ',indent)//'<'//trim(topology)//' WholeExtent="'//&
+               trim(extent)//'">'//end_rec
+  
 
+  new_toffset = new_toffset + 70 * bytechar
+    
+  indent = indent + 2
+  iini=iend+1
+  nele=63
+  iend=iend+nele
+  headervtk(iini:iend) = repeat(' ',indent)//'<Piece Extent="'//trim(extent)//'">'//end_rec
+  
+  new_toffset = new_toffset + 63 * bytechar
+    
+  ! initializing offset pointer
+  ioffset = 0 
+  
+  indent = indent + 2
+  iini=iend+1
+  nele=18
+  iend=iend+nele
+  headervtk(iini:iend)=repeat(' ',indent)//'<PointData>'//end_rec
+  
+  new_toffset = new_toffset + 18 * bytechar
+  
+  indent = indent + 2
+  iini=iend+1
+  nele=115
+  iend=iend+nele
+  
+    
+  
+  write(string1,'(i1)')ncomp
+   headervtk(iini:iend)=repeat(' ',indent)//'<DataArray type="Float32" Name="'// &
+   namevar//'" NumberOfComponents="'//string1// '" '//&
+   'format="appended" offset="'//space_fmtnumb12(ioffset)//'"/>'//end_rec
+  
+  new_toffset = new_toffset + 115 * bytechar
+ 
+  
+  indent = indent - 2
+  iini=iend+1
+  nele=19
+  iend=iend+nele
+  headervtk(iini:iend)=repeat(' ',indent)//'</PointData>'//end_rec
+  
+  new_toffset = new_toffset + 19 * bytechar
+  
+  
+  indent = indent - 2
+  iini=iend+1
+  nele=13
+  iend=iend+nele
+  headervtk(iini:iend)=repeat(' ',indent)//'</Piece>'//end_rec
+  
+  
+  new_toffset = new_toffset + 13 * bytechar
+  
+  
+  indent = indent - 2
+  iini=iend+1
+  nele=15
+  iend=iend+nele
+  headervtk(iini:iend)=repeat(' ',indent)//'</'//trim(topology)//'>'//end_rec
+  
+  new_toffset = new_toffset + 15 * bytechar
+   
+  
+  iini=iend+1
+  nele=32
+  iend=iend+nele
+  headervtk(iini:iend)=repeat(' ',indent)//'<AppendedData encoding="raw">'//end_rec
+  
+  new_toffset = new_toffset + 32 * bytechar
+  
+  iini=iend+1
+  nele=1
+  iend=iend+nele
+  headervtk(iini:iend)='_'
+  
+  new_toffset = new_toffset + 1 * bytechar
+  
+  vtkoffset=new_toffset
+  toffset=new_toffset+byteint+ndimvtk*nn*byter4
+  ndatavtk=ndimvtk*nn*byter4
+  nheadervtk=iend
+  
+  if(myrank==0)then
+    call print_header_vtk_par(iotest,0,nheadervtk,headervtk,e_io)  
+  endif
+  
+  footervtk=repeat(' ',30)
+  iini=0
+  iend=iini
+  
+  iini=iend+1
+  nele=1
+  iend=iend+nele
+  footervtk(iini:iend)=end_rec
+  
+  new_myoffset = toffset
+  new_myoffset = new_myoffset + 1 * bytechar
+  
+  iini=iend+1
+  nele=18
+  iend=iend+nele
+  footervtk(iini:iend)=repeat(' ',indent)//'</AppendedData>'//end_rec
+  
+  new_myoffset = new_myoffset + 18 * bytechar
+  
+  iini=iend+1
+  nele=11
+  iend=iend+nele
+  footervtk(iini:iend)='</VTKFile>'//end_rec
+  
+  endoff=vtkoffset+ndatavtk+byteint
+  if(myrank==0)call print_footer_vtk_par(iotest,endoff,footervtk,e_io)
+  nnloc=nx*ny*nz
+  allocate(service1(1:nx,1:ny,offset(3)+1:offset(3)+nz))
+  service1(1:nx,1:ny,offset(3)+1:offset(3)+nz)=0.0
+  kk=0
+  do k=offset(3)+1,offset(3)+nz
+    kk=kk+1
+    do j=1,ny
+      do i=1,nx
+        !if(myfluid(i,j,kk)==3)cycle
+        service1(i,j,k)=real(rhoR(i,j,kk),kind=4)
+      enddo
+    enddo
+  enddo
+  
+  
+  call print_binary_1d_vtk_col(iotest,vtkoffset,ndatavtk,nnloc,myrank, &
+     gsizes,lsizes,start_idx,service1,e_io)
+  
+  call close_file_vtk_par(iotest,e_io)
+  
+  
+  
+  endif
+  
+ end subroutine writeImageDataVTI
+ 
+ 
 
  subroutine writeImageDataVTI_3d(nz, fname, step, vel, textual)
   use dimensions_m

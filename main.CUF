@@ -63,7 +63,11 @@ program TestLB
   flipflop = 1
 
   stop_d = 0
-
+  
+  
+  gsizes(1)=glx
+  gsizes(2)=gly
+  gsizes(3)=glz
 #ifdef SERIAL
   myrank = 0
   nprocs = 1
@@ -80,7 +84,14 @@ program TestLB
   call setupMPI(nz)
   nz_d = glz / nprocs
 #endif
-
+  lsizes(1)=nx
+  lsizes(2)=ny
+  lsizes(3)=nz
+  start_idx(1)=1
+  start_idx(2)=1
+  start_idx(3)=offset(3)+1
+  
+  
   call readParameters
 
   call setupGPUgridAndAlloc
@@ -1171,6 +1182,9 @@ program TestLB
           call system(makedirectory)
         endif
       endif
+      
+      call test_little_endian(lelittle)
+      
     end subroutine makeOutput
 
     
