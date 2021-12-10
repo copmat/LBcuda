@@ -50,6 +50,8 @@ program TestLB
   real(4) :: omega
   ! Initial fluid velocity
   real :: vx,vy,vz
+  ! Input type
+  integer :: initType = -1
   
   ! Debug
   real,allocatable :: debugline(:,:,:)
@@ -75,8 +77,8 @@ program TestLB
   call MPI_comm_size(MPI_COMM_WORLD, nprocs, ierr)
   call MPI_comm_rank(MPI_COMM_WORLD, myrank, ierr)
   nz = glz / nprocs
-  nz_d = glz / nprocs
   call setupMPI(nz)
+  nz_d = glz / nprocs
 #endif
 
   call readParameters
@@ -93,6 +95,9 @@ program TestLB
 
   call setupRho_Pops
 
+  call fixPeriodic(.true., .true., "after_setup")
+
+  ! if (wantOut) call DumpBorderPlanez("step_", 0, 1)  
   if (wantOut) call OutputVTK("step_", 0, 1)
 
   
@@ -287,7 +292,8 @@ program TestLB
     endif
 
     if (wantOut) then
-       if (mod(step,niterVTK)==0) call OutputVTK("step_",step, flipflop)
+      ! if (mod(step,niterVTK)==0) call DumpBorderPlanez("step_",step, flipflop)      
+      if (mod(step,niterVTK)==0) call OutputVTK("step_",step, flipflop)
     endif
     
   enddo
@@ -349,45 +355,49 @@ program TestLB
       read(11, *, end=120) nIterVTK
       found = 3
       
-      read(11, *, end=120) vx,vy,vz
+      ! Number of iterations for input Type
+      read(11, *, end=120) initType
       found = 4
+      
+      read(11, *, end=120) vx,vy,vz
+      found = 5
 
       read(11, *, end=120) string, numAtoms
-      found = 5
+      found = 6
       if (string(1:3) == 'YES') then
         withParticles = .true.
       else if (string(1:3) == 'NO') then
         withParticles = .false.
       else
-        found = 4
+        found = 5
       endif
 
       if (withParticles) then
         max_vel_found = 0
         read(11, *, end=120) ext_fxx,ext_fyy,ext_fzz
-        found = 6
+        found = 7
 
         read(11, *, end=120) string, max_vel
-        found = 7
+        found = 8
         if (string(1:3) == 'MAX_PARTICLE_VEL') then
           max_vel_found = 1
         else
-          found = 6
+          found = 7
         endif
 
         read(11, *, end=120) string
-        found = 8
+        found = 9
         if (string(1:3) == 'YES') then
           lrotate = .true.
         else if (string(1:3) == 'NO') then
           lrotate = .false.
         else
-          found = 7
+          found = 8
         endif
 
         if (lrotate) then
           read(11, *, end=120) ext_tqx,ext_tqy,ext_tqz
-          found = 9
+          found = 10
         endif
       endif
 
@@ -396,18 +406,19 @@ program TestLB
 
       ! write (*,*) 'found',found, withParticles, lrotate
 
-      if ((lrotate .and. found /= 9) .or. &
-          (.not. lrotate .and. withParticles .and. found /= 8) .or. &
-          .not. withParticles .and. found /= 5) then        
+      if ((lrotate .and. found /= 10) .or. &
+          (.not. lrotate .and. withParticles .and. found /= 9) .or. &
+          .not. withParticles .and. found /= 6) then
         if (found<1) write (*,*) 'Number of iterations not found'
         if (found<2) write (*,*) 'nIterOut not found'
         if (found<3) write (*,*) 'nIterVTK not found'
-        if (found<4) write (*,*) 'vx,vy,vz not found'
-        if (found<5) write (*,*) 'withParticles not found'
-        if (withParticles .and. found<6) write (*,*) 'ext_fxx,ext_fyy,ext_fzz not found'
+        if (found<4) write (*,*) 'initType not found'
+        if (found<5) write (*,*) 'vx,vy,vz not found'
+        if (found<6) write (*,*) 'withParticles not found'
+        if (withParticles .and. found<7) write (*,*) 'ext_fxx,ext_fyy,ext_fzz not found'
         if (withParticles .and. max_vel_found<1) write (*,*) 'MAX_PARTICLE_VEL not found'        
-        if (withParticles .and. found<8) write (*,*) 'lrotate not found'
-        if (lrotate .and. found<9) write (*,*) 'ext_tqx,ext_tqy,ext_tqz not found'
+        if (withParticles .and. found<9) write (*,*) 'lrotate not found'
+        if (lrotate .and. found<10) write (*,*) 'ext_tqx,ext_tqy,ext_tqz not found'
         call mystop
       endif
     end subroutine
@@ -439,11 +450,11 @@ program TestLB
       integer      :: reqs_down(5)
       integer      :: tag
 
-      call abortOnLastErrorAndSync(msg,step, flipflop)
-
       if (withCG) then
         call isfluid_per_x2<<<dimGridx, dimBlock2>>>(step, flipflop)
         call isfluid_per_y2<<<dimGridy, dimBlock2>>>(step, flipflop)
+
+        call abortOnLastErrorAndSync(msg,step, flipflop)
 
         ! if it is the same task, there's no need to send/recv data
         if(up(2) == myrank) then
@@ -517,10 +528,10 @@ program TestLB
 
           call bc_corners<<<dimGridz, dimBlock2>>>(step, flipflop)
 #else
-          call abortOnLastErrorAndSync(msg,step, flipflop)
-
           call bc_per_x2<<<dimGridx, dimBlock2>>>(step, flipflop, faiPops,faiRho)
           call bc_per_y2<<<dimGridy, dimBlock2>>>(step, flipflop, faiPops,faiRho)
+
+          call abortOnLastErrorAndSync(msg,step, flipflop)
 
 ! if it is the same task, there's no need to send/recv data
           if(up(2) == myrank) then
@@ -759,6 +770,8 @@ program TestLB
             call bc_edge_y2<<<(ny+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)  
             call bc_edge_z2<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
           else
+            ! NON VA FATTO
+            
 !             mpi rho+pop myrank <--> up(2)
              call bc_edge_z2<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
           endif
@@ -1078,6 +1091,7 @@ program TestLB
       write(*,fmt=103) 'Lattice box', glx,gly,glz
       write(*,fmt=100) 'nIters',nIter
       write(*,fmt=100) 'nIterOut',nIterOut
+      write(*,fmt=100) 'initType',initType
 
       if (withCG) then
         write(*,fmt=100) 'Fluid components', 2
@@ -1388,32 +1402,38 @@ program TestLB
       character(len=120) :: mynamefile
       integer :: i,j,k,l, iosub = 55
 
-      mynamefile=repeat(' ',120)
-      mynamefile='output/'//trim(filenam)//write_fmtnumb(step)//'.'//write_fmtnumb(myrank)//'.dat'
-      open(unit=iosub, file=trim(mynamefile), status='replace')
+!       mynamefile=repeat(' ',120)
+!       mynamefile='output/'//trim(filenam)//write_fmtnumb(step)//'.'//write_fmtnumb(myrank)//'.dat'
+!       open(unit=iosub, file=trim(mynamefile), status='replace')
+        
+!       do k=0,nz+1
+!         do j=0,ny+1
+!           do i=0,nx+1
+!               do l=0,npops-1
+!     !!                              1,2,3,4,    5,		        6,         
+!                 write(iosub,fmt=200)i,j,k,l,pop_pinned(i,j,k,l), popB_pinned(i,j,k,l)
+! 200    format(4I5,' ', 2F20.15)
+!               enddo
+!           enddo
+!         enddo
+!       enddo    
+!       close(iosub)
     
       mynamefile=repeat(' ',120)
       mynamefile='output/'//trim(filenam)//write_fmtnumb(step)//'.'//write_fmtnumb(myrank)//'.dat1'
       open(unit=iosub+1,file=trim(mynamefile),status='replace')
     
-      do k=1,nz
-        do j=1,ny
-          do i=1,nx
-              do l=0,npops-1
-    !!                              1,2,3,4,    5,		        6,         
-                write(iosub,fmt=200)i,j,k,l,pop_pinned(i,j,k,l), popB_pinned(i,j,k,l)
-200    format(4I5,' ', 2F20.15)
-              enddo
-            
-    !!                               1,2,3,      4,          5,           6
-              write(iosub+1,fmt=201) i,j,k, rhoR(i,j,k), rhoB(i,j,k), myfluid(i,j,k, flip)
-201    format(3I5,' ', 2F20.15, I2)
+      do k=0,nz+1
+        do j=0,ny+1
+          do i=0,nx+1            
+    !!                               1,2,3,      4,          5,       !    6
+              write(iosub+1,fmt=201) i,j,offset(3)+k, rhoR(i,j,k), rhoB(i,j,k)  !, myfluid(i,j,k, flip)
+201    format(3I5,' ', 2F20.12, I2)
           enddo
         enddo
       enddo
     
-      close(iosub)
-      ! close(iosub+1)
+      close(iosub+1)
    end subroutine print_rho_pops2
 
    subroutine dumpPartvol(step)
@@ -1485,7 +1505,8 @@ program TestLB
       integer, intent(in) :: step, flip
       character(len=*), intent(in) :: fname
       integer(8) :: c_start,c_stop,diff_xfer,c_start2, pops_time
-      character(len=120) :: mynamefile
+      character(len=120) :: mynamefile, mynamefile0, mynamefile1
+      real(4)     :: plane0(nx+2,ny+2), plane1(nx+2,ny+2)
       
 
       ! if (fname(1:5) /= 'step_' .and. fname(1:4)/= 'stop') return
@@ -1545,8 +1566,8 @@ program TestLB
           mynamefile = trim(fname)//'rhoB'
          endif
 
-         ! call writeImageDataVTI(nz, mynamefile,step, 'rho2', rhoB, textVTK)
-         ! call writeImageDataVTI(nz, "phase",step, 'phase', phase, textVTK)
+         call writeImageDataVTI(nz, mynamefile,step, 'rho2', rhoB, textVTK)
+         call writeImageDataVTI(nz, "phase",step, 'phase', phase, textVTK)
       endif
 
       mynamefile = repeat(' ',120)
@@ -1556,8 +1577,7 @@ program TestLB
         mynamefile = trim(fname)//'rho'
       endif
       call writeImageDataVTI(nz, mynamefile,step, 'rho1', rhoR, textVTK)
-
-      ! call writeImageDataVTI_3d(nz, "vel",step, vel, textVTK)
+      call writeImageDataVTI_3d(nz, "vel",step, vel, textVTK)
 
       if (withParticles) then
         call system_clock(c_start2)
@@ -1598,6 +1618,64 @@ program TestLB
       endif
 
    end subroutine OutputVTK
+
+
+   subroutine DumpBorderPlanez(fname, step, flip)
+    implicit none
+    integer, intent(in) :: step, flip
+    character(len=*), intent(in) :: fname
+    integer(8) :: c_start,c_stop,diff_xfer,c_start2, pops_time
+    character(len=120) :: mynamefile0, mynamefile1
+    integer     :: l
+    real(4)     :: plane0(nx+2,ny+2), plane1(nx+2,ny+2)
+    
+
+    call system_clock(c_start)
+
+    do l = 0, -1
+      istat = cudaMemcpy(plane0, popsR_d(:,:,0,l,flip), (nx+2)*(ny+2) )
+      istat = cudaMemcpy(plane1, popsR_d(:,:,nz+1,l,flip), (nx+2)*(ny+2) )
+      if (istat/=0) write(*,*) 'status after copy R:',istat, 'flipflop',flipflop
+
+      istat = cudaDeviceSynchronize
+      if (istat/=0) write(*,*) 'status after deviceSync',istat
+
+      if (fname(1:5) == 'step_') then
+        mynamefile0 = 'plane0_popR' // trim(write_fmtnumb0(l,1))
+        mynamefile1 = 'plane1_popR' // trim(write_fmtnumb0(l,1))
+      else
+        mynamefile0 = trim(fname)//'plane0_popR' // trim(write_fmtnumb0(l,1))
+        mynamefile1 = trim(fname)//'plane1_popR' // trim(write_fmtnumb0(l,1))
+      endif
+
+      call writeImageDataVTI_2d(mynamefile0,step, 'pop'// trim(write_fmtnumb0(l,1)), plane0, 0, textVTK)
+      call writeImageDataVTI_2d(mynamefile1,step, 'pop'// trim(write_fmtnumb0(l,1)), plane1, nz+1, textVTK)
+    enddo
+
+    call system_clock(c_stop)
+    diff_xfer = c_stop-c_start
+
+    istat = cudaMemcpy(plane0, rhoR_d(:,:,0), (nx+2)*(ny+2) )
+    if (istat/=0) write(*,*) 'status after copy R0:',istat
+    istat = cudaDeviceSynchronize
+    if (istat/=0) write(*,*) 'status after R0 deviceSync',istat
+
+    istat = cudaMemcpy(plane1, rhoR_d(:,:,nz+1), (nx+2)*(ny+2) )
+    if (istat/=0) write(*,*) 'status after copy R1:',istat
+    istat = cudaDeviceSynchronize
+    if (istat/=0) write(*,*) 'status after R1 deviceSync',istat
+
+    if (fname(1:5) == 'step_') then
+      mynamefile0 = 'plane0_rhoR'
+      mynamefile1 = 'plane1_rhoR'
+    else
+      mynamefile0 = trim(fname)//'plane0_rhoR'
+      mynamefile1 = trim(fname)//'plane1_rhoR'
+    endif
+
+    call writeImageDataVTI_2d(mynamefile0,step, 'rho1', plane0, 0, textVTK)
+    call writeImageDataVTI_2d(mynamefile1,step, 'rho1', plane1, nz+1, textVTK)
+  end subroutine
 
 
    subroutine spherical_template
@@ -2020,7 +2098,7 @@ program TestLB
     implicit none
     integer, intent(in) :: step, flipflop
     character(len=*), intent(in) :: msg
-    integer :: gpustop
+    integer :: gpustop, gpustop_forall, ierr
 
     istat = cudaGetLastError()
     if (istat/=0) then
@@ -2037,9 +2115,14 @@ program TestLB
     endif
 
     gpustop = stop_d
-    if (gpustop/=0) then
-      write(*,*) 'status after ',msg,' mystop:', gpustop
-      write(*,*) 'Exiting ....'
+    call mpi_allreduce(gpustop, gpustop_forall, 1,MPI_INTEGER, &
+          MPI_SUM, lbecomm, ierr)
+
+    if (gpustop_forall/=0) then
+      if (gpustop/=0) then
+        write(*,*) 'status after ',msg,' mystop:', gpustop
+        write(*,*) 'Exiting ....'
+      endif
       call OutputVTK("stop-",step, flipflop)
       call mystop
     endif
@@ -2134,11 +2217,12 @@ program TestLB
 
    subroutine setupRho_Pops()
     implicit none
-    integer :: initType = 1
     integer :: minx,maxx, miny,maxy, minz,maxz
 
 
     if (myrank== 0) write(*,*) 'Initial setup...'
+    rhoR = 0
+    rhoB = 0
 
     if (withCG) then
       if (myrank== 0) write(*,*) 'Initial setup red & blue pops...'
@@ -2167,7 +2251,10 @@ program TestLB
         call read_and_setRed_Blue
         call read_and_setPops
 
-      else      
+      else if (initType == 5) then
+        call setupCyl<<<dimGrid, dimBlock>>>(vx,vy,vz)
+
+      else if (initType == 6) then 
         call set_random_dens_fluids
 
         istat = cudaMemcpy(rhoR_d, rhoR(:,:,:), (nx+2)*(ny+2)*(nz+2) )
@@ -2181,6 +2268,10 @@ program TestLB
         if (istat/=0) write(*,*) 'status after sync rho B',istat
 
         call setupPops<<<dimGrid, dimBlock>>>(vx,vy,vz)
+
+      else
+        write(*,*) 'Wront init type=', initType
+        call mystop
       endif
 
       if (withParticles) then
@@ -2204,10 +2295,13 @@ program TestLB
 
   subroutine set_random_dens_fluids
     implicit none
-    integer :: i,j,k
+    integer :: i,j,k, k1
     logical :: linit_seed = .false.
     real, parameter :: meanR = 0.5, stdevR = 1.0e-4
     real, parameter :: meanB = 0.5, stdevB = 1.0e-4
+    real :: localRhor, myRandom
+    INTEGER :: randomSZ
+    integer, allocatable :: seed(:)
     
     if(linit_seed)then
       do k=1, nz
@@ -2217,17 +2311,36 @@ program TestLB
           enddo
         enddo
       enddo
-    else  
-      do k=1, nz
+    else
+      call RANDOM_SEED (size=randomSZ)
+      write (*, *) 'Random seed size=', randomSZ
+      allocate(seed(randomSZ))
+      call random_seed(get=seed)
+      write (*, *) seed
+      
+      do k1=1, glz
         do j=1, ny
           do i=1, nx
-            rhoR(i,j,k) = meanR + stdevR*gauss_noseeded(i,j,k,1)
-            if (rhoR(i,j,k)<minRho .or. rhoR(i,j,k)>10) then
-              write(*,fmt=20) 'rhoR', i,j,k, rhoR(i,j,k)
-20  format('set_random_dens_fluids]Fixing range error ', a, 3i8, f10.8)
-              rhoR(i,j,k) = meanR   ! call mystop
+            ! localRhor  = meanR + stdevR*gauss_noseeded(i,j,k,1)
+
+            call RANDOM_NUMBER (myRandom)
+            localRhor  = meanR + stdevR*myRandom
+
+            ! localRhor = 1000 * k1 + j + i*0.001
+
+            if (offset(3)+1<=k1 .and. k1<=offset(3)+nz) then
+              k = k1 - offset(3)
+              rhoR(i,j,k) = localRhor
+              if (rhoR(i,j,k)<minRho .or. rhoR(i,j,k)>10) then
+                write(*,fmt=20) 'rhoR', i,j,k, rhoR(i,j,k)
+  20  format('set_random_dens_fluids]Fixing range error ', a, 3i8, f10.8)
+                rhoR(i,j,k) = meanR   ! call mystop
+              endif
+              rhoB(i,j,k) = 1.0 - rhoR(i,j,k)
+            else
+              if (j==1 .and. i==1) write (*,*) 'skipping k=', k1
             endif
-            rhoB(i,j,k) = 1.0 - rhoR(i,j,k)
+
           enddo
         enddo
       enddo  

@@ -171,7 +171,7 @@
     ! Particles PBC
     real, parameter :: cx=real(nx+1) * HALF
     real, parameter :: cy=real(ny+1) * HALF
-    !real, parameter :: cz=real(nz+1) * HALF
+    real, parameter :: cz=real(glz+1) * HALF
 
     ! Device constants...
     integer, dimension(0:npops-1), constant :: ex_d,ey_d,ez_d

@@ -1,7 +1,8 @@
-1000		!niter  number of iterations
-100		!stat print on screen every n
-100000		!vtk print every n
-0.01 0.0 0.0	! vx,vy,vz
+2000		!niter  number of iterations
+10
+10		!vtk print every n
+1               ! init TYPE 1=droplet, 2=planez, 3=read Rho, 4=read all, 5=cylinder, 6=RandomR+ b=1-R
+0.05 0.05 0.05	! vx,vy,vz
 NO 0		! with PARTICLES
 0.0 0.0 0.0	! ext_fxx,ext_fyy,ext_fzz
 NO		! with ROTATION

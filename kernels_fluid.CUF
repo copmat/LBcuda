@@ -46,6 +46,4 @@
     real, device :: debug_rm_d(20000,5)
     real, device :: debug_mk_d(20000,5)
     integer(2), allocatable, device :: debugfluid_d(:,:,:)
-
-    integer(4), constant :: zelvl_d
   end module

@@ -58,8 +58,8 @@
     open(unit=iotest,file=trim(fnameFull),status='old',position='append', &
                 access='stream',form='unformatted',action='write')
     write(iotest) '_'
-    length = 4*nx*ny*nz
-    write(iotest) length, rhoR(1:nx,1:ny,1:nz)
+    length = 4*(nx+0)*(ny+0)*(nz+0)
+    write(iotest) length, rhoR(1:nx, 1:ny, 1:nz)
     close(iotest)
 
     open(unit=iotest,file=trim(fnameFull),status='old',position='append', &
@@ -362,6 +362,25 @@
     write(write_fmtnumb8,fmt=cnumberlabel)inum
   endif
  end function write_fmtnumb8
+
+ function write_fmtnumb0(inum, sz)
+  implicit none
+  integer,intent(in) :: inum, sz
+  character(len=6) :: write_fmtnumb0
+  integer :: numdigit,irest
+  real :: tmp
+  character(len=22) :: cnumberlabel
+
+  numdigit = dimenumb(inum)
+  irest = sz - numdigit
+  if(irest>0)then
+    write(cnumberlabel,"(a,i8,a,i8,a)")"(a",irest,",i",numdigit,")"
+    write(write_fmtnumb0,fmt=cnumberlabel)repeat('0',irest),inum
+  else
+    write(cnumberlabel,"(a,i8,a)")"(i",numdigit,")"
+    write(write_fmtnumb0,fmt=cnumberlabel)inum
+  endif
+ end function write_fmtnumb0
 
 
  subroutine moments1Fl(nz, pops, rhoR,vel)
@@ -718,6 +737,72 @@
   ! write(iotest,*) '</VTKFile >'
   ! close(iotest)
  end subroutine writeImageDataVTI_isfluid
+
+
+ subroutine writeImageDataVTI_2d(fname, step, varname, plane, z, textual)
+    use dimensions_m
+    implicit none
+    integer(4), intent(in) :: z
+    character(len=*),intent(in) :: fname, varname
+    integer,intent(in) :: step
+    real(4)            :: plane(nx+2,ny+2)
+    logical,intent(in) :: textual
+    character(len=120) :: fnameFull,extent
+    integer i,j,k, iotest
+    integer(4)         :: length
+  
+  
+    iotest = 55
+    fnameFull = 'output/' // trim(fname) // '_' // trim(write_fmtnumb(myrank)) // '.' //trim(write_fmtnumb(step)) // '.vti'
+    open(unit=iotest,file=trim(fnameFull),status='replace',action='write')
+  
+    extent =  trim(write_fmtnumb(0)) // ' ' // trim(write_fmtnumb(nx+1)) // ' ' &
+          // trim(write_fmtnumb(0)) // ' ' // trim(write_fmtnumb(ny+1)) // ' ' &
+          // trim(write_fmtnumb(offset(3) + z)) // ' ' // trim(write_fmtnumb(offset(3) + z))
+  
+    write(iotest,*) '<VTKFile type="ImageData" version="1.0" byte_order="LittleEndian" >'
+    write(iotest,*) ' <ImageData WholeExtent="' // trim(extent) // '" >'
+    write(iotest,*) ' <Piece Extent="' // trim(extent) // '">'
+    write(iotest,*) '   <PointData>'
+  
+    if (textual) then
+      write(iotest,*) '    <DataArray type="Float32" Name="',trim(varname),'" format="ascii" >'
+  
+      
+      do j=0,ny+1
+        do i=0,nx+1
+          write(iotest,fmt='("     ", F20.8)') plane(i,j)
+        enddo
+      enddo
+  
+      write(iotest,*) '    </DataArray>'
+      write(iotest,*) '   </PointData>'
+      write(iotest,*) ' </Piece>'
+      write(iotest,*) ' </ImageData>'
+    else
+      write(iotest,*) '    <DataArray type="Float32" Name="',trim(varname),'" format="appended" offset="0" />'
+      write(iotest,*) '   </PointData>'
+      write(iotest,*) ' </Piece>'
+      write(iotest,*) ' </ImageData>'
+      write(iotest,*) ' <AppendedData encoding="raw">'
+      close(iotest)
+  
+      open(unit=iotest,file=trim(fnameFull),status='old',position='append', &
+                  access='stream',form='unformatted',action='write')
+      write(iotest) '_'
+      length = 4*(nx+2)*(ny+2)
+      write(iotest) length, plane(0:nx+1, 0:ny+1)
+      close(iotest)
+  
+      open(unit=iotest,file=trim(fnameFull),status='old',position='append', &
+                  action='write')
+      write(iotest,*) ''
+      write(iotest,*) ' </AppendedData>'
+    endif
+  
+    write(iotest,*) '</VTKFile >'
+    close(iotest)
+   end subroutine writeImageDataVTI_2d
 
 end module write_output
 

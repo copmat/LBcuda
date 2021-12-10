@@ -9,7 +9,7 @@
       integer(4), intent(in) :: nz
       character*15 file_name5
 
-      integer:: i, istat, ndev
+      integer:: i, istat, ndev, num_gpu
 
 !      call mpi_init(ierr)
 !      call MPI_comm_size(MPI_COMM_WORLD, nprocs, ierr)
@@ -63,13 +63,23 @@
                                MPI_INFO_NULL, localcomm, ierr)
       call MPI_comm_size(localcomm, ndev, ierr)
       call MPI_Comm_rank(localcomm, mydev, ierr)
-      mydev = 0; !istat = cudaSetDevice(mydev)
+
+      istat = cudaGetDeviceCount(num_gpu)
+      mydev = mod(mydev, num_gpu)
+      ! mydev = 0
+      istat = cudaSetDevice(mydev)
+      if (istat/=0) then
+            write(*,*) 'status after cudaSetDevice:', cudaGetErrorString(istat)
+            write(*,*) 'Exiting ....'
+            call mystop
+      endif
 
       write (6,*) 'MPI-DEBUG',myrank,'CPU offset = ', offset
       offset_d = offset
 !
       write(6,*) 'MPI-DEBUG',myrank,':tot  tasks ', nprocs
       write(6,*) 'MPI-DEBUG',myrank,':Device     ', mydev, ndev
+      write(6,*) 'MPI-DEBUG',myrank,':num_gpu    ', mydev, num_gpu
       write(6,*) 'MPI-DEBUG',myrank,':task mpi-z ', mpicoords(3)
       write(6,*) 'MPI-DEBUG',myrank,':up    task ', up(2)
       write(6,*) 'MPI-DEBUG',myrank,':down  task ', down(2)

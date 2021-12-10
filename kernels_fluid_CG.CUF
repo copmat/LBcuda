@@ -210,6 +210,61 @@
       countp2n2_d = 0
     end subroutine setup2_zplanes
 
+    attributes(global) subroutine setupCyl(vx,vy,vz)
+      real, value :: vx,vy,vz
+      integer :: i,j,k, l
+      integer :: gli,glj,glk
+      real    :: rhoR,rhoB, u,v,w, eqR,eqB, distx,disty,distz, rdist,tempr
+      real,parameter    :: radius = glz/8
+  
+      i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
+      j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
+      k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
+
+      gli = i + offset_d(1)
+      glj = j + offset_d(2)
+      glk = k + offset_d(3)
+
+      if (1==i*j*k+offset_d(3)) write(*,*) 'CUDA setup2] offset:', gli, glj, glk
+
+      distx = gli - (glx/2 + 0.5)
+      disty = glj - (gly/2 + 0.5)
+      distz = glk - (glz/4 + 0.5)
+
+      rdist = sqrt(distx*distx + disty*disty)
+      tempr = fcut(rdist, radius, radius+0.1)
+
+      rhoR = tempr
+      rhoB = 1.0 - tempr
+
+      u = vx
+      v = vy
+      w = vz
+  
+      rhoR_d(i,j,k) = rhoR
+      rhoB_d(i,j,k) = rhoB
+      do l = 0, npops-1
+	      eqR = equil(rhoR, u,v,w, l)
+        popsR_d(i,j,k, l, 1) = eqR
+	      eqB = equil(rhoB, u,v,w, l)
+        popsB_d(i,j,k, l, 1) = eqB
+
+        ! Clears other stuff
+        popsR_d(i,j,k, l, 2) = 0.0
+        popsB_d(i,j,k, l, 2) = 0.0
+      end do
+
+      myfluid_d(i,j,k, 1) = fluid_fluid
+      myfluid_d(i,j,k, 2) = fluid_fluid
+      debugfluid_d(i,j,k) = 0
+
+      countmk_d = 0
+      countrm_d = 0
+      countn2p_d = 0
+      countp2n1_d = 0
+      countp2n2_d = 0
+    end subroutine setupCyl
+
     attributes(global) subroutine setupPops(u,v,w)
       real, value :: u,v,w
       integer :: i,j,k, l
@@ -1036,7 +1091,7 @@
   
       k = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
 
-      if (1<=k .and. k<=nz_d) then
+      if (0<=k .and. k<=nz_d+1) then
         if (faiPops) then
           do l = 1, npops-1
             popsR_d(0,0,k, l, flip) = popsR_d(nx,ny,k, l, flip)
@@ -1207,7 +1262,7 @@
   
       k = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
 
-      if (1<=k .and. k<=nz_d) then
+      if (0<=k .and. k<=nz_d+1) then
         myfluid_d (   0,   0,k, flip) = myfluid_d (nx,ny,k, flip)
         myfluid_d (   0,ny+1,k, flip) = myfluid_d (nx, 1,k, flip)
         myfluid_d (nx+1,   0,k, flip) = myfluid_d ( 1,ny,k, flip)

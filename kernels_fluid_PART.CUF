@@ -1081,6 +1081,7 @@
       call addForce_particle_bounce_back(step, flip, i, lrotate)
       call nve_lf(step, flip, i, lrotate)
 
+      ! call zero_force_part(step, flip, i)
       flop = 3 - flip
 
       forceAtoms_d(1,i,flop) = ext_fxx_d
@@ -1241,24 +1242,22 @@
       real :: tqx,tqy,tqz
       real :: txb,tyb,tzb, txbo,tybo,tzbo
 
-      if (zelvl_d>1) then
-        !Zero forces
-        myf_d(1,i) = 0.0
-        myf_d(2,i) = 0.0
-        myf_d(3,i) = 0.0
-        myf2_d(1,i) = 0.0
-        myf2_d(2,i) = 0.0
-        myf2_d(3,i) = 0.0
+      ! !Zero forces
+      ! myf_d(1,i) = 0.0
+      ! myf_d(2,i) = 0.0
+      ! myf_d(3,i) = 0.0
+      ! myf2_d(1,i) = 0.0
+      ! myf2_d(2,i) = 0.0
+      ! myf2_d(3,i) = 0.0
 
-        if (lrotate) then
-          myt_d(1,i) = 0.0
-          myt_d(2,i) = 0.0
-          myt_d(3,i) = 0.0
-          myt2_d(1,i) = 0.0
-          myt2_d(2,i) = 0.0
-          myt2_d(3,i) = 0.0
-        endif
-      endif
+      ! if (lrotate) then
+      !   myt_d(1,i) = 0.0
+      !   myt_d(2,i) = 0.0
+      !   myt_d(3,i) = 0.0
+      !   myt2_d(1,i) = 0.0
+      !   myt2_d(2,i) = 0.0
+      !   myt2_d(3,i) = 0.0
+      ! endif
 
       ! if (1==step) write(*,*) 'CUDA addForce_particle_bounce_back] i:',i
 
@@ -1579,7 +1578,7 @@
         endif
       endif
       if (zperiodic) then
-        zzz = pbc_images_centeredz(zzz, cz_d)
+        zzz = pbc_images_centeredz(zzz, cz)
         if (zzz< 0.5 .or. zzz>glz+0.5) then
           write(*,*) 'nve]z step,i,pos', step, i, zzz
           stop_d = __LINE__
@@ -2133,9 +2132,9 @@
       real :: pbc_images_centeredz, zzs, ccc
 
       zzs = z - atomz
-      ccc = ONE/real(nz_d)
+      ccc = ONE/real(glz)
 
-      pbc_images_centeredz = zzs - real(nz_d)*nint(ccc*zzs) + atomz
+      pbc_images_centeredz = zzs - real(glz)*nint(ccc*zzs) + atomz
     end function
 
     attributes(device) subroutine particle_to_node_bounce_back_bc2_phase1(step, flip, i,j,k)
@@ -2419,6 +2418,7 @@
 
       	          ! put atom l in list(i,j,k)
 		  tempInt = 1 + atomicadd( dim_matAtm_d(i,j,k), 1)
+      write(*,*) 'makeListAtomsGPU', step, offset_d(3), l,  linear(i*TILE_DIMx,j*TILE_DIMy,k*TILE_DIMz)
 
 		  if (tempInt > maxAtomInBlock) then
             	     write(*,*) 'Too many atoms in CUDA block:', linear(i,j,k), tempInt, maxAtomInBlock
