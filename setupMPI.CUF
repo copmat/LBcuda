@@ -244,10 +244,6 @@
   
   mystarts = mymin - 1
   
-  write(6,'(a,5i6)')'ciao0',myrank,myoffset,mystarts
-  
-  write(6,'(a,7i12)')'ciao1',myrank,lbound(myvar,1),ubound(myvar,1),&
-   lbound(myvar,2),ubound(myvar,2),lbound(myvar,3),ubound(myvar,3)
   
   if(myrank==0)call MPI_File_write_at(iotest,myoffset,int(nbyte,kind=4),1, &
      MPI_INTEGER,MPI_STATUS_IGNORE,e_io)
@@ -264,8 +260,6 @@
   memDims = lDims + 2*nbuffsub
   memOffs = [ nbuffsub, nbuffsub, nbuffsub ]
   
-  write(6,'(a,10i6)')'ciao2',myrank,globalDims,lDims,mystarts
-  write(6,'(a,7i6)')'ciao3',myrank,memDims,memOffs
 
   call MPI_TYPE_CREATE_SUBARRAY(3,memDims,lDims,memOffs, &
    MPI_ORDER_FORTRAN,MPI_REAL4,imemtype,e_io)
