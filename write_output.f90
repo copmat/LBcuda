@@ -1032,7 +1032,7 @@
           vel(1,i,j,k) = 0.0
           vel(2,i,j,k) = 0.0
           vel(3,i,j,k) = 0.0
-          phase(i,j,k) = 10.0
+          phase(i,j,k) = 0.0
         endif
 
       enddo
@@ -1041,6 +1041,7 @@
  end subroutine moments2Fl
 
  subroutine writeImageDataVTI_isfluid(nz, fname, step, myfluid, flip, textual, totSphere)
+  use mpi
   use dimensions_m
   use kernels_fluid
   implicit none
@@ -1054,6 +1055,7 @@
   integer(4)         :: length
   real(8)            :: totSumR
   integer(8)         :: totSumI, totCenters, isFlCent(3,numAtoms)
+  integer(8)         :: totSumI_forall,totCenters_forall
   
   integer :: e_io
   character(1), parameter:: end_rec = char(10)
@@ -1086,6 +1088,8 @@
 
   totSumI = 0
   totCenters = 0
+  totSumI_forall = 0
+  totCenters_forall = 0
   do k=1,nz
     do j=1,ny
       do i=1,nx
@@ -1101,25 +1105,41 @@
       enddo
     enddo
   enddo
-  write(*,fmt=200) step, myrank, totSumI,totCenters
-  200     format('isfluid] step=', I8, ' rank=', I6,' myfluid=', I10,' CM=', I10)
 
   if (nprocs==1) then
-    if (myrank==0 .and. totCenters /= numAtoms) then
+    write(*,fmt=200) step, myrank, totSumI,totCenters
+    200     format('isfluid] step=', I8, ' rank=', I6,' myfluid=', I10,' CM=', I10)
+
+    if (totCenters /= numAtoms) then
       write(*,fmt=201) step, totCenters, numAtoms
       201     format('isfluid] step=', I8, ' ERROR!!!!!!!!!!   particle number diff:',I8,' vs ',I8)
 
-      if (step<2) call mystop
+      call mystop
     endif
 
-    if (myrank==0 .and. totSumI /= totSphere*numAtoms) then
+    if (totSumI /= totSphere*numAtoms) then
       write(*,fmt=202) step, totSumI, totSphere*numAtoms
       202     format('isfluid] step=', I8, ' ERROR!!!!!!!!!!   particle volume diff:',I8,' vs ',I8)
-      if (step<2) call mystop
+      call mystop
     endif
   else
-    ! write(*,fmt=201) step, totCenters, numAtoms
-    ! write(*,fmt=202) step, totSumI, totSphere*numAtoms
+    call mpi_barrier(lbecomm,ierr)
+    call mpi_allreduce(totSumI, totSumI_forall, 1,MPI_INTEGER, MPI_SUM, lbecomm, ierr)
+    call mpi_allreduce(totCenters, totCenters_forall, 1,MPI_INTEGER, MPI_SUM, lbecomm, ierr)
+    if (myrank==0) then
+      write(*,fmt=203) step, totSumI_forall,totCenters_forall
+      203     format('isfluid] step=', I8, ' MPI] myfluid=', I10,' CM=', I10)
+
+      if (totCenters_forall /= numAtoms) then
+        write(*,fmt=201) step, totCenters_forall, numAtoms
+        call mystop
+      endif
+
+      if (totSumI_forall /= totSphere*numAtoms) then
+        write(*,fmt=202) step, totSumI_forall, totSphere*numAtoms
+        call mystop
+      endif
+    endif
   endif
   
   if (nprocs==1) then

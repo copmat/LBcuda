@@ -1067,6 +1067,34 @@
       endif
     end subroutine inter_force_particles
 
+    attributes(device) subroutine zero_forces_part(step, i, lrotate)
+    integer, value    :: step, i
+    logical, value    :: lrotate
+
+    !Zero forces
+
+    ! Queste sono BB
+    myf_d(1,i) = 0.0
+    myf_d(2,i) = 0.0
+    myf_d(3,i) = 0.0
+    
+    ! myf2_d(1,i) = 0.0
+    ! myf2_d(2,i) = 0.0
+    ! myf2_d(3,i) = 0.0
+
+    if (lrotate) then
+
+      ! Queste sono BB per torque
+      myt_d(1,i) = 0.0
+      myt_d(2,i) = 0.0
+      myt_d(3,i) = 0.0
+      
+      ! myt2_d(1,i) = 0.0
+      ! myt2_d(2,i) = 0.0
+      ! myt2_d(3,i) = 0.0
+    endif
+    end subroutine zero_forces_part
+
     attributes(global) subroutine time_step_force_particles(step, flip, lrotate, numAtoms)
       integer, value    :: step,flip,numAtoms
       logical, value    :: lrotate
@@ -1078,10 +1106,12 @@
 
       if (offset_d(3)==0 .and. 1==step .and. 1==i) write(*,*) 'CUDA time_step_force_particles] i:',i
 
+      ! Only for DEBUG!!!!
+      ! call zero_forces_part(step, i, lrotate)
+
       call addForce_particle_bounce_back(step, flip, i, lrotate)
       call nve_lf(step, flip, i, lrotate)
 
-      ! call zero_force_part(step, flip, i)
       flop = 3 - flip
 
       forceAtoms_d(1,i,flop) = ext_fxx_d
@@ -1241,23 +1271,6 @@
       real :: fxb,fyb,fzb, fxbo,fybo,fzbo
       real :: tqx,tqy,tqz
       real :: txb,tyb,tzb, txbo,tybo,tzbo
-
-      ! !Zero forces
-      ! myf_d(1,i) = 0.0
-      ! myf_d(2,i) = 0.0
-      ! myf_d(3,i) = 0.0
-      ! myf2_d(1,i) = 0.0
-      ! myf2_d(2,i) = 0.0
-      ! myf2_d(3,i) = 0.0
-
-      ! if (lrotate) then
-      !   myt_d(1,i) = 0.0
-      !   myt_d(2,i) = 0.0
-      !   myt_d(3,i) = 0.0
-      !   myt2_d(1,i) = 0.0
-      !   myt2_d(2,i) = 0.0
-      !   myt2_d(3,i) = 0.0
-      ! endif
 
       ! if (1==step) write(*,*) 'CUDA addForce_particle_bounce_back] i:',i
 
@@ -2399,7 +2412,7 @@
 	mink = ( boxatom(3,2*loopk+1)-1 ) / TILE_DIMz + 1
 	maxk = ( boxatom(3,2*loopk+2)-1 ) / TILE_DIMz + 1
   
-	do k = mink- offset_d(3), maxk- offset_d(3)
+	do k = mink- offset_d(3)/TILE_DIMz, maxk- offset_d(3)/TILE_DIMz
 	  if (k<1 .or. k > nz_d/TILE_DIMz) cycle
 
       	  do loopj=0, 1
@@ -2418,7 +2431,7 @@
 
       	          ! put atom l in list(i,j,k)
 		  tempInt = 1 + atomicadd( dim_matAtm_d(i,j,k), 1)
-      write(*,*) 'makeListAtomsGPU', step, offset_d(3), l,  linear(i*TILE_DIMx,j*TILE_DIMy,k*TILE_DIMz)
+      ! write(*,*) 'makeListAtomsGPU', step, offset_d(3), l,  linear(i*TILE_DIMx,j*TILE_DIMy,k*TILE_DIMz)
 
 		  if (tempInt > maxAtomInBlock) then
             	     write(*,*) 'Too many atoms in CUDA block:', linear(i,j,k), tempInt, maxAtomInBlock

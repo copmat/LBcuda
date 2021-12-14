@@ -24,5 +24,6 @@
 #define noDEBUG_P2N
 #define noCHECK_WRONGATOM
 #define noCHECK_VOLP
+#define noMPI_DEBUG
 
 #define MINDENS   0.e-8

@@ -1392,11 +1392,11 @@ program TestLB
       !   istat4(4) = cudaMemcpy(myt2_d, buffer_forall(10,1), 3*numAtoms )
       ! endif
 
-      myf_d = buffer_for(1:3,  1:numAtoms)
-      myf2_d = buffer_for(4:6,  1:numAtoms)
+      myf_d = buffer_forall(1:3,  1:numAtoms)
+      myf2_d = buffer_forall(4:6,  1:numAtoms)
       if (lrotate) then
-        myt_d = buffer_for(7:9,  1:numAtoms)
-        myt2_d = buffer_for(10:12,  1:numAtoms)
+        myt_d = buffer_forall(7:9,  1:numAtoms)
+        myt2_d = buffer_forall(10:12,  1:numAtoms)
       endif
 
       istat = cudaDeviceSynchronize
@@ -1611,18 +1611,18 @@ program TestLB
         endif
         call writeParticleVTK(mynamefile,step, x_atm,v_atm,q, textVTK)
 
-        mynamefile = repeat(' ',120)
-        if (fname(1:5) == 'step_') then
-          mynamefile = 'isfluid'
-        else
-          mynamefile = trim(fname)//'_isfluid'
-        endif
-        if (fname(1:5) == 'step_' .and. step/=0) then
-          ! After time step, use old value
-          call writeImageDataVTI_isfluid(nz, mynamefile,step, myfluid, 3-flip, textVTK, totSphere)
-        else
-          call writeImageDataVTI_isfluid(nz, mynamefile,step, myfluid, flip, textVTK, totSphere)
-        endif
+        ! mynamefile = repeat(' ',120)
+        ! if (fname(1:5) == 'step_') then
+        !   mynamefile = 'isfluid'
+        ! else
+        !   mynamefile = trim(fname)//'_isfluid'
+        ! endif
+        ! if (fname(1:5) == 'step_' .and. step/=0) then
+        !   ! After time step, use old value
+        !   call writeImageDataVTI_isfluid(nz, mynamefile,step, myfluid, 3-flip, textVTK, totSphere)
+        ! else
+        !   call writeImageDataVTI_isfluid(nz, mynamefile,step, myfluid, flip, textVTK, totSphere)
+        ! endif
      endif
 
       call system_clock(c_stop)
@@ -2038,7 +2038,7 @@ program TestLB
 
         allocate(matrixAtoms_d(maxAtomInBlock, nx/TILE_DIMx, ny/TILE_DIMy, nz/TILE_DIMz), STAT=istat)
         numElems = maxAtomInBlock * nx/TILE_DIMx * ny/TILE_DIMy * nz/TILE_DIMz
-        write(*,*) 'Mem (MB) for matrixAtoms_d=', numElems * 4 / 1024**2
+        if (myrank== 0) write(*,*) 'Mem (MB) for matrixAtoms_d=', numElems * 4 / 1024**2
         if (istat /= 0) then
           write(*,*) 'Allocation of matrixAtoms_d failed'
         end if
@@ -2345,7 +2345,7 @@ program TestLB
             if (offset(3)+1<=k1 .and. k1<=offset(3)+nz) then
               k = k1 - offset(3)
               rhoR(i,j,k) = localRhor
-              if (rhoR(i,j,k)<minRho .or. rhoR(i,j,k)>10) then
+              if (rhoR(i,j,k)<minRho .or. rhoR(i,j,k)>maxRho) then
                 write(*,fmt=20) 'rhoR', i,j,k, rhoR(i,j,k)
   20  format('set_random_dens_fluids]Fixing range error ', a, 3i8, f10.8)
                 rhoR(i,j,k) = meanR   ! call mystop

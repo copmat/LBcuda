@@ -323,11 +323,11 @@
         rhoR = manual_rho(popsR_d)		! compute_rho(popsR_d,i,j,k,flip)
         rhoB = manual_rho(popsB_d)		! compute_rho(popsB_d,i,j,k,flip)
 
-        if (rhoR<minRho .or. rhoR>10) then
+        if (rhoR<minRho .or. rhoR>maxRho) then
           write(*,*) 'init_rho_CG]Range error rhoR', step, linear(i,j,k), rhoR
           stop_d = __LINE__
         endif
-        if (rhoB<minRho .or. rhoB>10) then
+        if (rhoB<minRho .or. rhoB>maxRho) then
           write(*,*) 'init_rho_CG]Range error rhoB', step, linear(i,j,k), rhoB
           stop_d = __LINE__
         endif
@@ -367,7 +367,7 @@
                popsR_d(i,j,k,16,flip) + popsR_d(i,j,k,17,flip) + &
                popsR_d(i,j,k,18,flip)
 
-        if (rhoR<minRho .or. rhoR>10) then
+        if (rhoR<minRho .or. rhoR>maxRho) then
           write(*,*) 'init_rhoR_CG]Range error rhoR', step, linear(i,j,k), rhoR
           stop_d = __LINE__
         endif
@@ -408,7 +408,7 @@
                popsB_d(i,j,k,16,flip) + popsB_d(i,j,k,17,flip) + &
                popsB_d(i,j,k,18,flip)
 
-        if (rhoB<minRho .or. rhoB>10) then
+        if (rhoB<minRho .or. rhoB>maxRho) then
           write(*,*) 'init_rhoB_CG]Range error rhoB', step, linear(i,j,k), rhoB
           stop_d = __LINE__
         endif

@@ -44,16 +44,19 @@
 ! xy plane is contiguous arrays (stride.eq.1)
       call MPI_type_contiguous((ny+2)*(nx+2), MPI_REAL, xyplane, ierr)
       call MPI_type_commit(xyplane,ierr)
+#ifdef MPI_DEBUG
       if(myrank.eq.0) then
          write(6,*) 'MPI-DEBUG) INFO: xyplane (KB)-->', (ny+2)*(nx+2) *4 / 1024
       endif
+#endif
 
       call MPI_type_contiguous((ny+2)*(nx+2), MPI_INTEGER1, xyplane_int1, ierr)
       call MPI_type_commit(xyplane_int1,ierr)
+#ifdef MPI_DEBUG
       if(myrank.eq.0) then
          write(6,*) 'MPI-DEBUG) INFO: xyplane_int1 (KB)-->', (ny+2)*(nx+2) / 1024
       endif
-!
+#endif
 ! x dir  & y dir
       call MPI_cart_shift(lbecomm, 0, 1, rear(2), front(2), ierr)
       call MPI_cart_shift(lbecomm, 1, 1, left(2), right(2), ierr)
@@ -74,15 +77,16 @@
             call mystop
       endif
 
-      write (6,*) 'MPI-DEBUG',myrank,'CPU offset = ', offset
       offset_d = offset
-!
+#ifdef MPI_DEBUG
+      write(6,*) 'MPI-DEBUG',myrank,'CPU offset = ', offset
       write(6,*) 'MPI-DEBUG',myrank,':tot  tasks ', nprocs
       write(6,*) 'MPI-DEBUG',myrank,':Device     ', mydev, ndev
-      write(6,*) 'MPI-DEBUG',myrank,':num_gpu    ', mydev, num_gpu
+      write(6,*) 'MPI-DEBUG',myrank,':num_gpu    ', num_gpu
       write(6,*) 'MPI-DEBUG',myrank,':task mpi-z ', mpicoords(3)
       write(6,*) 'MPI-DEBUG',myrank,':up    task ', up(2)
       write(6,*) 'MPI-DEBUG',myrank,':down  task ', down(2)
+#endif
       end subroutine setupMPI
 
       subroutine mystop

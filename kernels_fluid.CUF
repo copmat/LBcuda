@@ -32,7 +32,7 @@
     integer, device, allocatable :: partVol_d(:), oldpartVol_d(:)
     integer, device :: countn2p_d, countp2n1_d,countp2n2_d
 
-    real, device :: minRho = -0.1, minPops = -0.1
+    real, device :: minRho = -10.0, maxRho = 10.0
     real, device :: max_vel_d = 0.0
 
     ! Debug

@@ -56,7 +56,7 @@
     integer :: numAtoms = 1
 
     logical, parameter :: atomsFromFile = .true.
-    real, parameter    :: rdim  = 4.5
+    real, parameter    :: rdim  = 5.5
     real, parameter    :: rmass = 1.0 / 1500.0   ! 1/mass for particles
 
     logical, parameter :: lfix_moment = .false.
@@ -73,9 +73,9 @@
 
     ! Hertzian
     logical, parameter :: withHz = .true.
-    real, parameter    :: hz_k = 25
-    real, parameter    :: hz_rmin = 12.5
-    real, parameter    :: hz_rcap = 11.0
+    real, parameter    :: hz_k = 10
+    real, parameter    :: hz_rmin = 10.5
+    real, parameter    :: hz_rcap = 9.0
     logical, parameter :: llubrication = .false.
     real, parameter    :: lubric_k = 10
     real, parameter    :: lubric_rmin = 10.0
