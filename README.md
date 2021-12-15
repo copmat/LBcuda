@@ -28,10 +28,10 @@ Structure
 LBcuda is supplied as a main UNIX directory with 1 subdirectory.        
 All the source code files are contained in the main directory.          
 The 'Tests' sub-directory contains different test cases that can        
-help the user to edit new input files. Further the 'Tests' sub-directory
+help the user to edit new input files. Further the 'Tests'              
 contains the input files to run the test cases reported in Table 2 and  
-3 of the main article 'LBcuda: a high-performance CUDA port of LBsoft   
-for simulation of colloidal systems'.                                   
+sub-directory 3 of the main article 'LBcuda: a high-performance CUDA    
+port of LBsoft for simulation of colloidal systems'.                    
                                                                         
 Compiling LBcuda                                                        
                                                                         
