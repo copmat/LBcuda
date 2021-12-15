@@ -1,6 +1,7 @@
 # LBcuda
 
-CUDA Fortran code to solve Lattice Boltzmann equations of a multi-component flow interacting with rigid spherical particles
+CUDA Fortran code to solve Lattice Boltzmann equations of a             
+multi-component flow interacting with rigid spherical particles.        
                                                                         
 Fabio Bonaccorso         IIT-CLNS,Rome                     Italy        
 Marco Lauricella         IAC-CNR, Rome                     Italy        
