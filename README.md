@@ -36,18 +36,19 @@ port of LBsoft for simulation of colloidal systems'.
 Compiling LBcuda                                                        
                                                                         
 The main directory stores a UNIX makefile that assembles the            
-executable versions of the code both in GPU and multi-GPUs version. 
-Note the makefile could be eventually modified for several common        
+executable versions of the code both in GPU and multi-GPUs version.     
+Note the makefile could be eventually modified for several common       
 workstations and NVIDIA devices into the main directory,                
-where the code is compiled and linked. Finally, the     
-binary executable file can be run in the main directory or copy in,     
-an external location which is intended to be the working directory from 
-which jobs are submitted for execution and the data files manipulated.  
+where the code is compiled and linked. Finally, the binary              
+executable file can be run in the main directory or copy in,            
+an external location which is intended to be the working directory      
+from which jobs are submitted for execution and the data files          
+manipulated.                                                            
                                                                         
 On Windows system we advice the user to compile LBcuda under the        
 Windows native Ubuntu shell. Note that the NVIDIA HPC Software          
 Development  Kit (SDK) is necessary to compile and run LBcuda on        
-the GPU and multi-GPUs parallel mode.                                                        
+the GPU and multi-GPUs parallel mode.                                   
                                                                         
 Executing LBcuda                                                        
                                                                         
