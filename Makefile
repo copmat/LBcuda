@@ -8,7 +8,7 @@ CUDAFLAGS = -cuda -fast -gpu=cc70 -DMYDIMESION=256 -DTILE1=8 -DTILE2=4 -DTILE3=4
 
 
 
-lbCUDA: main.o dimensions_m.o kernels_fluid.o kernels_fluid_CG.o kernels_fluid_PART.o write_output.o setupMPI.o
+LBCUDA: main.o dimensions_m.o kernels_fluid.o kernels_fluid_CG.o kernels_fluid_PART.o write_output.o setupMPI.o
 	$(FC) $(CUDAFLAGS) $(F90FLAGS) -o $@ main.o dimensions_m.o kernels_fluid.o write_output.o kernels_fluid_CG.o kernels_fluid_PART.o setupMPI.o
 
 main.o: Makefile dimensions_m.mod kernels_fluid.o kernels_fluid_CG.o kernels_fluid_PART.o write_output.o main.CUF 

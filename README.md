@@ -25,7 +25,7 @@ The code is licensed under the 3-Clause BSD License (BSD-3-Clause).
                                                                         
 Structure                                                               
                                                                         
-LBcuda is supplied as a main UNIX directory with 3 subdirectories.      
+LBcuda is supplied as a main UNIX directory with 1 subdirectory.        
 All the source code files are contained in the main directory.          
 The 'Tests' sub-directory contains different test cases that can        
 help the user to edit new input files. Further the 'Tests' sub-directory
@@ -61,9 +61,9 @@ the 'Tests' sub-directory which can be used as test cases.
                                                                         
 Example command to run LBcuda in serial mode:                           
                                                                         
-mpirun -np 1 ./main.x                                                                
+mpirun -np 1 ./LBCUDA                                                                
                                                                         
 Example command to run LBcuda in parallel mode on 8 GPUs:               
                                                                         
-mpirun -np 8 ./main_mpi.x                                               
+mpirun -np 8 ./LBCUDA                                              
                                                                         
