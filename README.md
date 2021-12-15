@@ -54,8 +54,8 @@ the GPU and multi-GPUs parallel mode.
 Executing LBcuda                                                        
                                                                         
 To run LBcuda, it is necessary first to ensure that the program is      
-compiled (from the source sub-directory) and that the file input.dat    
-is present in the main directory.                                       
+compiled and that the file input.dat and eventually the input.xyz       
+are present in the main directory.                                      
 All output data files will be returned to the main directory.           
 Remember that the input file HAS TO BE NAMED 'input.dat' and put in     
 the main directory. Few example input files are contained in            
