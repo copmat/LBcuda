@@ -1,8 +1,8 @@
 5000	           	!niter  number of iterations
 500    		       	!stat print on screen every n
-5000			!vtk print every n
+500			!vtk print every n
 1			! init TYPE 1=droplet, 2=planez, 3=read Rho, 4=read all, 5=cylinder, 6=RandomR+ b=1-R
-0.0 0.0 0.0		! vx,vy,vz
+0.0 0.0 0.0	1.0 1.0	! vx,vy,vz
 NO 20000		! with PARTICLES
 0.0 0.0 0.0		! ext_fxx,ext_fyy,ext_fzz
 MAX_PARTICLE_VEL 1.0	! Max particle speed

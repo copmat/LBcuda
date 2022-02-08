@@ -129,23 +129,32 @@
   	opp =(/ 0, 2, 1, 4, 3, 6, 5, 8, 7,10, 9,12,11,14,13,16,15,18,17/)
 
     ! Q3D27 for onebelt
-    integer, parameter, public :: linksd3q27 = 26
-    integer, dimension(0:linksd3q27), parameter, public :: &
-      !           0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26
-     exd3q27 = (/ 0, 1,-1, 0, 0, 0, 0, 1,-1,-1, 1, 1,-1,-1, 1, 0, 0, 0, 0, 1,-1,-1, 1, 1,-1, 1,-1 /)
-    integer, dimension(0:linksd3q27), parameter, public :: &
-     eyd3q27 = (/ 0, 0, 0, 1,-1, 0, 0, 1,-1, 1,-1, 0, 0, 0, 0, 1,-1,-1, 1, 1,-1, 1,-1,-1, 1, 1,-1 /)
-    integer, dimension(0:linksd3q27), parameter, public :: &
-     ezd3q27 = (/ 0, 0, 0, 0, 0, 1,-1, 0, 0, 0, 0, 1,-1, 1,-1, 1,-1, 1,-1, 1,-1, 1,-1, 1,-1,-1, 1 /)
-
+    integer, parameter, public :: linksd3q27 = 27
+    integer, dimension(0:linksd3q27-1), parameter, public :: & 
+    !           0, 1, 2, 3, 4, 5, 6, 7, 8, 9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26
+     exd3q27=(/ 0, 1,-1, 0, 0, 0, 0, 1,-1, 1,-1, 0, 0, 0, 0, 1,-1,-1, 1, 1,-1, 1,-1,-1, 1, 1,-1/)
+    integer, dimension(0:linksd3q27-1), parameter, public :: &
+     eyd3q27=(/ 0, 0, 0, 1,-1, 0, 0, 1,-1,-1, 1, 1,-1, 1,-1, 0, 0, 0, 0, 1,-1, 1,-1, 1,-1,-1, 1/)
+    integer, dimension(0:linksd3q27-1), parameter, public :: & 
+	 ezd3q27=(/ 0, 0, 0, 0, 0, 1,-1, 0, 0, 0, 0, 1,-1,-1, 1, 1,-1, 1,-1, 1,-1,-1, 1, 1,-1, 1,-1/)
+	integer, dimension(0:linksd3q27-1), parameter, public :: & 
+	 oppd3q27=(/0, 2,1,4,3,6,5,8,7,10,9,12,11,14,13,16,15,18,17,20,19,22,21,24,23,26,25/)
     real, parameter :: p0d3q27 = ( TWO / THREE )**THREE
     real, parameter :: p1d3q27 = ( TWO / THREE )**TWO * (ONE/SIX)
     real, parameter :: p2d3q27 = ( ONE / SIX )**TWO * (TWO/THREE)
     real, parameter :: p3d3q27 = ( ONE / SIX )**THREE
-    real, dimension(0:linksd3q27), parameter, public :: pd3q27 = (/ p0d3q27,p1d3q27,p1d3q27,p1d3q27,p1d3q27,p1d3q27,p1d3q27, &
+    real, dimension(0:linksd3q27-1), parameter, public :: pd3q27 = &
+     (/ p0d3q27,p1d3q27,p1d3q27,p1d3q27,p1d3q27,p1d3q27,p1d3q27, &
       p2d3q27,p2d3q27,p2d3q27,p2d3q27,p2d3q27,p2d3q27,p2d3q27,p2d3q27, &
       p2d3q27,p2d3q27,p2d3q27,p2d3q27,p3d3q27,p3d3q27,p3d3q27,p3d3q27, &
       p3d3q27,p3d3q27,p3d3q27,p3d3q27 /)
+    real, dimension(0:linksd3q27-1), parameter, public :: ad3q27 = &
+     (/ ZERO,p1d3q27/cssq,p1d3q27/cssq,p1d3q27/cssq,p1d3q27/cssq,p1d3q27/cssq,p1d3q27/cssq, &
+      p2d3q27/cssq,p2d3q27/cssq,p2d3q27/cssq,p2d3q27/cssq,&
+      p2d3q27/cssq,p2d3q27/cssq,p2d3q27/cssq,p2d3q27/cssq,&
+      p2d3q27/cssq,p2d3q27/cssq,p2d3q27/cssq,p2d3q27/cssq,&
+      p3d3q27/cssq,p3d3q27/cssq,p3d3q27/cssq,p3d3q27/cssq,&
+      p3d3q27/cssq,p3d3q27/cssq,p3d3q27/cssq,p3d3q27/cssq /)
 
     ! CG
     real, parameter :: b_xi = 0.5 !Leclaire
@@ -175,11 +184,13 @@
 
     ! Device constants...
     integer, dimension(0:npops-1), constant :: ex_d,ey_d,ez_d
+    integer, dimension(0:linksd3q27-1), constant :: exd3q27_d,eyd3q27_d,ezd3q27_d
     real, constant :: fx_d,fy_d,fz_d, buz_d
     real, dimension(3), constant :: wall_x0_d, wall_x1_d
     real, dimension(3), constant :: wall_y0_d, wall_y1_d
     real, dimension(3), constant :: wall_z0_d, wall_z1_d
     real, dimension(0:npops-1), constant :: p_d, a_d, b_l_d
+    real, dimension(0:linksd3q27-1), constant :: ad3q27_d
     real, constant :: sigma_CG_d, beta_CG_d
     real, dimension(0:npops-1), constant :: rec_fact_d
 

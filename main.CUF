@@ -49,7 +49,7 @@ program TestLB
   ! Phys params
   real(4) :: omega
   ! Initial fluid velocity
-  real :: vx,vy,vz
+  real :: vx,vy,vz,densR,densB
   ! Input type
   integer :: initType = -1
   
@@ -95,15 +95,16 @@ program TestLB
   call readParameters
 
   call setupGPUgridAndAlloc
-
+#ifdef PARTICLES
   if (withParticles) then
 	  call SetupParts
   endif
-
+#endif
   call makeOutput
   call SetConstants
+#ifdef PARTICLES
   call spherical_template
-
+#endif
   call setupRho_Pops
 
   call fixPeriodic(.true., .true., "after_setup")
@@ -371,7 +372,7 @@ program TestLB
       read(11, *, end=120) initType
       found = 4
       
-      read(11, *, end=120) vx,vy,vz
+      read(11, *, end=120) vx,vy,vz,densR,densB
       found = 5
 
       read(11, *, end=120) string, numAtoms
@@ -425,7 +426,7 @@ program TestLB
         if (found<2) write (*,*) 'nIterOut not found'
         if (found<3) write (*,*) 'nIterVTK not found'
         if (found<4) write (*,*) 'initType not found'
-        if (found<5) write (*,*) 'vx,vy,vz not found'
+        if (found<5) write (*,*) 'vx,vy,vz,densR,densB not found'
         if (found<6) write (*,*) 'withParticles not found'
         if (withParticles .and. found<7) write (*,*) 'ext_fxx,ext_fyy,ext_fzz not found'
         if (withParticles .and. max_vel_found<1) write (*,*) 'MAX_PARTICLE_VEL not found'        
@@ -838,7 +839,10 @@ program TestLB
     subroutine SetConstants
       implicit none
       integer l, i,j,k
-
+      
+      if(densR.ne.1.0)densR_d=densR
+      if(densB.ne.1.0)densB_d=densB
+      
       cz_d = real(glz+1) * HALF
 
       do l=0,npops-1
@@ -850,7 +854,14 @@ program TestLB
         b_l_d(l) = b_l(l)
         rec_fact_d(l) = sqrt( real(ex(l)*ex(l) + ey(l)*ey(l) + ez(l)*ez(l)) )
       enddo
-
+      
+      do l=0,linksd3q27
+        exd3q27_d(l) = exd3q27(l)
+        eyd3q27_d(l) = eyd3q27(l)
+        ezd3q27_d(l) = ezd3q27(l)
+        ad3q27_d(l)=ad3q27(l)
+      enddo
+      
       fx_d = f_cost(1)
       fy_d = f_cost(2)
       fz_d = f_cost(3)
@@ -1110,7 +1121,7 @@ program TestLB
         write(*,fmt=105) 'Color gradient'
         write(*,fmt=101) 'Color gradient sigma', sigma_CG
         write(*,fmt=101) 'Color gradient beta', beta_CG
-        write(*,fmt=104) 'Initial fluid vel', vx,vy,vz
+        write(*,fmt=107) 'Initial fluid vel and density',vx,vy,vz,densR,densB
 
         if (withParticles) then
           write(*,fmt=103) 'With Particles'
@@ -1164,6 +1175,7 @@ program TestLB
 104    format(a20, ':', 3F20.8)
 105    format('              Method:', a20)
 106    format(a20, ':', F20.2)
+107    format(a20, ':', 5F20.8)
     end subroutine printParams
 
 

@@ -590,6 +590,21 @@
         psix = ZERO
         psiy = ZERO
         psiz = ZERO
+#ifdef HIGHGRAD
+        do l = 1, linksd3q27-1
+          i1 = li + exd3q27_d(l)
+          j1 = lj + eyd3q27_d(l)
+          k1 = lk + ezd3q27_d(l)
+
+          rhoR_shifted = loc_rhoR(i1,j1,k1)
+          rhoB_shifted = loc_rhoB(i1,j1,k1)
+          psi_shifted = (rhoR_shifted/densR_d - rhoB_shifted/densB_d) / &
+           (rhoR_shifted/densR_d + rhoB_shifted/densB_d)
+          psix = psix + ad3q27_d(l)*exd3q27_d(l)* psi_shifted
+          psiy = psiy + ad3q27_d(l)*eyd3q27_d(l)* psi_shifted
+          psiz = psiz + ad3q27_d(l)*ezd3q27_d(l)* psi_shifted
+        enddo
+#else
         do l = 1, npops-1
           i1 = li + ex_d(l)
           j1 = lj + ey_d(l)
@@ -597,12 +612,13 @@
 
           rhoR_shifted = loc_rhoR(i1,j1,k1)
           rhoB_shifted = loc_rhoB(i1,j1,k1)
-          psi_shifted = (rhoR_shifted - rhoB_shifted) / (rhoR_shifted + rhoB_shifted)
+          psi_shifted = (rhoR_shifted/densR_d - rhoB_shifted/densB_d) / &
+           (rhoR_shifted/densR_d + rhoB_shifted/densB_d)
           psix = psix + a_d(l)*ex_d(l)* psi_shifted
           psiy = psiy + a_d(l)*ey_d(l)* psi_shifted
           psiz = psiz + a_d(l)*ez_d(l)* psi_shifted
         enddo
-
+#endif
         !perturbation step
         psinorm_sq = psix*psix + psiy*psiy + psiz*psiz
         if (psinorm_sq>mylimit) then

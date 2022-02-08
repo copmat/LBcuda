@@ -789,7 +789,7 @@
     
       Rsum=ZERO; Bsum=ZERO; Dsum=0
       !compute mean density value
-      do l = 1, linksd3q27
+      do l = 1, linksd3q27-1
         i1 = i + exd3q27(l)
         j1 = j + eyd3q27(l)
         k1 = k + ezd3q27(l)
@@ -870,7 +870,7 @@
     
       Rsum=ZERO; Bsum=ZERO; Dsum=ZERO
       !compute mean density value
-      do l = 1, linksd3q27
+      do l = 1, linksd3q27-1
         i1 = i + exd3q27(l)
         j1 = j + eyd3q27(l)
         k1 = k + ezd3q27(l)

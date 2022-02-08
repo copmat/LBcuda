@@ -33,6 +33,7 @@
     integer, device :: countn2p_d, countp2n1_d,countp2n2_d
 
     real, device :: minRho = -10.0, maxRho = 10.0
+    real, device :: densR_d=1.0, densB_d=1.0
     real, device :: max_vel_d = 0.0
 
     ! Debug

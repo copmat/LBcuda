@@ -2,6 +2,7 @@
 #define CG
 #define noPARTICLES
 #define FLUIDSPLIT
+#define HIGHGRAD
 
 #ifndef MYDIMESION
 #define MYDIMESION 64
