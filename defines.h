@@ -1,6 +1,6 @@
 #define noBGK
 #define CG
-#define PARTICLES
+#define noPARTICLES
 #define FLUIDSPLIT
 
 #ifndef MYDIMESION

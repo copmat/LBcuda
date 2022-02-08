@@ -290,13 +290,14 @@ program TestLB
         write(*,*) ''
         write(*,fmt=100)  step, mytime*0.001, mytime/niterOut, lup * niterOut / mytime / 1000.
 100     format('Iter:',I10,'   Time(s):', G10.4, '   ms/it:',G9.3, '   Mlup/s:',F8.0)
-
+#ifdef PARTICLES
         if (withParticles) then
           if (diff_listatomGPU/real(clock_rate)>0.5) write(*,fmt=101)  step, diff_listatomGPU/real(clock_rate)
 101       format('Iter:',I10, '   ListAtomGPU Time(s):', F10.3)
         
           diff_listatomGPU = 0
         endif
+#endif
       endif
 
        istat = cudaEventRecord(startEvent, 0)
@@ -2287,7 +2288,7 @@ program TestLB
         write(*,*) 'Wront init type=', initType
         call mystop
       endif
-
+#ifdef PARTICLES
       if (withParticles) then
         partVol_d(1:numAtoms) = 0
 
@@ -2300,6 +2301,7 @@ program TestLB
 #endif
         partVol_d(1:numAtoms) = 0
       endif
+#endif
     else
       call setup<<<dimGrid, dimBlock>>>(vx,vy,vz)
     end if

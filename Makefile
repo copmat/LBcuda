@@ -3,12 +3,12 @@ FC=mpif90
 
 CUDAFLAGS = -cuda -gpu=cc70 -O0 -g -Mbounds -Mchkptr -Mchkstk
 CUDAFLAGS = -cuda -gpu=cc70,keepptx -O0 -g
-CUDAFLAGS = -cuda -fast -gpu=cc80 -DMYDIMESION=256 -DTILE1=8 -DTILE2=4 -DTILE3=4
-CUDAFLAGS = -cuda -fast -gpu=cc70 -DMYDIMESION=256 -DTILE1=8 -DTILE2=4 -DTILE3=4
+CUDAFLAGS = -cuda -fast -gpu=cc80 -DMYDIMESION=128 -DTILE1=128 -DTILE2=1 -DTILE3=1
+CUDAFLAGS = -cuda -fast -gpu=cc70 -DMYDIMESION=128 -DTILE1=128 -DTILE2=1 -DTILE3=1
 
 
 
-LBCUDA: main.o dimensions_m.o kernels_fluid.o kernels_fluid_CG.o kernels_fluid_PART.o write_output.o setupMPI.o
+lbCUDA: main.o dimensions_m.o kernels_fluid.o kernels_fluid_CG.o kernels_fluid_PART.o write_output.o setupMPI.o
 	$(FC) $(CUDAFLAGS) $(F90FLAGS) -o $@ main.o dimensions_m.o kernels_fluid.o write_output.o kernels_fluid_CG.o kernels_fluid_PART.o setupMPI.o
 
 main.o: Makefile dimensions_m.mod kernels_fluid.o kernels_fluid_CG.o kernels_fluid_PART.o write_output.o main.CUF 
