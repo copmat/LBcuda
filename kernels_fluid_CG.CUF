@@ -530,7 +530,17 @@
 
       if (lj==TILE_DIMy .and. lk==1) loc_rhoR(li,lj+1,lk-1) = rhoR_d(i,j+1,k-1)
       if (lj==TILE_DIMy .and. lk==TILE_DIMz) loc_rhoR(li,lj+1,lk+1) = rhoR_d(i,j+1,k+1)
-
+      
+      ! Halo corner
+      if (li==1 .and. lj==1 .and. lk==1) loc_rhoR(li-1,lj-1,lk-1) = rhoR_d(i-1,j-1,k-1) 
+      if (li==TILE_DIMx .and. lj==1 .and. lk==1) loc_rhoR(li+1,lj-1,lk-1) = rhoR_d(i+1,j-1,k-1)
+      if (li==1 .and. lj==TILE_DIMy .and. lk==1) loc_rhoR(li-1,lj+1,lk-1) = rhoR_d(i-1,j+1,k-1) 
+      if (li==1 .and. lj==1 .and. lk==TILE_DIMz) loc_rhoR(li-1,lj-1,lk+1) = rhoR_d(i-1,j-1,k+1) 
+      if (li==1 .and. lj==TILE_DIMy .and. lk==TILE_DIMz) loc_rhoR(li-1,lj+1,lk+1) = rhoR_d(i-1,j+1,k+1) 
+      if (li==TILE_DIMx .and. lj==1 .and. lk==TILE_DIMz) loc_rhoR(li+1,lj-1,lk+1) = rhoR_d(i+1,j-1,k+1) 
+      if (li==TILE_DIMx .and. lj==TILE_DIMy .and. lk==1) loc_rhoR(li+1,lj+1,lk-1) = rhoR_d(i+1,j+1,k-1) 
+      if (li==TILE_DIMx .and. lj==TILE_DIMy .and. lk==TILE_DIMz) loc_rhoR(li+1,lj+1,lk+1) = rhoR_d(i+1,j+1,k+1) 
+      
       ! Ripeto per il blue
       loc_rhoB(li,lj,lk) = rhoB_d(i,j,k)
 
@@ -574,6 +584,16 @@
 
       if (lj==TILE_DIMy .and. lk==1) loc_rhoB(li,lj+1,lk-1) = rhoB_d(i,j+1,k-1)
       if (lj==TILE_DIMy .and. lk==TILE_DIMz) loc_rhoB(li,lj+1,lk+1) = rhoB_d(i,j+1,k+1)
+      
+      ! Halo corner
+      if (li==1 .and. lj==1 .and. lk==1) loc_rhoB(li-1,lj-1,lk-1) = rhoB_d(i-1,j-1,k-1) 
+      if (li==TILE_DIMx .and. lj==1 .and. lk==1) loc_rhoB(li+1,lj-1,lk-1) = rhoB_d(i+1,j-1,k-1)
+      if (li==1 .and. lj==TILE_DIMy .and. lk==1) loc_rhoB(li-1,lj+1,lk-1) = rhoB_d(i-1,j+1,k-1) 
+      if (li==1 .and. lj==1 .and. lk==TILE_DIMz) loc_rhoB(li-1,lj-1,lk+1) = rhoB_d(i-1,j-1,k+1) 
+      if (li==1 .and. lj==TILE_DIMy .and. lk==TILE_DIMz) loc_rhoB(li-1,lj+1,lk+1) = rhoB_d(i-1,j+1,k+1) 
+      if (li==TILE_DIMx .and. lj==1 .and. lk==TILE_DIMz) loc_rhoB(li+1,lj-1,lk+1) = rhoB_d(i+1,j-1,k+1) 
+      if (li==TILE_DIMx .and. lj==TILE_DIMy .and. lk==1) loc_rhoB(li+1,lj+1,lk-1) = rhoB_d(i+1,j+1,k-1) 
+      if (li==TILE_DIMx .and. lj==TILE_DIMy .and. lk==TILE_DIMz) loc_rhoB(li+1,lj+1,lk+1) = rhoB_d(i+1,j+1,k+1) 
 
       ! Non serve halo
       do l = 0, npops-1
