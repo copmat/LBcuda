@@ -3,6 +3,7 @@
 #define noPARTICLES
 #define FLUIDSPLIT
 #define HIGHGRAD
+#define noDIFFDENS
 
 #ifndef MYDIMESION
 #define MYDIMESION 64

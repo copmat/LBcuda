@@ -62,6 +62,8 @@
     logical, parameter :: lfix_moment = .false.
     real               :: max_vel = 0.0
     
+    real    :: densR,densB
+    
     ! External particle forces
     real    :: ext_fxx, ext_fyy, ext_fzz
     real    :: ext_tqx, ext_tqy, ext_tqz
@@ -107,6 +109,7 @@
     real, parameter :: FOUR = 4.0
     real, parameter :: FIVE = 5.0
     real, parameter :: SIX = 6.0
+    real, parameter :: EIGHT = 8.0
     real, parameter :: NINE = 9.0
     real, parameter :: TWELVE = 12.0
     real, parameter :: TWENTYFOUR = 24.0
@@ -163,11 +166,46 @@
     real, parameter :: b2 = ONE/(SIX*b_xi+TWENTYFOUR)
     real, dimension(0:npops-1), parameter, public :: &
       b_l = (/b0,b1,b1,b1,b1,b1,b1,b2,b2,b2,b2,b2,b2,b2,b2,b2,b2,b2,b2/) 
-
+    
+    real, parameter :: phi0 = ZERO
+    real, parameter :: phi1 = ONE/TWELVE
+    real, parameter :: phi2 = ONE/TWENTYFOUR
+    
+    real, dimension(0:npops-1), parameter, public :: phi = &
+     (/phi0,phi1,phi1,phi1,phi1,phi1,phi1, &
+      phi2,phi2,phi2,phi2,phi2,phi2,phi2,phi2,phi2,phi2,phi2,phi2/) 
+    
+    real, parameter :: varphi0 = ONE
+    real, parameter :: varphi1 = -ONE/TWELVE
+    real, parameter :: varphi2 = -ONE/TWENTYFOUR
+    
+    real, dimension(0:npops-1), parameter, public :: varphi = &
+     (/varphi0,varphi1,varphi1,varphi1,varphi1,varphi1,varphi1, &
+      varphi2,varphi2,varphi2,varphi2,varphi2,varphi2, &
+      varphi2,varphi2,varphi2,varphi2,varphi2,varphi2/) 
+    
+    real, parameter :: psi0 = -FIVE/TWO
+    real, parameter :: psi1 = -ONE/SIX
+    real, parameter :: psi2 = ONE/TWENTYFOUR
+    
+    real, dimension(0:npops-1), parameter, public :: psi = &
+     (/psi0,psi1,psi1,psi1,psi1,psi1,psi1, &
+      psi2,psi2,psi2,psi2,psi2,psi2,psi2,psi2,psi2,psi2,psi2,psi2/) 
+    
+    real, parameter :: xi0 = ZERO
+    real, parameter :: xi1 = ONE/FOUR
+    real, parameter :: xi2 = ONE/EIGHT
+    
+    real, dimension(0:npops-1), parameter, public :: xi = &
+     (/xi0,xi1,xi1,xi1,xi1,xi1,xi1, &
+      xi2,xi2,xi2,xi2,xi2,xi2,xi2,xi2,xi2,xi2,xi2,xi2/) 
+    
     real, dimension(0:npops-1), parameter, public :: &
       a = (/ZERO,p1/cssq,p1/cssq,p1/cssq,p1/cssq,p1/cssq,p1/cssq,p2/cssq, &
       p2/cssq,p2/cssq,p2/cssq,p2/cssq,p2/cssq,p2/cssq,p2/cssq,p2/cssq, &
       p2/cssq,p2/cssq,p2/cssq/)
+      
+    real, dimension(2) ::  alphaCG
 
     ! isfluid
     integer, parameter :: fluid_wall = 0
@@ -189,7 +227,9 @@
     real, dimension(3), constant :: wall_x0_d, wall_x1_d
     real, dimension(3), constant :: wall_y0_d, wall_y1_d
     real, dimension(3), constant :: wall_z0_d, wall_z1_d
+    real, dimension(2), constant ::  alphaCG_d
     real, dimension(0:npops-1), constant :: p_d, a_d, b_l_d
+    real, dimension(0:npops-1), constant :: phi_d, varphi_d, psi_d, xi_d
     real, dimension(0:linksd3q27-1), constant :: ad3q27_d
     real, constant :: sigma_CG_d, beta_CG_d
     real, dimension(0:npops-1), constant :: rec_fact_d

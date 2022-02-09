@@ -49,7 +49,7 @@ program TestLB
   ! Phys params
   real(4) :: omega
   ! Initial fluid velocity
-  real :: vx,vy,vz,densR,densB
+  real :: vx,vy,vz
   ! Input type
   integer :: initType = -1
   
@@ -843,6 +843,24 @@ program TestLB
       if(densR.ne.1.0)densR_d=densR
       if(densB.ne.1.0)densB_d=densB
       
+      if (densR.ne.1.0 .and. densB.ne.1.0) then
+        write (*,*) 'the density of at leat one of the two fluids should be one', &
+         densR,densB
+        call mystop
+      endif
+      
+      if(densR.eq.1.0)then
+        alphaCG(1)=p(0)
+        alphaCG(2)=(-ONE+alphaCG(1))*(densR/densB)+ONE
+      else
+        alphaCG(2)=p(0)
+        alphaCG(1)=(ONE/(-ONE+alphaCG(2)))*(densB/densR)+ONE
+      endif
+      
+      do l=1,2
+        alphaCG_d(l)=alphaCG(l)
+      enddo
+      
       cz_d = real(glz+1) * HALF
 
       do l=0,npops-1
@@ -851,6 +869,10 @@ program TestLB
         ey_d(l) = ey(l)
         ez_d(l) = ez(l)
         a_d(l) = a(l)
+        phi_d(l) = phi(l)
+        varphi_d(l) = varphi(l)
+        psi_d(l) = psi(l)
+        xi_d(l) = xi(l)
         b_l_d(l) = b_l(l)
         rec_fact_d(l) = sqrt( real(ex(l)*ex(l) + ey(l)*ey(l) + ez(l)*ez(l)) )
       enddo

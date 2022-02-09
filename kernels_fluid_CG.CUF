@@ -6,6 +6,7 @@
     implicit none
     
    private :: equil
+   private :: equilCG
    private :: linear,linear2
    private :: compute_rho
    private :: compute_u_1fl,compute_v_1fl,compute_w_1fl 
@@ -34,6 +35,17 @@
      uv = (1.0/cssq) * (u*ex_d(l) + v*ey_d(l) + w*ez_d(l))
      equil = rho * p_d(l)*(ONE+uv+HALF*(uv*uv)-(HALF/cssq) * (u*u + v*v + w*w))
     end function equil
+    
+    attributes(device) function equilCG(rho,u,v,w, k, l)
+     real, intent(in) :: rho,u,v,w
+     integer, intent(in) :: k,l
+     real :: equilCG
+     real :: uv
+
+     uv = (1.0/cssq) * (u*ex_d(l) + v*ey_d(l) + w*ez_d(l))
+     equilCG = rho * ( phi_d(l) + varphi_d(l)*alphaCG_d(k) + &
+      p_d(l)*(uv+HALF*(uv*uv)-(HALF/cssq) * (u*u + v*v + w*w)))
+    end function equilCG
 
 !!!!!!!!!!!!! Helpers for recovering phys vars
     attributes(device) function compute_rho(pops, i,j,k, flip)
@@ -123,10 +135,13 @@
 
       rdist = sqrt(distx*distx + disty*disty + distz*distz)
       tempr = fcut(rdist, radius, radius+0.1)
-
+#ifdef DIFFDENS
+      rhoR = tempr*densR_d
+      rhoB = (1.0 - tempr)*densB_d
+#else
       rhoR = tempr
-      rhoB = 1.0 - tempr
-
+      rhoB = (1.0 - tempr)
+#endif
       u = vx
       v = vy
       w = vz
@@ -134,9 +149,14 @@
       rhoR_d(i,j,k) = rhoR
       rhoB_d(i,j,k) = rhoB
       do l = 0, npops-1
-	      eqR = equil(rhoR, u,v,w, l)
-        popsR_d(i,j,k, l, 1) = eqR
+#ifdef DIFFDENS
+	      eqR = equilCG(rhoR, u,v,w, 1, l)
+	      eqB = equilCG(rhoB, u,v,w, 2, l)
+#else
+          eqR = equil(rhoR, u,v,w, l)
 	      eqB = equil(rhoB, u,v,w, l)
+#endif
+        popsR_d(i,j,k, l, 1) = eqR
         popsB_d(i,j,k, l, 1) = eqB
 
         ! Clears other stuff
@@ -576,15 +596,23 @@
         v   = manual_v(loc_tempR) + manual_v(loc_tempB)
         w   = manual_w(loc_tempR) + manual_w(loc_tempB)
 
-
+#ifdef DIFFDENS
         !bgk step
         do l = 0, npops-1
-            loc_tempR(l) = loc_tempR(l)*oneminusomega + equil(rhoR,u,v,w, l)*omega
+            loc_tempR(l) = loc_tempR(l)*oneminusomega + equilCG(rhoR,u,v,w,1,l)*omega
         enddo
         do l = 0, npops-1
-            loc_tempB(l) = loc_tempB(l)*oneminusomega + equil(rhoB,u,v,w, l)*omega
+            loc_tempB(l) = loc_tempB(l)*oneminusomega + equilCG(rhoB,u,v,w,2,l)*omega
         enddo
-
+#else
+        !bgk step
+        do l = 0, npops-1
+            loc_tempR(l) = loc_tempR(l)*oneminusomega + equil(rhoR,u,v,w,l)*omega
+        enddo
+        do l = 0, npops-1
+            loc_tempB(l) = loc_tempB(l)*oneminusomega + equil(rhoB,u,v,w,l)*omega
+        enddo
+#endif
 
         ! Psi calc
         psix = ZERO
@@ -635,7 +663,11 @@
 
           !recoloring step
           do l=0, npops-1
-              feq = equil(rhoR,ZERO,ZERO,ZERO, l) + equil(rhoB,ZERO,ZERO,ZERO, l)
+#ifdef DIFFDENS
+              feq = equilCG(rhoR,ZERO,ZERO,ZERO,1,l) + equilCG(rhoB,ZERO,ZERO,ZERO,2,l)
+#else
+              feq = equil(rhoR,ZERO,ZERO,ZERO,l) + equil(rhoB,ZERO,ZERO,ZERO,l)
+#endif
               e_dot_psi = ex_d(l)*psix + ey_d(l)*psiy + ez_d(l)*psiz
               temp1 = rec_fact_d(l) * psinorm
 
