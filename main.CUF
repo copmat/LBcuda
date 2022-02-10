@@ -839,6 +839,7 @@ program TestLB
     subroutine SetConstants
       implicit none
       integer l, i,j,k
+      real, dimension(3) :: v1,v2
       
       if(densR.ne.1.0)densR_d=densR
       if(densB.ne.1.0)densB_d=densB
@@ -875,6 +876,14 @@ program TestLB
         xi_d(l) = xi(l)
         b_l_d(l) = b_l(l)
         rec_fact_d(l) = sqrt( real(ex(l)*ex(l) + ey(l)*ey(l) + ez(l)*ez(l)) )
+      enddo
+      
+      do l=0,npops-1
+		v1(1) = ex(l)
+		v1(2) = ey(l)
+		v1(3) = ez(l)
+	   	v2(1:3) = v1(1:3)
+        cmat_d(1:3,1:3,l) = transpose(tensor_product(v1,v2))
       enddo
       
       do l=0,linksd3q27
@@ -927,7 +936,30 @@ program TestLB
         enddo
       enddo
     end subroutine SetConstants
+    
+    pure function tensor_product(v,w)
 
+     implicit none
+
+     real, intent(in),dimension(3) :: v,w
+     real,dimension(3,3) :: tensor_product
+  
+     tensor_product(1,1)=v(1)*w(1)
+     tensor_product(2,1)=v(2)*w(1)
+     tensor_product(3,1)=v(3)*w(1)
+     
+     tensor_product(1,2)=v(1)*w(2)
+     tensor_product(2,2)=v(2)*w(2)
+     tensor_product(3,2)=v(3)*w(2)
+     
+     tensor_product(1,3)=v(1)*w(3)
+     tensor_product(2,3)=v(2)*w(3)
+     tensor_product(3,3)=v(3)*w(3)
+  
+     return
+
+    end function tensor_product
+    
     subroutine SetupParts
       implicit none
       real(4) dx, dist_3d(3), dist

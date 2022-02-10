@@ -233,6 +233,8 @@
     real, dimension(0:linksd3q27-1), constant :: ad3q27_d
     real, constant :: sigma_CG_d, beta_CG_d
     real, dimension(0:npops-1), constant :: rec_fact_d
+    
+    real, dimension(1:3,1:3,0:npops-1), constant :: cmat_d
 
     real, constant    :: ext_fxx_d, ext_fyy_d, ext_fzz_d
     real, constant    :: ext_tqx_d, ext_tqy_d, ext_tqz_d

@@ -7,6 +7,7 @@
     
    private :: equil
    private :: equilCG
+   private :: tensor_product
    private :: linear,linear2
    private :: compute_rho
    private :: compute_u_1fl,compute_v_1fl,compute_w_1fl 
@@ -46,6 +47,30 @@
      equilCG = rho * ( phi_d(l) + varphi_d(l)*alphaCG_d(k) + &
       p_d(l)*(uv+HALF*(uv*uv)-(HALF/cssq) * (u*u + v*v + w*w)))
     end function equilCG
+    
+    attributes(device) pure function tensor_product(v,w)
+
+     implicit none
+
+     real, intent(in), dimension(3) :: v,w
+     real, dimension(3,3) :: tensor_product
+  
+     tensor_product(1,1)=v(1)*w(1)
+     tensor_product(2,1)=v(2)*w(1)
+     tensor_product(3,1)=v(3)*w(1)
+     
+     tensor_product(1,2)=v(1)*w(2)
+     tensor_product(2,2)=v(2)*w(2)
+     tensor_product(3,2)=v(3)*w(2)
+     
+     tensor_product(1,3)=v(1)*w(3)
+     tensor_product(2,3)=v(2)*w(3)
+     tensor_product(3,3)=v(3)*w(3)
+     
+     return
+
+    end function tensor_product
+    
 
 !!!!!!!!!!!!! Helpers for recovering phys vars
     attributes(device) function compute_rho(pops, i,j,k, flip)
@@ -459,8 +484,13 @@
       real    :: rhoavg,omega,oneminusomega
       real    :: rhoR_shifted,rhoB_shifted,rhosum_shifted
 !      real    :: grad_rhoRx,grad_rhoRy,grad_rhoRz, grad_rhoBx,grad_rhoBy,grad_rhoBz
-      real    :: psi_shifted
+      real    :: psi_shifted,phase_field
       real    :: psix,psiy,psiz,psinorm_sq,psinorm,acoeff,e_dot_psi
+#ifdef DIFFDENS
+      real :: v_psi_R_dot,v_psi_B_dot,tens_contr
+      real, dimension(3) :: psi_R,psi_B,myvel
+      real, dimension(3,3) :: mat_R,mat_B,mat_TR,mat_TB,myG_R,myG_B
+#endif
       real    :: temp,temp1, cosphi, feq
       real, parameter :: mylimit=1.e-20
 
@@ -606,8 +636,13 @@
         rhoR = loc_rhoR(li,lj,lk)
         rhoB = loc_rhoB(li,lj,lk)
         rhosum = rhoR + rhoB
+        phase_field = (rhoR/densR_d - rhoB/densB_d) / &
+           (rhoR/densR_d + rhoB/densB_d)
 
-        rhoavg = rhoR/rhosum*viscR + rhoB/rhosum*viscB
+        ! rhoavg = rhoR/rhosum*viscR + rhoB/rhosum*viscB
+        rhoavg = 1.0 / (0.5*(1.0 + phase_field)*(1.0/viscR) & 
+			            +0.5*(1.0 - phase_field)*(1.0/viscB))
+        
         omega  = 1.0 / ( rhoavg/cssq  + 0.5)
         oneminusomega = 1.0 - omega
 
@@ -616,28 +651,17 @@
         v   = manual_v(loc_tempR) + manual_v(loc_tempB)
         w   = manual_w(loc_tempR) + manual_w(loc_tempB)
 
-#ifdef DIFFDENS
-        !bgk step
-        do l = 0, npops-1
-            loc_tempR(l) = loc_tempR(l)*oneminusomega + equilCG(rhoR,u,v,w,1,l)*omega
-        enddo
-        do l = 0, npops-1
-            loc_tempB(l) = loc_tempB(l)*oneminusomega + equilCG(rhoB,u,v,w,2,l)*omega
-        enddo
-#else
-        !bgk step
-        do l = 0, npops-1
-            loc_tempR(l) = loc_tempR(l)*oneminusomega + equil(rhoR,u,v,w,l)*omega
-        enddo
-        do l = 0, npops-1
-            loc_tempB(l) = loc_tempB(l)*oneminusomega + equil(rhoB,u,v,w,l)*omega
-        enddo
-#endif
-
         ! Psi calc
         psix = ZERO
         psiy = ZERO
         psiz = ZERO
+#ifdef DIFFDENS
+        psi_R(1:3) = ZERO
+        psi_B(1:3) = ZERO
+        myvel(1) = u
+        myvel(2) = v
+        myvel(3) = w
+#endif
 #ifdef HIGHGRAD
         do l = 1, linksd3q27-1
           i1 = li + exd3q27_d(l)
@@ -651,6 +675,14 @@
           psix = psix + ad3q27_d(l)*exd3q27_d(l)* psi_shifted
           psiy = psiy + ad3q27_d(l)*eyd3q27_d(l)* psi_shifted
           psiz = psiz + ad3q27_d(l)*ezd3q27_d(l)* psi_shifted
+#ifdef DIFFDENS
+          psi_R(1) = psi_R(1) + ad3q27_d(l)*exd3q27_d(l)* rhoR_shifted
+          psi_R(2) = psi_R(2) + ad3q27_d(l)*eyd3q27_d(l)* rhoR_shifted
+          psi_R(3) = psi_R(3) + ad3q27_d(l)*ezd3q27_d(l)* rhoR_shifted
+          psi_B(1) = psi_B(1) + ad3q27_d(l)*exd3q27_d(l)* rhoB_shifted
+          psi_B(2) = psi_B(2) + ad3q27_d(l)*eyd3q27_d(l)* rhoB_shifted
+          psi_B(3) = psi_B(3) + ad3q27_d(l)*ezd3q27_d(l)* rhoB_shifted
+#endif
         enddo
 #else
         do l = 1, npops-1
@@ -665,8 +697,54 @@
           psix = psix + a_d(l)*ex_d(l)* psi_shifted
           psiy = psiy + a_d(l)*ey_d(l)* psi_shifted
           psiz = psiz + a_d(l)*ez_d(l)* psi_shifted
+#ifdef DIFFDENS
+          psi_R(1) = psi_R(1) + a_d(l)*ex_d(l)* rhoR_shifted
+          psi_R(2) = psi_R(2) + a_d(l)*ey_d(l)* rhoR_shifted
+          psi_R(3) = psi_R(3) + a_d(l)*ez_d(l)* rhoR_shifted
+          psi_B(1) = psi_B(1) + a_d(l)*ex_d(l)* rhoB_shifted
+          psi_B(2) = psi_B(2) + a_d(l)*ey_d(l)* rhoB_shifted
+          psi_B(3) = psi_B(3) + a_d(l)*ez_d(l)* rhoB_shifted
+#endif
         enddo
 #endif
+        !relaxation step
+        
+#ifdef DIFFDENS
+        v_psi_R_dot = dot_product(myvel,psi_R)
+        v_psi_B_dot = dot_product(myvel,psi_B)
+        mat_R=tensor_product(myvel,psi_R)
+        mat_B=tensor_product(myvel,psi_B)
+        mat_TR=transpose(mat_R)
+        mat_TB=transpose(mat_B)
+        
+        myG_R= mat_R + mat_TR
+        myG_B= mat_B + mat_TB
+        
+        !bgk step
+        do l = 0, npops-1
+            tens_contr = myG_R(1,1)*cmat_d(1,1,l)+ &
+             myG_R(2,2)*cmat_d(2,2,l)+myG_R(3,3)*cmat_d(3,3,l)
+            loc_tempR(l) = loc_tempR(l)*oneminusomega + &
+             (equilCG(rhoR,u,v,w,1,l) + &
+             rhoavg*(psi_d(l)*v_psi_R_dot + xi_d(l)*tens_contr) )*omega
+        enddo
+        do l = 0, npops-1
+            tens_contr = myG_B(1,1)*cmat_d(1,1,l)+ &
+             myG_B(2,2)*cmat_d(2,2,l)+myG_B(3,3)*cmat_d(3,3,l)
+            loc_tempB(l) = loc_tempB(l)*oneminusomega + &
+             (equilCG(rhoB,u,v,w,2,l) + &
+             rhoavg*(psi_d(l)*v_psi_B_dot + xi_d(l)*tens_contr) )*omega
+        enddo
+#else
+        !bgk step
+        do l = 0, npops-1
+            loc_tempR(l) = loc_tempR(l)*oneminusomega + equil(rhoR,u,v,w,l)*omega
+        enddo
+        do l = 0, npops-1
+            loc_tempB(l) = loc_tempB(l)*oneminusomega + equil(rhoB,u,v,w,l)*omega
+        enddo
+#endif        
+        
         !perturbation step
         psinorm_sq = psix*psix + psiy*psiy + psiz*psiz
         if (psinorm_sq>mylimit) then
