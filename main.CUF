@@ -337,20 +337,84 @@ program TestLB
 #endif
 
       implicit none
-      character(len = 120)  :: string
-      integer               :: itest, found, max_vel_found
-
-      open(unit=11, file='input.dat', status='old', form='FORMATTED', action='read', iostat=itest)
-      if (itest/=0) then
-        write (*,*) "input.dat] Error opening file. STOP"
-        call mystop
-      endif
-
+      integer, parameter :: maxlen=120
+      integer, parameter :: inputio=25
+      character(len = maxlen)  :: string,inipFile,arg
+      integer               :: itest, found, max_vel_found,i,count
+      logical :: lcheck,lexist
+#ifdef NEWINPUT      
+      namelist /simulation/ nIter,nIterOut,nIterVTK,initType
+      namelist /fluid/ vx,vy,vz,densR,densB
+      namelist /particle/ withParticles,numAtoms,lrotate,ext_fxx,ext_fyy,&
+      ext_fzz,ext_tqx,ext_tqy,ext_tqz,max_vel
+#endif      
       nIter = 0.2*1000*1000*1000 / lup * 10
       nIterOut = nIter / 10
       nIter = 5
       nIterOut = 1
       nIterVTK = 100000000 !nIterOut
+      ext_fxx=ZERO;ext_fyy=ZERO;ext_fzz=ZERO
+      ext_tqx=ZERO;ext_tqy=ZERO;ext_tqz=ZERO
+      withParticles=.false.
+      lrotate=.false.
+      
+#ifdef NEWINPUT
+      lcheck=.false.
+      count = command_argument_count()
+      if(count==1)then
+        i=1
+        arg=repeat(' ',maxlen)
+        call getarg(i, arg)
+        inipFile=repeat(' ',maxlen)
+        inipFile=trim(arg)
+        if(myrank==0)write(6,*) 'file  = ',trim(inipFile)
+        lcheck=.true.
+      else
+        do i = 1, count
+          arg=repeat(' ',maxlen)
+          call getarg(i, arg)
+          if(lcheck)then
+            inipFile=repeat(' ',maxlen)
+            inipFile=trim(arg)
+            if(myrank==0)write(6,*) 'file  = ',trim(inipFile)
+            exit
+          endif
+          if(trim(arg)=='./lbCUDA')lcheck=.true.
+        enddo
+      endif
+      if(len(trim(inipFile))==0)lcheck=.false. 
+      if(.not. lcheck)then
+        if(myrank==0)then
+          write(6,*) 'error!'
+          write(6,*) 'the command line should be'
+          write(6,*) '[executable] [file]'
+          write(6,*) 'file  = name of input file'
+          write(6,*) 'STOP!'
+        endif
+        call mystop
+      endif     
+      inquire(file=trim(inipFile),exist=lexist)
+      if(.not. lexist)then
+        if(myrank==0)then
+          write(6,*)'ERROR: file ',trim(inipFile),' does not exist!'
+          write(6,*) 'the command line should be'
+          write(6,*) '[executable] [file]'
+          write(6,*) 'file  = name of input file'
+        endif
+        call mystop
+      endif
+      open(unit=inputio,file=trim(inipFile),status='old')
+      read(inputio,nml=simulation)
+      read(inputio,nml=fluid)
+      read(inputio,nml=particle)
+      close(inputio)
+#else
+      
+      open(unit=11, file='input.dat', status='old', form='FORMATTED', action='read', iostat=itest)
+      if (itest/=0) then
+        write (*,*) "input.dat] Error opening file. STOP"
+        call mystop
+      endif
 
       found = 0
       ! Header line
@@ -416,7 +480,7 @@ program TestLB
 
       120 continue
       close(11)
-
+      
       ! write (*,*) 'found',found, withParticles, lrotate
 
       if ((lrotate .and. found /= 10) .or. &
@@ -434,7 +498,11 @@ program TestLB
         if (lrotate .and. found<10) write (*,*) 'ext_tqx,ext_tqy,ext_tqz not found'
         call mystop
       endif
-    end subroutine
+      
+#endif
+
+      
+    end subroutine 
 
 
     subroutine fixPeriodic_isfluid(msg)

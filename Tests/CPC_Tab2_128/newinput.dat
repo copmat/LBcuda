@@ -1,0 +1,25 @@
+&simulation
+nIter=5000    !niter  number of iterations
+nIterOut=500  !stat print on screen every n
+nIterVTK=500  !vtk print every n
+initType=1    ! init TYPE 1=droplet, 2=planez, 3=read Rho, 4=read all, 5=cylinder, 6=RandomR+ b=1-R
+&end
+&fluid
+densR=2.0
+densB=1.0
+vx=0.0
+vy=0.0
+vz=0.0
+&end
+&particle
+withParticles=.false.
+numAtoms=20000
+lrotate=.false.
+ext_fxx=0.0
+ext_fyy=0.0
+ext_fzz=0.0
+ext_tqx=0.0
+ext_tqy=0.0
+ext_tqz=0.0
+max_vel=1.0
+&end

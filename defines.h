@@ -4,6 +4,7 @@
 #define FLUIDSPLIT
 #define HIGHGRAD
 #define DIFFDENS
+#define noNEWINPUT
 
 #ifndef MYDIMESION
 #define MYDIMESION 64
