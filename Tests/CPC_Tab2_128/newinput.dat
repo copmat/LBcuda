@@ -10,6 +10,8 @@ densB=1.0
 vx=0.0
 vy=0.0
 vz=0.0
+tauR=1.0
+tauB=1.0
 &end
 &particle
 withParticles=.false.

@@ -47,7 +47,6 @@ program TestLB
   logical :: pinnedFlag = .true.
 
   ! Phys params
-  real(4) :: omega
   ! Initial fluid velocity
   real :: vx,vy,vz
   ! Input type
@@ -111,11 +110,6 @@ program TestLB
 
   ! if (wantOut) call DumpBorderPlanez("step_", 0, 1)  
   if (wantOut) call OutputVTK("step_", 0, 1)
-
-  
-  ! tauR = viscR/cssq + HALF
-  ! viscR = cssq*(tauR-HALF)
-  omega = ONE / tauR
 
   step = 1
 
@@ -344,7 +338,7 @@ program TestLB
       logical :: lcheck,lexist
 #ifdef NEWINPUT      
       namelist /simulation/ nIter,nIterOut,nIterVTK,initType
-      namelist /fluid/ vx,vy,vz,densR,densB
+      namelist /fluid/ vx,vy,vz,densR,densB,tauR,tauB
       namelist /particle/ withParticles,numAtoms,lrotate,ext_fxx,ext_fyy,&
       ext_fzz,ext_tqx,ext_tqy,ext_tqz,max_vel
 #endif      
@@ -586,12 +580,16 @@ program TestLB
       use mpi
       implicit none
       character(len=*), intent(in) :: msg
-
-      integer      :: reqs_right(5)
-      integer      :: status_up(MPI_STATUS_SIZE)
+#ifdef D3Q27
+      integer      :: reqs_up(9)
+      integer      :: reqs_down(9)
+#else
       integer      :: reqs_up(5)
-      integer      :: status_down(MPI_STATUS_SIZE)
       integer      :: reqs_down(5)
+#endif
+      
+      integer      :: status_up(MPI_STATUS_SIZE)
+      integer      :: status_down(MPI_STATUS_SIZE)
       integer      :: tag
 
 #endif
@@ -667,6 +665,21 @@ program TestLB
               tag = 017
               call mpi_isend(popsR_d(0,0,nz  ,17,flipflop), 1, xyplane, up(2), tag, &
                                 lbecomm, reqs_up(5), ierr)
+#ifdef D3Q27
+              tag = 019
+              call mpi_isend(popsR_d(0,0,nz  ,19,flipflop), 1, xyplane, up(2), tag, &
+                                lbecomm, reqs_up(6), ierr)
+              tag = 022
+              call mpi_isend(popsR_d(0,0,nz  ,22,flipflop), 1, xyplane, up(2), tag, &
+                                lbecomm, reqs_up(7), ierr)
+              tag = 023
+              call mpi_isend(popsR_d(0,0,nz  ,23,flipflop), 1, xyplane, up(2), tag, &
+                                lbecomm, reqs_up(8), ierr)
+              tag = 025
+              call mpi_isend(popsR_d(0,0,nz  ,25,flipflop), 1, xyplane, up(2), tag, &
+                                lbecomm, reqs_up(9), ierr)
+#endif
+
 !
 ! 2) recv from down task
               tag = 005
@@ -684,6 +697,20 @@ program TestLB
               tag = 017
               call mpi_recv(popsR_d(0,0, 0  ,17,flipflop), 1, xyplane, down(2), tag, &
                                 lbecomm, status_up, ierr)
+#ifdef D3Q27
+              tag = 019
+              call mpi_recv(popsR_d(0,0, 0  ,19,flipflop), 1, xyplane, down(2), tag, &
+                                lbecomm, status_up, ierr)
+              tag = 022
+              call mpi_recv(popsR_d(0,0, 0  ,22,flipflop), 1, xyplane, down(2), tag, &
+                                lbecomm, status_up, ierr)
+              tag = 023
+              call mpi_recv(popsR_d(0,0, 0  ,23,flipflop), 1, xyplane, down(2), tag, &
+                                lbecomm, status_up, ierr)
+              tag = 025
+              call mpi_recv(popsR_d(0,0, 0  ,25,flipflop), 1, xyplane, down(2), tag, &
+                                lbecomm, status_up, ierr)
+#endif
 !
 ! 3) isend to down task
               tag = 006
@@ -701,6 +728,20 @@ program TestLB
               tag = 018
               call mpi_isend(popsR_d(0,0, 1  ,18,flipflop), 1, xyplane, down(2), tag, &
                                 lbecomm, reqs_down(5), ierr)
+#ifdef D3Q27
+              tag = 020
+              call mpi_isend(popsR_d(0,0, 1  ,20,flipflop), 1, xyplane, down(2), tag, &
+                                lbecomm, reqs_down(6), ierr)
+              tag = 021
+              call mpi_isend(popsR_d(0,0, 1  ,21,flipflop), 1, xyplane, down(2), tag, &
+                                lbecomm, reqs_down(7), ierr)
+              tag = 024
+              call mpi_isend(popsR_d(0,0, 1  ,24,flipflop), 1, xyplane, down(2), tag, &
+                                lbecomm, reqs_down(8), ierr)
+              tag = 026
+              call mpi_isend(popsR_d(0,0, 1  ,26,flipflop), 1, xyplane, down(2), tag, &
+                                lbecomm, reqs_down(9), ierr)
+#endif
 !
 ! 4) recv from up task
               tag = 006
@@ -718,6 +759,20 @@ program TestLB
               tag = 018
               call mpi_recv(popsR_d( 0,0,nz+1,18,flipflop), 1, xyplane, up(2), tag, &
                                 lbecomm, status_down, ierr)
+#ifdef D3Q27
+              tag = 020
+              call mpi_recv(popsR_d( 0,0,nz+1,20,flipflop), 1, xyplane, up(2), tag, &
+                                lbecomm, status_down, ierr)
+              tag = 021
+              call mpi_recv(popsR_d( 0,0,nz+1,21,flipflop), 1, xyplane, up(2), tag, &
+                                lbecomm, status_down, ierr)
+              tag = 024
+              call mpi_recv(popsR_d( 0,0,nz+1,24,flipflop), 1, xyplane, up(2), tag, &
+                                lbecomm, status_down, ierr)
+              tag = 026
+              call mpi_recv(popsR_d( 0,0,nz+1,26,flipflop), 1, xyplane, up(2), tag, &
+                                lbecomm, status_down, ierr)
+#endif
 !
 ! 5) sincronizza
               call mpi_wait(reqs_up(1), status_up, ierr)
@@ -730,6 +785,16 @@ program TestLB
               call mpi_wait(reqs_down(4), status_down, ierr)
               call mpi_wait(reqs_up(5), status_up, ierr)
               call mpi_wait(reqs_down(5), status_down, ierr)
+#ifdef D3Q27
+              call mpi_wait(reqs_up(6), status_up, ierr)
+              call mpi_wait(reqs_down(6), status_down, ierr)
+              call mpi_wait(reqs_up(7), status_up, ierr)
+              call mpi_wait(reqs_down(7), status_down, ierr)
+              call mpi_wait(reqs_up(8), status_up, ierr)
+              call mpi_wait(reqs_down(8), status_down, ierr)
+              call mpi_wait(reqs_up(9), status_up, ierr)
+              call mpi_wait(reqs_down(9), status_down, ierr)
+#endif
             endif
 !
 ! -----------------------------------------------------------------------------------
@@ -779,6 +844,20 @@ program TestLB
             tag = 117
             call mpi_isend(popsB_d(0,0,nz  ,17,flipflop), 1, xyplane, up(2), tag, &
                               lbecomm, reqs_up(5), ierr)
+#ifdef D3Q27
+            tag = 119
+            call mpi_isend(popsB_d(0,0,nz  ,19,flipflop), 1, xyplane, up(2), tag, &
+                              lbecomm, reqs_up(6), ierr)
+            tag = 122
+            call mpi_isend(popsB_d(0,0,nz  ,22,flipflop), 1, xyplane, up(2), tag, &
+                              lbecomm, reqs_up(7), ierr)
+            tag = 123
+            call mpi_isend(popsB_d(0,0,nz  ,23,flipflop), 1, xyplane, up(2), tag, &
+                              lbecomm, reqs_up(8), ierr)
+            tag = 125
+            call mpi_isend(popsB_d(0,0,nz  ,25,flipflop), 1, xyplane, up(2), tag, &
+                              lbecomm, reqs_up(9), ierr)
+#endif
 !
 ! 2) recv from down task
             tag = 105
@@ -796,6 +875,20 @@ program TestLB
             tag = 117
             call mpi_recv(popsB_d(0,0, 0  ,17,flipflop), 1, xyplane, down(2), tag, &
                               lbecomm, status_up, ierr)
+#ifdef D3Q27
+            tag = 119
+            call mpi_recv(popsB_d(0,0, 0  ,19,flipflop), 1, xyplane, down(2), tag, &
+                              lbecomm, status_up, ierr)
+            tag = 122
+            call mpi_recv(popsB_d(0,0, 0  ,22,flipflop), 1, xyplane, down(2), tag, &
+                              lbecomm, status_up, ierr)
+            tag = 123
+            call mpi_recv(popsB_d(0,0, 0  ,23,flipflop), 1, xyplane, down(2), tag, &
+                              lbecomm, status_up, ierr)
+            tag = 125
+            call mpi_recv(popsB_d(0,0, 0  ,25,flipflop), 1, xyplane, down(2), tag, &
+                              lbecomm, status_up, ierr)
+#endif
 !
 ! 3) isend to down task
             tag = 106
@@ -813,6 +906,20 @@ program TestLB
             tag = 118
             call mpi_isend(popsB_d(0,0, 1  ,18,flipflop), 1, xyplane, down(2), tag, &
                               lbecomm, reqs_down(5), ierr)
+#ifdef D3Q27
+            tag = 120
+            call mpi_isend(popsB_d(0,0, 1  ,20,flipflop), 1, xyplane, down(2), tag, &
+                              lbecomm, reqs_down(6), ierr)
+            tag = 121
+            call mpi_isend(popsB_d(0,0, 1  ,21,flipflop), 1, xyplane, down(2), tag, &
+                              lbecomm, reqs_down(7), ierr)
+            tag = 124
+            call mpi_isend(popsB_d(0,0, 1  ,24,flipflop), 1, xyplane, down(2), tag, &
+                              lbecomm, reqs_down(8), ierr)
+            tag = 126
+            call mpi_isend(popsB_d(0,0, 1  ,26,flipflop), 1, xyplane, down(2), tag, &
+                              lbecomm, reqs_down(9), ierr)
+#endif
 !
 ! 4) recv from up task
             tag = 106
@@ -830,6 +937,20 @@ program TestLB
             tag = 118
             call mpi_recv(popsB_d( 0,0,nz+1,18,flipflop), 1, xyplane, up(2), tag, &
                               lbecomm, status_down, ierr)
+#ifdef D3Q27
+            tag = 120
+            call mpi_recv(popsB_d( 0,0,nz+1,20,flipflop), 1, xyplane, up(2), tag, &
+                              lbecomm, status_down, ierr)
+            tag = 121
+            call mpi_recv(popsB_d( 0,0,nz+1,21,flipflop), 1, xyplane, up(2), tag, &
+                              lbecomm, status_down, ierr)
+            tag = 124
+            call mpi_recv(popsB_d( 0,0,nz+1,24,flipflop), 1, xyplane, up(2), tag, &
+                              lbecomm, status_down, ierr)
+            tag = 126
+            call mpi_recv(popsB_d( 0,0,nz+1,26,flipflop), 1, xyplane, up(2), tag, &
+                              lbecomm, status_down, ierr)
+#endif
 !
 ! 5) sincronizza
             call mpi_wait(reqs_up(1), status_up, ierr)
@@ -842,6 +963,16 @@ program TestLB
             call mpi_wait(reqs_down(4), status_down, ierr)
             call mpi_wait(reqs_up(5), status_up, ierr)
             call mpi_wait(reqs_down(5), status_down, ierr)
+#ifdef D3Q27
+            call mpi_wait(reqs_up(6), status_up, ierr)
+            call mpi_wait(reqs_down(6), status_down, ierr)
+            call mpi_wait(reqs_up(7), status_up, ierr)
+            call mpi_wait(reqs_down(7), status_down, ierr)
+            call mpi_wait(reqs_up(8), status_up, ierr)
+            call mpi_wait(reqs_down(8), status_down, ierr)
+            call mpi_wait(reqs_up(9), status_up, ierr)
+            call mpi_wait(reqs_down(9), status_down, ierr)
+#endif
             endif
 
           endif
@@ -909,14 +1040,29 @@ program TestLB
       integer l, i,j,k
       real, dimension(3) :: v1,v2
       
-      if(densR.ne.1.0)densR_d=densR
-      if(densB.ne.1.0)densB_d=densB
+      if(densR.ne.ONE)then
+        densR_d=densR
+      else
+        densR_d=ONE
+      endif
+      if(densB.ne.ONE)then
+        densB_d=densB
+      else
+        densB_d=ONE
+      endif
       
       if (densR.ne.1.0 .and. densB.ne.1.0) then
         write (*,*) 'the density of at leat one of the two fluids should be one', &
          densR,densB
         call mystop
       endif
+      
+      viscR = cssq*(tauR-HALF)
+      viscB = cssq*(tauB-HALF)
+      omega = ONE / tauR
+      
+      viscR_d = viscR
+      viscB_d = viscB
       
       if(densR.eq.1.0)then
         alphaCG(1)=p(0)
@@ -1237,7 +1383,8 @@ program TestLB
       write(*,fmt=100) 'nIters',nIter
       write(*,fmt=100) 'nIterOut',nIterOut
       write(*,fmt=100) 'initType',initType
-
+      write(*,fmt=108)lattice
+      
       if (withCG) then
         write(*,fmt=100) 'Fluid components', 2
         write(*,fmt=105) 'Color gradient'
@@ -1268,6 +1415,8 @@ program TestLB
       write(*,fmt=102) 'Z axis is periodic', zperiodic
       write(*,fmt=101) 'Fluid tau', tauR
       write(*,fmt=101) 'Fluid viscosity',  viscR
+      write(*,fmt=101) 'Fluid blue tau', tauB
+      write(*,fmt=101) 'Fluid blue viscosity',  viscB
       write(*,fmt=102) 'Constant omega mode', uniqueOmega
       write(*,fmt=101) 'Omega',  omega
       write(*,fmt=102) 'Forced', forced
@@ -1298,6 +1447,7 @@ program TestLB
 105    format('              Method:', a20)
 106    format(a20, ':', F20.2)
 107    format(a20, ':', 5F20.8)
+108    format('             Lattice:', a5)
     end subroutine printParams
 
 

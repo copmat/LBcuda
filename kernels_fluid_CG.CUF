@@ -156,7 +156,7 @@
 
       distx = gli - (glx/2 + 0.5)
       disty = glj - (gly/2 + 0.5)
-      distz = glk - (glz/4 + 0.5)
+      distz = glk - (glz/2 + 0.5)
 
       rdist = sqrt(distx*distx + disty*disty + distz*distz)
       tempr = fcut(rdist, radius, radius+0.1)
@@ -346,12 +346,19 @@
     end subroutine setupPops
 
     !!!!!!!!!!!!!!!!!!! Color gradient !!!!!!!!!!!!!!!!!!!
-
+#ifdef D3Q27
+#define manual_rho(pops) pops(i,j,k,0,flip) + pops(i,j,k,1,flip) + pops(i,j,k,2, flip) +   \
+       pops(i,j,k,3, flip) + pops(i,j,k,4, flip) + pops(i,j,k,5, flip) + pops(i,j,k,6, flip) + pops(i,j,k,7, flip) +                     \
+       pops(i,j,k,8, flip) + pops(i,j,k,9, flip) + pops(i,j,k,10, flip) + pops(i,j,k,11, flip) + pops(i,j,k,12, flip) +                  \
+       pops(i,j,k,13, flip) + pops(i,j,k,14, flip) + pops(i,j,k,15, flip) + pops(i,j,k,16, flip) + pops(i,j,k,17, flip) +                \
+       pops(i,j,k,18, flip) + pops(i,j,k,19, flip) + pops(i,j,k,20, flip) + pops(i,j,k,21, flip) + pops(i,j,k,22, flip) +                \
+       pops(i,j,k,23, flip) + pops(i,j,k,24, flip) + pops(i,j,k,25, flip) + pops(i,j,k,26, flip)
+#else
 #define manual_rho(pops) pops(i,j,k,0,flip) + pops(i,j,k,1,flip) + pops(i,j,k,2, flip) +   \
        pops(i,j,k,3, flip) + pops(i,j,k,4, flip) + pops(i,j,k,5, flip) + pops(i,j,k,6, flip) + pops(i,j,k,7, flip) +                     \
        pops(i,j,k,8, flip) + pops(i,j,k,9, flip) + pops(i,j,k,10, flip) + pops(i,j,k,11, flip) + pops(i,j,k,12, flip) +                  \
        pops(i,j,k,13, flip) + pops(i,j,k,14, flip) + pops(i,j,k,15, flip) + pops(i,j,k,16, flip) + pops(i,j,k,17, flip) + pops(i,j,k,18, flip)
-
+#endif
     attributes(global) subroutine init_rho_CG(step, flip)
       integer, value :: step,flip
       real    :: rhoR,rhoB
@@ -401,6 +408,22 @@
 
       ! Only on fluid nodes
       if (myfluid_d(i,j,k, flip) == fluid_fluid) then
+#ifdef D3Q27
+      rhoR = popsR_d(i,j,k,0, flip) + popsR_d(i,j,k,1, flip) + &
+               popsR_d(i,j,k,2, flip) + popsR_d(i,j,k,3, flip) + &
+               popsR_d(i,j,k,4, flip) + popsR_d(i,j,k,5, flip) + &
+               popsR_d(i,j,k,6, flip) + popsR_d(i,j,k,7, flip) + &
+               popsR_d(i,j,k,8, flip) + popsR_d(i,j,k,9, flip) + &
+               popsR_d(i,j,k,10,flip) + popsR_d(i,j,k,11,flip) + &
+               popsR_d(i,j,k,12,flip) + popsR_d(i,j,k,13,flip) + &
+               popsR_d(i,j,k,14,flip) + popsR_d(i,j,k,15,flip) + &
+               popsR_d(i,j,k,16,flip) + popsR_d(i,j,k,17,flip) + &
+               popsR_d(i,j,k,18,flip) + popsR_d(i,j,k,19,flip) + &
+               popsR_d(i,j,k,20,flip) + popsR_d(i,j,k,21,flip) + &
+               popsR_d(i,j,k,22,flip) + popsR_d(i,j,k,23,flip) + &
+               popsR_d(i,j,k,24,flip) + popsR_d(i,j,k,25,flip) + &
+               popsR_d(i,j,k,26,flip)
+#else
         rhoR = popsR_d(i,j,k,0, flip) + popsR_d(i,j,k,1, flip) + &
                popsR_d(i,j,k,2, flip) + popsR_d(i,j,k,3, flip) + &
                popsR_d(i,j,k,4, flip) + popsR_d(i,j,k,5, flip) + &
@@ -411,7 +434,7 @@
                popsR_d(i,j,k,14,flip) + popsR_d(i,j,k,15,flip) + &
                popsR_d(i,j,k,16,flip) + popsR_d(i,j,k,17,flip) + &
                popsR_d(i,j,k,18,flip)
-
+#endif
         if (rhoR<minRho .or. rhoR>maxRho) then
           write(*,*) 'init_rhoR_CG]Range error rhoR', step, linear(i,j,k), rhoR
           stop_d = __LINE__
@@ -442,6 +465,22 @@
 
       ! Only on fluid nodes
       if (myfluid_d(i,j,k, flip) == fluid_fluid) then
+#ifdef D3Q27
+        rhoB = popsB_d(i,j,k,0, flip) + popsB_d(i,j,k,1, flip) + &
+               popsB_d(i,j,k,2, flip) + popsB_d(i,j,k,3, flip) + &
+               popsB_d(i,j,k,4, flip) + popsB_d(i,j,k,5, flip) + &
+               popsB_d(i,j,k,6, flip) + popsB_d(i,j,k,7, flip) + &
+               popsB_d(i,j,k,8, flip) + popsB_d(i,j,k,9, flip) + &
+               popsB_d(i,j,k,10,flip) + popsB_d(i,j,k,11,flip) + &
+               popsB_d(i,j,k,12,flip) + popsB_d(i,j,k,13,flip) + &
+               popsB_d(i,j,k,14,flip) + popsB_d(i,j,k,15,flip) + &
+               popsB_d(i,j,k,16,flip) + popsB_d(i,j,k,17,flip) + &
+               popsB_d(i,j,k,18,flip) + popsB_d(i,j,k,19,flip) + &
+               popsB_d(i,j,k,20,flip) + popsB_d(i,j,k,21,flip) + &
+               popsB_d(i,j,k,22,flip) + popsB_d(i,j,k,23,flip) + &
+               popsB_d(i,j,k,24,flip) + popsB_d(i,j,k,25,flip) + &
+               popsB_d(i,j,k,26,flip)
+#else
         rhoB = popsB_d(i,j,k,0, flip) + popsB_d(i,j,k,1, flip) + &
                popsB_d(i,j,k,2, flip) + popsB_d(i,j,k,3, flip) + &
                popsB_d(i,j,k,4, flip) + popsB_d(i,j,k,5, flip) + &
@@ -452,7 +491,7 @@
                popsB_d(i,j,k,14,flip) + popsB_d(i,j,k,15,flip) + &
                popsB_d(i,j,k,16,flip) + popsB_d(i,j,k,17,flip) + &
                popsB_d(i,j,k,18,flip)
-
+#endif
         if (rhoB<minRho .or. rhoB>maxRho) then
           write(*,*) 'init_rhoB_CG]Range error rhoB', step, linear(i,j,k), rhoB
           stop_d = __LINE__
@@ -468,7 +507,18 @@
       endif
 
     end subroutine init_rhoB_CG
+#ifdef D3Q27
+#define manual_u(pops)   invrho * ( pops(1) - pops(2) + pops(7) - pops(8) - pops(9) + \
+       pops(10) + pops(11) - pops(12) - pops(13) + pops(14) + pops(19) - pops(20) + \
+       pops(21) - pops(22) - pops(23) + pops(24) + pops(25) - pops(26) )
 
+#define manual_v(pops)   invrho * ( pops(3) - pops(4) + pops(7) - pops(8) + pops(9) - \
+       pops(10) + pops(15) - pops(16) - pops(17) + pops(18) + pops(19) - pops(20) + \
+       pops(21) - pops(22) + pops(23) - pops(24) - pops(25) + pops(26) )
+#define manual_w(pops)   invrho * ( pops(5) - pops(6) + pops(11) - pops(12) + pops(13) - \
+       pops(14) + pops(15) - pops(16) + pops(17) - pops(18) + pops(19) - pops(20) - \
+       pops(21) + pops(22) + pops(23) - pops(24) + pops(25) - pops(26) )
+#else
 #define manual_u(pops)   invrho * ( pops(1) - pops(2) + pops(7) - pops(8) - pops(9) + \
        pops(10) + pops(11) - pops(12) - pops(13) + pops(14) )
 
@@ -477,15 +527,15 @@
 
 #define manual_w(pops)   invrho * ( pops(5) - pops(6) + pops(11) - pops(12) + pops(13) - \
        pops(14) + pops(15) - pops(16) + pops(17) - pops(18) )
-
+#endif
     attributes(global) subroutine time_step_CG(step, flip)
       integer, value :: step,flip
       real    :: rhoR,rhoB,rhosum,invrho, u,v,w
-      real    :: rhoavg,omega,oneminusomega
+      real    :: viscavg,omega,oneminusomega
       real    :: rhoR_shifted,rhoB_shifted,rhosum_shifted
 !      real    :: grad_rhoRx,grad_rhoRy,grad_rhoRz, grad_rhoBx,grad_rhoBy,grad_rhoBz
       real    :: psi_shifted,phase_field
-      real    :: psix,psiy,psiz,psinorm_sq,psinorm,acoeff,e_dot_psi
+      real    :: psix,psiy,psiz,psinorm_sq,psinorm,acoeff,e_dot_psi,myrhoR
 #ifdef DIFFDENS
       real :: v_psi_R_dot,v_psi_B_dot,tens_contr
       real, dimension(3) :: psi_R,psi_B,myvel
@@ -493,7 +543,7 @@
 #endif
       real    :: temp,temp1, cosphi, feq
       real, parameter :: mylimit=1.e-20
-
+      
 !      real,shared    :: loc_tempR(TILE_DIMx,TILE_DIMy,TILE_DIMz,0:npops-1)
 !      real,shared    :: loc_tempB(TILE_DIMx,TILE_DIMy,TILE_DIMz,0:npops-1)
 !      real,shared    :: loc_fdum(TILE_DIMx,TILE_DIMy,TILE_DIMz,0:npops-1)
@@ -502,11 +552,15 @@
 !      real,shared    :: loc_popsB(TILE_DIMx,TILE_DIMy,TILE_DIMz, 0:18)
       real,shared    :: loc_rhoR(0:TILE_DIMx+1,0:TILE_DIMy+1,0:TILE_DIMz+1)
       real,shared    :: loc_rhoB(0:TILE_DIMx+1,0:TILE_DIMy+1,0:TILE_DIMz+1)
-      
+
+#ifdef D3Q27
+      real :: loc_tempR(0:26),loc_tempB(0:26),loc_fdum(0:26)
+#else
       real :: loc_tempR(0:18),loc_tempB(0:18),loc_fdum(0:18)
+#endif
       integer :: i,j,k, i1,j1,k1,l
       integer :: li,lj,lk
-
+      integer :: gli,glj,glk
 
       i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
       j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
@@ -633,17 +687,18 @@
       call syncthreads
 
       if (myfluid_d(i,j,k, flip) == fluid_fluid) then
+      
         rhoR = loc_rhoR(li,lj,lk)
         rhoB = loc_rhoB(li,lj,lk)
         rhosum = rhoR + rhoB
         phase_field = (rhoR/densR_d - rhoB/densB_d) / &
            (rhoR/densR_d + rhoB/densB_d)
 
-        ! rhoavg = rhoR/rhosum*viscR + rhoB/rhosum*viscB
-        rhoavg = 1.0 / (0.5*(1.0 + phase_field)*(1.0/viscR) & 
-			            +0.5*(1.0 - phase_field)*(1.0/viscB))
+        ! viscavg = rhoR/rhosum*viscR_d + rhoB/rhosum*viscB_d
+        viscavg = 1.0 / (0.5*(1.0 + phase_field)*(1.0/viscR_d) & 
+			            +0.5*(1.0 - phase_field)*(1.0/viscB_d))
         
-        omega  = 1.0 / ( rhoavg/cssq  + 0.5)
+        omega  = 1.0 / ( viscavg/cssq  + 0.5)
         oneminusomega = 1.0 - omega
 
         invrho = 1.0 / rhosum
@@ -726,14 +781,14 @@
              myG_R(2,2)*cmat_d(2,2,l)+myG_R(3,3)*cmat_d(3,3,l)
             loc_tempR(l) = loc_tempR(l)*oneminusomega + &
              (equilCG(rhoR,u,v,w,1,l) + &
-             rhoavg*(psi_d(l)*v_psi_R_dot + xi_d(l)*tens_contr) )*omega
+             viscavg*(psi_d(l)*v_psi_R_dot + xi_d(l)*tens_contr) )*omega
         enddo
         do l = 0, npops-1
             tens_contr = myG_B(1,1)*cmat_d(1,1,l)+ &
              myG_B(2,2)*cmat_d(2,2,l)+myG_B(3,3)*cmat_d(3,3,l)
             loc_tempB(l) = loc_tempB(l)*oneminusomega + &
              (equilCG(rhoB,u,v,w,2,l) + &
-             rhoavg*(psi_d(l)*v_psi_B_dot + xi_d(l)*tens_contr) )*omega
+             viscavg*(psi_d(l)*v_psi_B_dot + xi_d(l)*tens_contr) )*omega
         enddo
 #else
         !bgk step
@@ -902,6 +957,16 @@
           popsR_d(i+0,j-1,k-1,16, flop) = popsR_d(i,j,k,16,flip)
           popsR_d(i+0,j-1,k+1,17, flop) = popsR_d(i,j,k,17,flip)
           popsR_d(i+0,j+1,k-1,18, flop) = popsR_d(i,j,k,18,flip)
+#ifdef D3Q27
+          popsR_d(i+1,j+1,k+1,19, flop) = popsR_d(i,j,k,19,flip)
+          popsR_d(i-1,j-1,k-1,20, flop) = popsR_d(i,j,k,20,flip)
+          popsR_d(i+1,j+1,k-1,21, flop) = popsR_d(i,j,k,21,flip)
+          popsR_d(i-1,j-1,k+1,22, flop) = popsR_d(i,j,k,22,flip)
+          popsR_d(i-1,j+1,k+1,23, flop) = popsR_d(i,j,k,23,flip)
+          popsR_d(i+1,j-1,k-1,24, flop) = popsR_d(i,j,k,24,flip)
+          popsR_d(i+1,j-1,k+1,25, flop) = popsR_d(i,j,k,25,flip)
+          popsR_d(i-1,j+1,k-1,26, flop) = popsR_d(i,j,k,26,flip)
+#endif
       endif
     end subroutine streamR_CG
 
@@ -936,6 +1001,16 @@
           popsB_d(i+0,j-1,k-1,16, flop) = popsB_d(i,j,k,16,flip)
           popsB_d(i+0,j-1,k+1,17, flop) = popsB_d(i,j,k,17,flip)
           popsB_d(i+0,j+1,k-1,18, flop) = popsB_d(i,j,k,18,flip)
+#ifdef D3Q27
+          popsB_d(i+1,j+1,k+1,19, flop) = popsB_d(i,j,k,19,flip)
+          popsB_d(i-1,j-1,k-1,20, flop) = popsB_d(i,j,k,20,flip)
+          popsB_d(i+1,j+1,k-1,21, flop) = popsB_d(i,j,k,21,flip)
+          popsB_d(i-1,j-1,k+1,22, flop) = popsB_d(i,j,k,22,flip)
+          popsB_d(i-1,j+1,k+1,23, flop) = popsB_d(i,j,k,23,flip)
+          popsB_d(i+1,j-1,k-1,24, flop) = popsB_d(i,j,k,24,flip)
+          popsB_d(i+1,j-1,k+1,25, flop) = popsB_d(i,j,k,25,flip)
+          popsB_d(i-1,j+1,k-1,26, flop) = popsB_d(i,j,k,26,flip)
+#endif
       endif
     end subroutine streamB_CG
 
