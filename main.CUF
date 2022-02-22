@@ -38,6 +38,8 @@ program TestLB
 
   ! misc
   type (dim3) :: dimGrid, dimBlock, dimGridx,dimGridy,dimGridz, dimBlock2
+  type (dim3) :: dimGridhalox
+  
   integer     :: dimGridAtm, dimBlockAtm
   type (dim3) :: dimGridSubd, dimBlockSubd
   type (cudaDeviceProp) :: prop
@@ -105,7 +107,7 @@ program TestLB
   call spherical_template
 #endif
   call setupRho_Pops
-
+  
   call fixPeriodic(.true., .true., "after_setup")
 
   ! if (wantOut) call DumpBorderPlanez("step_", 0, 1)  
@@ -430,7 +432,7 @@ program TestLB
       read(11, *, end=120) initType
       found = 4
       
-      read(11, *, end=120) vx,vy,vz,densR,densB
+      read(11, *, end=120) vx,vy,vz
       found = 5
 
       read(11, *, end=120) string, numAtoms
@@ -609,7 +611,9 @@ program TestLB
 #else
           call bc_per_x2<<<dimGridx, dimBlock2>>>(step, flipflop, faiPops,faiRho)
           call bc_per_y2<<<dimGridy, dimBlock2>>>(step, flipflop, faiPops,faiRho)
-
+          
+          
+          
           call abortOnLastErrorAndSync(msg,step, flipflop)
 
 ! if it is the same task, there's no need to send/recv data
@@ -983,7 +987,8 @@ program TestLB
             call bc_edge_z2<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
           else
             ! NON VA FATTO
-            
+              !call abortOnLastErrorAndSync(msg,step, flipflop)
+              
 !             mpi rho+pop myrank <--> up(2)
              call bc_edge_z2<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
           endif
@@ -1039,7 +1044,7 @@ program TestLB
       implicit none
       integer l, i,j,k
       real, dimension(3) :: v1,v2
-      
+#ifdef DIFFDENS      
       if(densR.ne.ONE)then
         densR_d=densR
       else
@@ -1056,7 +1061,12 @@ program TestLB
          densR,densB
         call mystop
       endif
-      
+#else
+      densR = ONE
+      densB = ONE
+      densR_d = densR
+      densB_d = densB
+#endif      
       viscR = cssq*(tauR-HALF)
       viscB = cssq*(tauB-HALF)
       omega = ONE / tauR
@@ -2144,9 +2154,13 @@ program TestLB
   
     dimGrid  = dim3(nx/TILE_DIMx, ny/TILE_DIMy, nz/TILE_DIMz)
     dimBlock = dim3(TILE_DIMx, TILE_DIMy, TILE_DIMz)
-  
+    !(ceiling((ny+2)/TILE_DIM)) 
     dimGridx  = dim3((ny+2+TILE_DIM-1)/TILE_DIM, (nz+2+TILE_DIM-1)/TILE_DIM, 1)
     dimGridy  = dim3((nx+2+TILE_DIM-1)/TILE_DIM, (nz+2+TILE_DIM-1)/TILE_DIM, 1)
+    
+    
+    
+    
     dimGridz  = dim3((nx+2+TILE_DIM-1)/TILE_DIM, (ny+2+TILE_DIM-1)/TILE_DIM, 1)
     dimBlock2 = dim3(TILE_DIM, TILE_DIM, 1)
   

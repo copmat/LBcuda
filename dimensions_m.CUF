@@ -340,6 +340,8 @@
     integer, parameter :: TILE_DIMy = TILE2
     integer, parameter :: TILE_DIMz = TILE3
     integer, parameter :: TILE_DIMPART = 32
+    
+    integer, parameter :: NHALO = 2
 
     ! MPI
     integer, constant  :: offset_d(3)
