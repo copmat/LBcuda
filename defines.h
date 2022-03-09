@@ -1,10 +1,11 @@
-#define noBGK
-#define CG
+#define BGK
+#define noMOMBGK
+#define noCG
 #define noPARTICLES
 #define FLUIDSPLIT
 #define HIGHGRAD
 #define noDIFFDENS
-#define noNEWINPUT
+#define NEWINPUT
 #define noD3Q27
 
 #ifndef MYDIMESION

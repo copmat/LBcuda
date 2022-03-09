@@ -9,8 +9,7 @@
    private :: equilCG
    private :: tensor_product
    private :: linear,linear2
-   private :: compute_rho
-   private :: compute_u_1fl,compute_v_1fl,compute_w_1fl 
+   
   contains
 
     attributes(device) pure function linear(i,j,k)
@@ -72,56 +71,6 @@
     end function tensor_product
     
 
-!!!!!!!!!!!!! Helpers for recovering phys vars
-    attributes(device) function compute_rho(pops, i,j,k, flip)
-     integer, intent(in) :: i,j,k, flip
-     real, intent(in) :: pops(0:nx+1,0:ny+1,0:nz_d+1, 0:npops-1, 2)
-     real :: compute_rho
-
-     compute_rho = pops(i,j,k,0, flip) + pops(i,j,k,1, flip) + pops(i,j,k,2, flip) + &
-       pops(i,j,k,3, flip) + pops(i,j,k,4, flip) + &
-       pops(i,j,k,5, flip) + pops(i,j,k,6, flip) + pops(i,j,k,7, flip) + &
-       pops(i,j,k,8, flip) + pops(i,j,k,9, flip) + &
-       pops(i,j,k,10, flip) + pops(i,j,k,11, flip) + pops(i,j,k,12, flip) + &
-       pops(i,j,k,13, flip) + pops(i,j,k,14, flip) + &
-       pops(i,j,k,15, flip) + pops(i,j,k,16, flip) + &
-       pops(i,j,k,17, flip) + pops(i,j,k,18, flip)
-    end function compute_rho
-
-    attributes(device) function compute_u_1fl(pops, i,j,k, flip, invrho)
-     integer, intent(in) :: i,j,k, flip
-     real, intent(in) :: pops(0:nx+1,0:ny+1,0:nz_d+1, 0:npops-1, 2), invrho
-     real :: compute_u_1fl
-
-     compute_u_1fl   = invrho * ( pops(i,j,k,1, flip) - pops(i,j,k,2, flip) + pops(i,j,k,7, flip) - &
-       pops(i,j,k,8, flip) - pops(i,j,k,9, flip) + &
-       pops(i,j,k,10, flip) + pops(i,j,k,11, flip) - pops(i,j,k,12, flip) - &
-       pops(i,j,k,13, flip) + pops(i,j,k,14, flip) )
-    end function compute_u_1fl
-
-    attributes(device) function compute_v_1fl(pops, i,j,k, flip, invrho)
-     integer, intent(in) :: i,j,k, flip
-     real, intent(in) :: pops(0:nx+1,0:ny+1,0:nz_d+1, 0:npops-1, 2), invrho
-     real :: compute_v_1fl
-
-     compute_v_1fl    = invrho * ( pops(i,j,k,3, flip) - pops(i,j,k,4, flip) + pops(i,j,k,7, flip) - &
-       pops(i,j,k,8, flip) + pops(i,j,k,9, flip) - &
-       pops(i,j,k,10, flip) + pops(i,j,k,15, flip) - pops(i,j,k,16, flip) - &
-       pops(i,j,k,17, flip) + pops(i,j,k,18, flip) )
-    end function compute_v_1fl
-
-    attributes(device) function compute_w_1fl(pops, i,j,k, flip, invrho)
-     integer, intent(in) :: i,j,k, flip
-     real, intent(in) :: pops(0:nx+1,0:ny+1,0:nz_d+1, 0:npops-1, 2), invrho
-     real :: compute_w_1fl
-
-     compute_w_1fl    = invrho * ( pops(i,j,k,5, flip) - pops(i,j,k,6, flip) + pops(i,j,k,11, flip) - &
-       pops(i,j,k,12, flip) + pops(i,j,k,13, flip) - &
-       pops(i,j,k,14, flip) + pops(i,j,k,15, flip) - pops(i,j,k,16, flip) + &
-       pops(i,j,k,17, flip) - pops(i,j,k,18, flip) )
-
-    end function compute_w_1fl
-!!!!!!!!!!!!!!!!!!!!!!!!!!!!!	 	END of Helpers for recovering phys vars
 
 
     attributes(device) function fcut(r, r1, r2)
@@ -136,6 +85,69 @@
         fcut = HALF * cos((r-r1)*Pi/(r2-r1)) + HALF
      endif
     end function fcut
+    
+    attributes(global) subroutine setup1(vx,vy,vz)
+      real, value :: vx,vy,vz
+      integer :: i,j,k, l
+      integer :: gli,glj,glk
+      real    :: rhoR,rhoB, u,v,w, eqR,eqB, distx,disty,distz, rdist,tempr
+      real,parameter    :: radius = glz/8
+  
+      i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
+      j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
+      k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
+
+      gli = i + offset_d(1)
+      glj = j + offset_d(2)
+      glk = k + offset_d(3)
+
+      if (1==i*j*k+offset_d(3)) write(*,*) 'CUDA setup2] offset:', gli, glj, glk
+
+      distx = gli - (glx/2 + 0.5)
+      disty = glj - (gly/2 + 0.5)
+      distz = glk - (glz/2 + 0.5)
+
+      !rdist = sqrt(distx*distx + disty*disty + distz*distz)
+      tempr = 1.0 !fcut(rdist, radius, radius+0.1)
+#ifdef DIFFDENS
+      rhoR = tempr*densR_d
+      rhoB = (1.0 - tempr)*densB_d
+#else
+      rhoR = tempr
+      rhoB = (1.0 - tempr)
+#endif
+      u = vx
+      v = vy
+      w = vz
+  
+      rhoR_d(i,j,k) = rhoR
+      rhoB_d(i,j,k) = rhoB
+      do l = 0, npops-1
+#ifdef DIFFDENS
+	      eqR = equilCG(rhoR, u,v,w, 1, l)
+	      eqB = equilCG(rhoB, u,v,w, 2, l)
+#else
+          eqR = equil(rhoR, u,v,w, l)
+	      eqB = equil(rhoB, u,v,w, l)
+#endif
+        popsR_d(i,j,k, l, 1) = eqR
+        popsB_d(i,j,k, l, 1) = eqB
+
+        ! Clears other stuff
+        popsR_d(i,j,k, l, 2) = 0.0
+        popsB_d(i,j,k, l, 2) = 0.0
+      end do
+
+      myfluid_d(i,j,k, 1) = fluid_fluid
+      myfluid_d(i,j,k, 2) = fluid_fluid
+      debugfluid_d(i,j,k) = 0
+
+      countmk_d = 0
+      countrm_d = 0
+      countn2p_d = 0
+      countp2n1_d = 0
+      countp2n2_d = 0
+    end subroutine setup1
 
     attributes(global) subroutine setup2(vx,vy,vz)
       real, value :: vx,vy,vz
@@ -1581,7 +1593,7 @@
       ! if (1==step .and. 1==j*k) write(*,*) 'CUDA bc_bb_x] j,k:',j,k
 
       if (0<=j .and. j<=ny+1 .and. 0<=k .and. k<=nz_d+1) then
-	      rho1 = compute_rho(popsR_d,1,j,k,flip)
+	      !rho1 = compute_rho(popsR_d,1,j,k,flip)
 
         popsR_d(1,j,k, 1, flip) = popsR_d(0, j,   k,    2, flip)
         popsR_d(1,j,k, 7, flip) = popsR_d(0, j-1, k,    8, flip)
@@ -1589,7 +1601,7 @@
         popsR_d(1,j,k,11, flip) = popsR_d(0, j  , k-1, 12, flip)
         popsR_d(1,j,k,14, flip) = popsR_d(0, j  , k+1, 13, flip)
 
-	      rho2 = compute_rho(popsR_d,nx,j,k,flip)
+	      !rho2 = compute_rho(popsR_d,nx,j,k,flip)
 
         popsR_d(nx,j,k, 2, flip) = popsR_d(nx+1, j,   k,    1, flip)
         popsR_d(nx,j,k, 8, flip) = popsR_d(nx+1, j+1, k,    7, flip)
@@ -1635,7 +1647,7 @@
       ! if (1==step .and. 1==i*j) write(*,*) 'CUDA bc_bb_z] i,j:',i,j
 
       if (0<=j .and. j<=ny+1 .and. 0<=i .and. i<=nx+1) then
-        rho1 = compute_rho(popsR_d,i,j,1,flip)
+        !rho1 = compute_rho(popsR_d,i,j,1,flip)
 
         popsR_d(i,j,1, 5, flip) = popsR_d(i,   j,   0,  6, flip)
         popsR_d(i,j,1,11, flip) = popsR_d(i-1, j,   0, 12, flip) + p_d(12)*buz_d*rho1 * wall_z0_d(1)
@@ -1643,7 +1655,7 @@
         popsR_d(i,j,1,15, flip) = popsR_d(i,   j-1, 0, 16, flip)
         popsR_d(i,j,1,17, flip) = popsR_d(i,   j+1, 0, 18, flip)
 
-        rho2 = compute_rho(popsR_d,i,j,nz_d,flip)
+        !rho2 = compute_rho(popsR_d,i,j,nz_d,flip)
 
         popsR_d(i,j,nz_d, 6, flip) = popsR_d(i,   j,   nz_d+1,  5, flip)
         popsR_d(i,j,nz_d,12, flip) = popsR_d(i+1, j,   nz_d+1, 11, flip) - p_d(11)*buz_d*rho2 * wall_z1_d(1)
@@ -1736,28 +1748,28 @@
       ! if (1==step .and. 1==i*j) write(*,*) 'CUDA bc_bb_z] i,j:',i,j
 
       if (0<=j .and. j<=ny+1 .and. 0<=i .and. i<=nx+1) then
-        rho1 = compute_rho(popsR_d,i,j,1,flip)
+        !rho1 = compute_rho(popsR_d,i,j,1,flip)
         popsR_d(i,j,1, 5, flip) = popsR_d(i,   j,   0,  6, flip)
         popsR_d(i,j,1,11, flip) = popsR_d(i-1, j,   0, 12, flip) + p_d(12)*buz_d*rho1 * wall_z0_d(1)
         popsR_d(i,j,1,13, flip) = popsR_d(i+1, j,   0, 14, flip) - p_d(14)*buz_d*rho1 * wall_z0_d(1)
         popsR_d(i,j,1,15, flip) = popsR_d(i,   j-1, 0, 16, flip)
         popsR_d(i,j,1,17, flip) = popsR_d(i,   j+1, 0, 18, flip)
 
-        rho2 = compute_rho(popsR_d,i,j,nz_d,flip)
+        !rho2 = compute_rho(popsR_d,i,j,nz_d,flip)
         popsR_d(i,j,nz_d, 6, flip) = popsR_d(i,   j,   nz_d+1,  5, flip)
         popsR_d(i,j,nz_d,12, flip) = popsR_d(i+1, j,   nz_d+1, 11, flip) - p_d(11)*buz_d*rho2 * wall_z1_d(1)
         popsR_d(i,j,nz_d,14, flip) = popsR_d(i-1, j,   nz_d+1, 13, flip) + p_d(13)*buz_d*rho2 * wall_z1_d(1)
         popsR_d(i,j,nz_d,16, flip) = popsR_d(i,   j+1, nz_d+1, 15, flip)
         popsR_d(i,j,nz_d,18, flip) = popsR_d(i,   j-1, nz_d+1, 17, flip)
 
-        rho3 = compute_rho(popsB_d,i,j,1,flip)
+        !rho3 = compute_rho(popsB_d,i,j,1,flip)
         popsB_d(i,j,1, 5, flip) = popsB_d(i,   j,   0,  6, flip)
         popsB_d(i,j,1,11, flip) = popsB_d(i-1, j,   0, 12, flip) + p_d(12)*buz_d*rho3 * wall_z0_d(1)
         popsB_d(i,j,1,13, flip) = popsB_d(i+1, j,   0, 14, flip) - p_d(14)*buz_d*rho3 * wall_z0_d(1)
         popsB_d(i,j,1,15, flip) = popsB_d(i,   j-1, 0, 16, flip)
         popsB_d(i,j,1,17, flip) = popsB_d(i,   j+1, 0, 18, flip)
 
-        rho4 = compute_rho(popsB_d,i,j,nz_d,flip)
+        !rho4 = compute_rho(popsB_d,i,j,nz_d,flip)
         popsB_d(i,j,nz_d, 6, flip) = popsB_d(i,   j,   nz_d+1,  5, flip)
         popsB_d(i,j,nz_d,12, flip) = popsB_d(i+1, j,   nz_d+1, 11, flip) - p_d(11)*buz_d*rho4 * wall_z1_d(1)
         popsB_d(i,j,nz_d,14, flip) = popsB_d(i-1, j,   nz_d+1, 13, flip) + p_d(13)*buz_d*rho4 * wall_z1_d(1)

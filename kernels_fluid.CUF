@@ -1,3 +1,4 @@
+#include "defines.h"
   module kernels_fluid
     use dimensions_m
     implicit none
@@ -46,4 +47,70 @@
     real, device :: debug_rm_d(20000,5)
     real, device :: debug_mk_d(20000,5)
     integer(2), allocatable, device :: debugfluid_d(:,:,:)
+    public :: compute_rho
+  contains
+  
+    attributes(device) function compute_rho(pops, i,j,k, flip)
+     integer, intent(in) :: i,j,k, flip
+     real, intent(in) :: pops(0:nx+1,0:ny+1,0:nz_d+1, 0:npops-1, 2)
+     real :: compute_rho
+#ifdef D3Q27
+     compute_rho = pops(i,j,k,0, flip) + pops(i,j,k,1, flip) + pops(i,j,k,2, flip) + &
+       pops(i,j,k,3, flip) + pops(i,j,k,4, flip) + &
+       pops(i,j,k,5, flip) + pops(i,j,k,6, flip) + pops(i,j,k,7, flip) + &
+       pops(i,j,k,8, flip) + pops(i,j,k,9, flip) + &
+       pops(i,j,k,10, flip) + pops(i,j,k,11, flip) + pops(i,j,k,12, flip) + &
+       pops(i,j,k,13, flip) + pops(i,j,k,14, flip) + &
+       pops(i,j,k,15, flip) + pops(i,j,k,16, flip) + &
+       pops(i,j,k,17, flip) + pops(i,j,k,18, flip) + &
+       pops(i,j,k,19, flip) + pops(i,j,k,20, flip) + &
+       pops(i,j,k,21, flip) + pops(i,j,k,22, flip) + &
+       pops(i,j,k,23, flip) + pops(i,j,k,24, flip) + &
+       pops(i,j,k,25, flip) + pops(i,j,k,26, flip)
+#else
+     compute_rho = pops(i,j,k,0, flip) + pops(i,j,k,1, flip) + pops(i,j,k,2, flip) + &
+       pops(i,j,k,3, flip) + pops(i,j,k,4, flip) + &
+       pops(i,j,k,5, flip) + pops(i,j,k,6, flip) + pops(i,j,k,7, flip) + &
+       pops(i,j,k,8, flip) + pops(i,j,k,9, flip) + &
+       pops(i,j,k,10, flip) + pops(i,j,k,11, flip) + pops(i,j,k,12, flip) + &
+       pops(i,j,k,13, flip) + pops(i,j,k,14, flip) + &
+       pops(i,j,k,15, flip) + pops(i,j,k,16, flip) + &
+       pops(i,j,k,17, flip) + pops(i,j,k,18, flip)
+#endif       
+    end function compute_rho  
+    
+!    attributes(device) function compute_u_1fl(pops, i,j,k, flip, invrho)
+!     integer, intent(in) :: i,j,k, flip
+!     real, intent(in) :: pops(0:nx+1,0:ny+1,0:nz_d+1, 0:npops-1, 2), invrho
+!     real :: compute_u_1fl
+!
+!     compute_u_1fl   = invrho * ( pops(i,j,k,1, flip) - pops(i,j,k,2, flip) + pops(i,j,k,7, flip) - &
+!       pops(i,j,k,8, flip) - pops(i,j,k,9, flip) + &
+!       pops(i,j,k,10, flip) + pops(i,j,k,11, flip) - pops(i,j,k,12, flip) - &
+!       pops(i,j,k,13, flip) + pops(i,j,k,14, flip) )
+!    end function compute_u_1fl
+
+!    attributes(device) function compute_v_1fl(pops, i,j,k, flip, invrho)
+!     integer, intent(in) :: i,j,k, flip
+!     real, intent(in) :: pops(0:nx+1,0:ny+1,0:nz_d+1, 0:npops-1, 2), invrho
+!     real :: compute_v_1fl
+!
+!     compute_v_1fl    = invrho * ( pops(i,j,k,3, flip) - pops(i,j,k,4, flip) + pops(i,j,k,7, flip) - &
+!       pops(i,j,k,8, flip) + pops(i,j,k,9, flip) - &
+!       pops(i,j,k,10, flip) + pops(i,j,k,15, flip) - pops(i,j,k,16, flip) - &
+!       pops(i,j,k,17, flip) + pops(i,j,k,18, flip) )
+!    end function compute_v_1fl
+
+!    attributes(device) function compute_w_1fl(pops, i,j,k, flip, invrho)
+!     integer, intent(in) :: i,j,k, flip
+!     real, intent(in) :: pops(0:nx+1,0:ny+1,0:nz_d+1, 0:npops-1, 2), invrho
+!     real :: compute_w_1fl
+!
+!     compute_w_1fl    = invrho * ( pops(i,j,k,5, flip) - pops(i,j,k,6, flip) + pops(i,j,k,11, flip) - &
+!       pops(i,j,k,12, flip) + pops(i,j,k,13, flip) - &
+!       pops(i,j,k,14, flip) + pops(i,j,k,15, flip) - pops(i,j,k,16, flip) + &
+!       pops(i,j,k,17, flip) - pops(i,j,k,18, flip) )
+!
+!    end function compute_w_1fl
+    
   end module

@@ -1,12 +1,47 @@
 #include "defines.h"
 
+#ifdef D3Q27
+#define manual_rho(pops) pops(i,j,k,0,flip) + pops(i,j,k,1,flip) + pops(i,j,k,2, flip) +   \
+       pops(i,j,k,3, flip) + pops(i,j,k,4, flip) + pops(i,j,k,5, flip) + pops(i,j,k,6, flip) + pops(i,j,k,7, flip) +                     \
+       pops(i,j,k,8, flip) + pops(i,j,k,9, flip) + pops(i,j,k,10, flip) + pops(i,j,k,11, flip) + pops(i,j,k,12, flip) +                  \
+       pops(i,j,k,13, flip) + pops(i,j,k,14, flip) + pops(i,j,k,15, flip) + pops(i,j,k,16, flip) + pops(i,j,k,17, flip) +                \
+       pops(i,j,k,18, flip) + pops(i,j,k,19, flip) + pops(i,j,k,20, flip) + pops(i,j,k,21, flip) + pops(i,j,k,22, flip) +                \
+       pops(i,j,k,23, flip) + pops(i,j,k,24, flip) + pops(i,j,k,25, flip) + pops(i,j,k,26, flip)
+#else
+#define manual_rho(pops) pops(i,j,k,0,flip) + pops(i,j,k,1,flip) + pops(i,j,k,2, flip) +   \
+       pops(i,j,k,3, flip) + pops(i,j,k,4, flip) + pops(i,j,k,5, flip) + pops(i,j,k,6, flip) + pops(i,j,k,7, flip) +                     \
+       pops(i,j,k,8, flip) + pops(i,j,k,9, flip) + pops(i,j,k,10, flip) + pops(i,j,k,11, flip) + pops(i,j,k,12, flip) +                  \
+       pops(i,j,k,13, flip) + pops(i,j,k,14, flip) + pops(i,j,k,15, flip) + pops(i,j,k,16, flip) + pops(i,j,k,17, flip) + pops(i,j,k,18, flip)
+#endif
+#ifdef D3Q27
+#define manual_u(pops)   invrho * ( pops(i,j,k,1,flip) - pops(i,j,k,2,flip) + pops(i,j,k,7,flip) - pops(i,j,k,8,flip) - pops(i,j,k,9,flip) + \
+       pops(i,j,k,10,flip) + pops(i,j,k,11,flip) - pops(i,j,k,12,flip) - pops(i,j,k,13,flip) + pops(i,j,k,14,flip) + pops(i,j,k,19,flip) - pops(i,j,k,20,flip) + \
+       pops(i,j,k,21,flip) - pops(i,j,k,22,flip) - pops(i,j,k,23,flip) + pops(i,j,k,24,flip) + pops(i,j,k,25,flip) - pops(i,j,k,26,flip) )
+
+#define manual_v(pops)   invrho * ( pops(i,j,k,3,flip) - pops(i,j,k,4,flip) + pops(i,j,k,7,flip) - pops(i,j,k,8,flip) + pops(i,j,k,9,flip) - \
+       pops(i,j,k,10,flip) + pops(i,j,k,15,flip) - pops(i,j,k,16,flip) - pops(i,j,k,17,flip) + pops(i,j,k,18,flip) + pops(i,j,k,19,flip) - pops(i,j,k,20,flip) + \
+       pops(i,j,k,21,flip) - pops(i,j,k,22,flip) + pops(i,j,k,23,flip) - pops(i,j,k,24,flip) - pops(i,j,k,25,flip) + pops(i,j,k,26,flip) )
+#define manual_w(pops)   invrho * ( pops(i,j,k,5,flip) - pops(i,j,k,6,flip) + pops(i,j,k,11,flip) - pops(i,j,k,12,flip) + pops(i,j,k,13,flip) - \
+       pops(i,j,k,14,flip) + pops(i,j,k,15,flip) - pops(i,j,k,16,flip) + pops(i,j,k,17,flip) - pops(i,j,k,18,flip) + pops(i,j,k,19,flip) - pops(i,j,k,20,flip) - \
+       pops(i,j,k,21,flip) + pops(i,j,k,22,flip) + pops(i,j,k,23,flip) - pops(i,j,k,24,flip) + pops(i,j,k,25,flip) - pops(i,j,k,26,flip) )
+#else
+#define manual_u(pops)   invrho * ( pops(i,j,k,1,flip) - pops(i,j,k,2,flip) + pops(i,j,k,7,flip) - pops(i,j,k,8,flip) - pops(i,j,k,9,flip) + \
+       pops(i,j,k,10,flip) + pops(i,j,k,11,flip) - pops(i,j,k,12,flip) - pops(i,j,k,13,flip) + pops(i,j,k,14,flip) )
+
+#define manual_v(pops)   invrho * ( pops(i,j,k,3,flip) - pops(i,j,k,4,flip) + pops(i,j,k,7,flip) - pops(i,j,k,8,flip) + pops(i,j,k,9,flip) - \
+       pops(i,j,k,10,flip) + pops(i,j,k,15,flip) - pops(i,j,k,16,flip) - pops(i,j,k,17,flip) + pops(i,j,k,18,flip) )
+
+#define manual_w(pops)   invrho * ( pops(i,j,k,5,flip) - pops(i,j,k,6,flip) + pops(i,j,k,11,flip) - pops(i,j,k,12,flip) + pops(i,j,k,13,flip) - \
+       pops(i,j,k,14,flip) + pops(i,j,k,15,flip) - pops(i,j,k,16,flip) + pops(i,j,k,17,flip) - pops(i,j,k,18,flip) )
+#endif
   module kernels_bgk
     use dimensions_m
-    use kernel_fluid
+    use kernels_fluid
     implicit none
     
-    private :: equil
- 
+!    private :: equil,compute_u_1fl,compute_v_1fl, &
+!     compute_w_1fl
+!    private :: compute_rho
   contains
    
     attributes(device) function equil(rho,u,v,w, l)
@@ -37,8 +72,8 @@
 
       x = 3.14159265358979 / nx * i
       y = 3.14159265358979 / ny * j
-      z = 3.14159265358979 / nz * k
-      rho = 1 + 0.1*sin(x)*sin(x) * sin(y)*sin(y) * sin(z)*sin(z)
+      z = 3.14159265358979 / nz_d * k
+      rho = densR_d !1 + 0.1*sin(x)*sin(x) * sin(y)*sin(y) * sin(z)*sin(z)
 
       u = vx
       v = vy
@@ -72,37 +107,49 @@
 
 
     ! Time Step
-    attributes(global) subroutine time_step(step, flip, omega,oneminusomega)
+    attributes(global) subroutine time_step_mom_BGK(step, flip, omega)
       integer, value :: step,flip
-      real, value :: omega,oneminusomega
-      real    :: rho,invrho, u,v,w
+      real, value :: omega
+      real    :: rho,invrho, u,v,w,oneminusomega
       integer :: i,j,k, l, flop
       integer :: i1,j1,k1
-  
+      
+      oneminusomega = 1.0 -omega
+      
       i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
       j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
       k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
       ! if (step==1 .and. 1==i*j*k) write(*,*) 'CUDA time_step] i,k:',i,j,k
+      if (myfluid_d(i,j,k, flip) == fluid_fluid) then
+        rho = manual_rho(popsR_d) !compute_rho(popsR_d,i,j,k,flip)
+        if (rho<minRho .or. rho>10) then
+         write(*,*) 'Rho error:',rho,i,j,k
+         stop_d = __LINE__
+        endif
+        rhoR_d(i,j,k) = rho
 
-      rho = compute_rho(popsR_d,i,j,k,flip)
-      if (rho < 1.0E-7) then
-       write(*,*) 'Rho error:',rho,i,j,k
-       stop_d = __LINE__
-      endif
+    
 
-      invrho = 1.0 / rho
-      u   = compute_u_1fl(popsR_d,i,j,k,flip, invrho)
-      v   = compute_v_1fl(popsR_d,i,j,k,flip, invrho)
-      w   = compute_w_1fl(popsR_d,i,j,k,flip, invrho)
+        invrho = 1.0 / rho
+        u   = manual_u(popsR_d) !compute_u_1fl(popsR_d,i,j,k,flip, invrho)
+        v   = manual_v(popsR_d) !compute_v_1fl(popsR_d,i,j,k,flip, invrho)
+        w   = manual_w(popsR_d) !compute_w_1fl(popsR_d,i,j,k,flip, invrho)
   
-      flop = 3 - flip
-      do l = 0, npops-1
-        i1 = i + ex_d(l)
-        j1 = j + ey_d(l)
-        k1 = k + ez_d(l)
-        popsR_d(i1,j1,k1, l, flop) = popsR_d(i,j,k, l, flip)*oneminusomega + equil(rho, u,v,w, l)*omega
-      end do
-    end subroutine time_step
+        flop = 3 - flip
+        do l = 0, npops-1
+          !i1 = i + ex_d(l)
+          !j1 = j + ey_d(l)
+          !k1 = k + ez_d(l)
+          !popsR_d(i1,j1,k1, l, flop) = popsR_d(i,j,k, l, flip)*oneminusomega + equil(rho, u,v,w, l)*omega
+          popsR_d(i,j,k,l,flop) = popsR_d(i,j,k,l,flip)*oneminusomega + equil(rho, u,v,w, l)*omega
+        end do
+      
+      else
+      
+        rhoR_d(i,j,k) = MINDENS
+      endif
+      
+    end subroutine time_step_mom_BGK
 
     attributes(global) subroutine time_step_force_cost(step, flip, omega,oneminusomega)
       integer, value :: step,flip
@@ -117,16 +164,16 @@
       k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
       ! if (1==step.and.1==i*j*k) write(*,*) 'CUDA time_step_force_cost] i,k:',i,j,k
 
-      rho = compute_rho(popsR_d,i,j,k,flip)
+      rho = manual_rho(popsR_d) !compute_rho(popsR_d,i,j,k,flip)
       if (rho < 1.0E-7) then
        write(*,*) 'Rho error:',rho,i,j,k
        stop_d = __LINE__
       endif
 
       invrho = 1.0 / rho
-      u   = compute_u_1fl(popsR_d,i,j,k,flip, invrho)
-      v   = compute_v_1fl(popsR_d,i,j,k,flip, invrho)
-      w   = compute_w_1fl(popsR_d,i,j,k,flip, invrho)
+      u   = manual_u(popsR_d) !compute_u_1fl(popsR_d,i,j,k,flip, invrho)
+      v   = manual_v(popsR_d) !compute_v_1fl(popsR_d,i,j,k,flip, invrho)
+      w   = manual_w(popsR_d) !compute_w_1fl(popsR_d,i,j,k,flip, invrho)
 
       fx = fx_d * invrho
       fy = fy_d * invrho
@@ -166,16 +213,16 @@
       k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
       ! if (1==step.and.1==i*j*k) write(*,*) 'CUDA time_step_force] i,k:',i,j,k
 
-      rho = compute_rho(popsR_d,i,j,k,flip)
+      rho = manual_rho(popsR_d) !compute_rho(popsR_d,i,j,k,flip)
       if (rho < 1.0E-7) then
        write(*,*) 'Rho error:',rho,i,j,k
        stop_d = __LINE__
       endif
 
       invrho = 1.0 / rho
-      u   = compute_u_1fl(popsR_d,i,j,k,flip, invrho)
-      v   = compute_v_1fl(popsR_d,i,j,k,flip, invrho)
-      w   = compute_w_1fl(popsR_d,i,j,k,flip, invrho)
+      u   = manual_u(popsR_d) !compute_u_1fl(popsR_d,i,j,k,flip, invrho)
+      v   = manual_v(popsR_d) !compute_v_1fl(popsR_d,i,j,k,flip, invrho)
+      w   = manual_w(popsR_d) !compute_w_1fl(popsR_d,i,j,k,flip, invrho)
 
       fx = force_d(1, i,j,k) * invrho
       fy = force_d(2, i,j,k) * invrho
@@ -214,7 +261,7 @@
 
     ! Only on fluid nodes
     if (myfluid_d(i,j,k, flip) == fluid_fluid) then
-      rhoR = compute_rho(popsR_d,i,j,k,flip)
+      rhoR = manual_rho(popsR_d) !compute_rho(popsR_d,i,j,k,flip)
 
       if (rhoR<minRho .or. rhoR>10) then
         ! write(*,*) 'init_rho_isfluid_BGK]Range error rhoR', step, linear(i,j,k), rhoR
@@ -226,15 +273,19 @@
       rhoR_d(i,j,k) = MINDENS
     endif
     end subroutine init_rho_isfluid_BGK
+    
+ 
 
 
-    attributes(global) subroutine time_step_BGK(step, flip, omega,oneminusomega)
+
+    attributes(global) subroutine time_step_BGK(step, flip, omega)
       integer, value :: step,flip
-      real, value :: omega,oneminusomega
-      real    :: rhoR, invrho, u,v,w  
+      real, value :: omega
+      real    :: rhoR, invrho, u,v,w  ,oneminusomega
       integer :: i,j,k, l
       
-  
+      oneminusomega = 1.0 - omega
+      
       i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
       j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
       k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
@@ -244,9 +295,9 @@
         rhoR = rhoR_d(i,j,k)
 
         invrho = 1.0 / rhoR
-        u   = compute_u_1fl(popsR_d,i,j,k,flip, invrho)
-        v   = compute_v_1fl(popsR_d,i,j,k,flip, invrho)
-        w   = compute_w_1fl(popsR_d,i,j,k,flip, invrho)
+        u   = manual_u(popsR_d) !compute_u_1fl(popsR_d,i,j,k,flip, invrho)
+        v   = manual_v(popsR_d) !compute_v_1fl(popsR_d,i,j,k,flip, invrho)
+        w   = manual_w(popsR_d) !compute_w_1fl(popsR_d,i,j,k,flip, invrho)
 
         !bgk step
         do l = 0, npops-1
@@ -270,9 +321,203 @@
         popsR_d(i,j,k,l, flop) = popsR_d(i,j,k,l, flip)
       enddo
     end subroutine copy_BGK
+    
+    attributes(global) subroutine bc_BGK_per_x(step, flip, faiPops,faiRho)
+      integer, value :: step,flip
+      logical, value :: faiPops, faiRho
+      integer :: j,k, l
+  
+      j = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
+      k = (blockIdx%y-1) * TILE_DIM + threadIdx%y - 1
+      ! if (1==step .and. 1==j*k) write(*,*) 'CUDA bc_per_x2] i,j:',j,k
+      
+      if (1<=j .and. j<=ny .and. 1<=k .and. k<=nz_d) then
+
+         
+        if (faiPops) then
+          do l = 1, npops-1
+            popsR_d(nx+1, j,k, l, flip) = popsR_d(1,j,k, l, flip)
+            
+            popsR_d(0,j,k, l, flip) = popsR_d(nx,j,k, l, flip)
+          end do
+        endif
+
+        if (faiRho) then
+          rhoR_d (nx+1,j,k) = rhoR_d (1,j,k)
+
+          rhoR_d (0,j,k) = rhoR_d (nx,j,k)
+
+        endif
+
+      endif
+      
+    end subroutine bc_BGK_per_x
 
 
-    attributes(global) subroutine stream_BGK(step, flip)
+    attributes(global) subroutine bc_BGK_per_y(step, flip, faiPops,faiRho)
+      integer, value :: step,flip
+      logical, value :: faiPops, faiRho
+      integer :: i,k, l
+  
+      i = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
+      k = (blockIdx%y-1) * TILE_DIM + threadIdx%y - 1
+      ! if (1==step .and. 1==i*k) write(*,*) 'CUDA bc_per_y2] i,k:',i,k
+      
+      if (1<=i .and. i<=nx .and. 1<=k .and. k<=nz_d) then
+
+          
+        if (faiPops) then
+          do l = 1, npops-1
+            popsR_d(i,ny+1,k, l, flip) = popsR_d(i,1,k, l, flip)
+            
+            popsR_d(i,0,k, l, flip) = popsR_d(i,ny,k, l, flip)
+          end do
+        endif
+
+        if (faiRho) then
+          rhoR_d(i,ny+1,k) = rhoR_d(i,1,k)
+
+          rhoR_d(i,0,k) = rhoR_d(i,ny,k)
+        endif
+        
+      endif
+
+      
+      
+      
+    end subroutine bc_BGK_per_y
+    
+    attributes(global) subroutine bc_BGK_per_z(step, flip, faiPops,faiRho)
+      integer, value :: step,flip
+      logical, value :: faiPops, faiRho
+      integer :: i,j, l
+  
+      i = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
+      j = (blockIdx%y-1) * TILE_DIM + threadIdx%y - 1
+      ! if (1==step .and. 1==i*j) write(*,*) 'CUDA bc_per_z2] i,j:',i,j
+
+      if (1<=j .and. j<=ny .and. 1<=i .and. i<=nx) then
+        if (faiPops) then
+          do l = 1, npops-1        
+            popsR_d(i,j,nz_d+1, l, flip) = popsR_d(i,j,1, l, flip)
+          
+            popsR_d(i,j,0, l, flip) = popsR_d(i,j,nz_d, l, flip)
+          end do
+        endif
+
+        if (faiRho) then
+          rhoR_d(i,j,nz_d+1) = rhoR_d(i,j,1)
+
+          rhoR_d(i,j,0) = rhoR_d(i,j,nz_d)
+        endif
+      endif
+    end subroutine bc_BGK_per_z
+    
+    attributes(global) subroutine bc_BGK_edge_z(step, flip, faiPops,faiRho)
+      integer, value :: step,flip
+      logical, value :: faiPops, faiRho
+      integer :: k, l
+  
+      k = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
+
+      if (0<=k .and. k<=nz_d+1) then
+        if (faiPops) then
+          do l = 1, npops-1
+            popsR_d(0,0,k, l, flip) = popsR_d(nx,ny,k, l, flip)
+
+            popsR_d(0,ny+1,k, l, flip) = popsR_d(nx,1,k, l, flip)
+
+            popsR_d(nx+1,0,k, l, flip) = popsR_d(1,ny,k, l, flip)
+
+            popsR_d(nx+1,ny+1,k, l, flip) = popsR_d(1,1,k, l, flip)
+          end do
+        endif
+
+        if (faiRho) then
+          rhoR_d (0,0,k) = rhoR_d (nx,ny,k)
+
+          rhoR_d (0,ny+1,k) = rhoR_d (nx,1,k)
+
+          rhoR_d (nx+1,0,k) = rhoR_d (1,ny,k)
+
+          rhoR_d (nx+1,ny+1,k) = rhoR_d (1,1,k)
+        endif
+      endif
+    end subroutine bc_BGK_edge_z
+    
+    attributes(global) subroutine bc_BGK_edge_y(step, flip, faiPops,faiRho)
+      integer, value :: step,flip
+      logical, value :: faiPops, faiRho
+      integer :: j, l
+  
+      j = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
+
+      if (1<=j .and. j<=ny) then
+        if (faiPops) then
+          do l = 1, npops-1
+            popsR_d(0,j,0, l, flip) = popsR_d(nx,j,nz_d, l, flip)
+
+            popsR_d(0,j,nz_d+1, l, flip) = popsR_d(nx,j,1, l, flip)
+
+            popsR_d(nx+1,j,0, l, flip) = popsR_d(1,j,nz_d, l, flip)
+
+            popsR_d(nx+1,j,nz_d+1, l, flip) = popsR_d(1,j,1, l, flip)
+          end do
+        endif
+
+        if (faiRho) then
+          rhoR_d (0,j,0) = rhoR_d (nx,j,nz_d)
+
+          rhoR_d (0,j,nz_d+1) = rhoR_d (nx,j,1)
+
+          rhoR_d (nx+1,j,0) = rhoR_d (1,j,nz_d)
+
+          rhoR_d (nx+1,j,nz_d+1) = rhoR_d (1,j,1)
+        endif
+      endif
+    end subroutine bc_BGK_edge_y
+    
+    attributes(global) subroutine bc_BGK_edge_x(step, flip, faiPops,faiRho)
+      integer, value :: step,flip
+      logical, value :: faiPops, faiRho
+      integer :: i, l
+  
+      i = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
+
+      if (1<=i .and. i<=nx) then
+        if (faiPops) then
+          do l = 1, npops-1
+            popsR_d(i,0,0, l, flip) = popsR_d(i,ny,nz_d, l, flip)
+
+            popsR_d(i,0,nz_d+1, l, flip) = popsR_d(i,ny,1, l, flip)
+
+            popsR_d(i,ny+1,0, l, flip) = popsR_d(i,1,nz_d, l, flip)
+
+            popsR_d(i,ny+1,nz_d+1, l, flip) = popsR_d(i,1,1, l, flip)
+          end do
+        endif
+
+        if (faiRho) then
+          rhoR_d (i,0,0) = rhoR_d (i,ny,nz_d)
+
+          rhoR_d (i,0,nz_d+1) = rhoR_d (i,ny,1)
+
+          rhoR_d (i,ny+1,0) = rhoR_d (i,1,nz_d)
+
+          rhoR_d (i,ny+1,nz_d+1) = rhoR_d (i,1,1)
+        endif
+      endif
+    end subroutine bc_BGK_edge_x
+    
+    attributes(global) subroutine bc_BGK_corners(step, flip)
+      integer, value :: step,flip
+      integer :: j,k, l
+  
+      j = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
+      k = (blockIdx%y-1) * TILE_DIM + threadIdx%y - 1
+    end subroutine bc_BGK_corners
+
+    attributes(global) subroutine stream_BGK_old(step, flip)
       integer, value :: step,flip
       integer :: i,j,k, l, flop
       integer :: i1,j1,k1
@@ -294,7 +539,7 @@
           popsR_d(i1,j1,k1,l, flop) = popsR_d(i,j,k,l, flip)
         enddo
       endif    
-    end subroutine stream_BGK
+    end subroutine stream_BGK_old
 
     attributes(global) subroutine stream_BGK_x(step, flip)
       integer, value :: step,flip
@@ -305,7 +550,7 @@
       k = (blockIdx%y-1) * TILE_DIM + threadIdx%y - 1
 
       if (j>ny+1) return
-      if (k>nz+1) return
+      if (k>nz_d+1) return
 
       flop = 3 - flip
 
@@ -316,7 +561,7 @@
           i1 = i + ex_d(l)
           j1 = j + ey_d(l)
           k1 = k + ez_d(l)
-          if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz) then
+          if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz_d) then
             popsR_d(i1,j1,k1,l, flop) = popsR_d(i,j,k,l, flip)
           endif
         end do
@@ -329,7 +574,7 @@
           i1 = i + ex_d(l)
           j1 = j + ey_d(l)
           k1 = k + ez_d(l)
-          if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz) then
+          if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz_d) then
             popsR_d(i1,j1,k1,l, flop) = popsR_d(i,j,k,l, flip)
           endif
         end do
@@ -345,7 +590,7 @@
     k = (blockIdx%y-1) * TILE_DIM + threadIdx%y - 1
     
     if (i>nx+1) return
-    if (k>nz+1) return
+    if (k>nz_d+1) return
 
     flop = 3 - flip
 
@@ -356,7 +601,7 @@
         i1 = i + ex_d(l)
         j1 = j + ey_d(l)
         k1 = k + ez_d(l)
-        if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz) then
+        if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz_d) then
           popsR_d(i1,j1,k1,l, flop) = popsR_d(i,j,k,l, flip)
         endif
       end do
@@ -369,7 +614,7 @@
         i1 = i + ex_d(l)
         j1 = j + ey_d(l)
         k1 = k + ez_d(l)
-        if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz) then
+        if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz_d) then
           popsR_d(i1,j1,k1,l, flop) = popsR_d(i,j,k,l, flip)
         endif
       end do
@@ -396,24 +641,82 @@
         i1 = i + ex_d(l)
         j1 = j + ey_d(l)
         k1 = k + ez_d(l)
-        if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz) then
+        if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz_d) then
           popsR_d(i1,j1,k1,l, flop) = popsR_d(i,j,k,l, flip)
         endif
       end do
     endif
 
-    ! Stream z=nz+1
-    k = nz+1
+    ! Stream z=nz_d+1
+    k = nz_d+1
     if (myfluid_d(i,j,k, flip) /= fluid_spheredead) then
       do l = 1, npops-1
         i1 = i + ex_d(l)
         j1 = j + ey_d(l)
         k1 = k + ez_d(l)
-        if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz) then
+        if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz_d) then
           popsR_d(i1,j1,k1,l, flop) = popsR_d(i,j,k,l, flip)
         endif
       end do
     endif
-  end subroutine stream_BGK_z    
+  end subroutine stream_BGK_z   
+  
+  attributes(global) subroutine stream_BGK(step, flip)
+      integer, value :: step,flip
+      integer :: i,j,k,flop
+
+      i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
+      j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
+      k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
+      if (step==1 .and. 1==i*j*k+offset_d(3)) write(*,*) 'CUDA streamR_CG]'
+
+      flop = 3 - flip
+
+      ! Streaming
+      if (myfluid_d(i,j,k, flip) /= fluid_spheredead) then
+          popsR_d(i+1,j+0,k+0,01, flop) = popsR_d(i,j,k,01,flip)
+          popsR_d(i-1,j+0,k+0,02, flop) = popsR_d(i,j,k,02,flip)
+          popsR_d(i+0,j+1,k+0,03, flop) = popsR_d(i,j,k,03,flip)
+          popsR_d(i+0,j-1,k+0,04, flop) = popsR_d(i,j,k,04,flip)
+          popsR_d(i+0,j+0,k+1,05, flop) = popsR_d(i,j,k,05,flip)
+          popsR_d(i+0,j+0,k-1,06, flop) = popsR_d(i,j,k,06,flip)
+          popsR_d(i+1,j+1,k+0,07, flop) = popsR_d(i,j,k,07,flip)
+          popsR_d(i-1,j-1,k+0,08, flop) = popsR_d(i,j,k,08,flip)
+          popsR_d(i-1,j+1,k+0,09, flop) = popsR_d(i,j,k,09,flip)
+          popsR_d(i+1,j-1,k+0,10, flop) = popsR_d(i,j,k,10,flip)
+          popsR_d(i+1,j+0,k+1,11, flop) = popsR_d(i,j,k,11,flip)
+          popsR_d(i-1,j+0,k-1,12, flop) = popsR_d(i,j,k,12,flip)
+          popsR_d(i-1,j+0,k+1,13, flop) = popsR_d(i,j,k,13,flip)
+          popsR_d(i+1,j+0,k-1,14, flop) = popsR_d(i,j,k,14,flip)
+          popsR_d(i+0,j+1,k+1,15, flop) = popsR_d(i,j,k,15,flip)
+          popsR_d(i+0,j-1,k-1,16, flop) = popsR_d(i,j,k,16,flip)
+          popsR_d(i+0,j-1,k+1,17, flop) = popsR_d(i,j,k,17,flip)
+          popsR_d(i+0,j+1,k-1,18, flop) = popsR_d(i,j,k,18,flip)
+#ifdef D3Q27
+          popsR_d(i+1,j+1,k+1,19, flop) = popsR_d(i,j,k,19,flip)
+          popsR_d(i-1,j-1,k-1,20, flop) = popsR_d(i,j,k,20,flip)
+          popsR_d(i+1,j+1,k-1,21, flop) = popsR_d(i,j,k,21,flip)
+          popsR_d(i-1,j-1,k+1,22, flop) = popsR_d(i,j,k,22,flip)
+          popsR_d(i-1,j+1,k+1,23, flop) = popsR_d(i,j,k,23,flip)
+          popsR_d(i+1,j-1,k-1,24, flop) = popsR_d(i,j,k,24,flip)
+          popsR_d(i+1,j-1,k+1,25, flop) = popsR_d(i,j,k,25,flip)
+          popsR_d(i-1,j+1,k-1,26, flop) = popsR_d(i,j,k,26,flip)
+#endif
+      endif
+    end subroutine stream_BGK 
+    
+    attributes(global) subroutine flipflopPop0_BGK(step, flip)
+      integer, value :: step,flip
+      integer :: i,j,k, flop
+
+      i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
+      j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
+      k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
+      if (step==1 .and. 1==i*j*k+offset_d(3)) write(*,*) 'CUDA flipflopRPop0_CG]'
+
+      flop = 3 - flip
+      
+      popsR_d(i,j,k,0, flop) = popsR_d(i,j,k,0, flip)
+    end subroutine flipflopPop0_BGK
 
   end module kernels_bgk
