@@ -113,6 +113,7 @@ program TestLB
   else
     call fixPeriodic_BGK(.true., .true., "after_setup")
   endif
+  call fixPeriodic_isfluid("after_setup")
   ! if (wantOut) call DumpBorderPlanez("step_", 0, 1)  
   if (wantOut) call OutputVTK("step_", 0, 1)
 
@@ -275,8 +276,14 @@ program TestLB
       
       ! Boundary Conditions with new flipflop
       !call doBoundary
+
       
       call fixPeriodic_BGK(.true., .false., "time_step_BGK")
+           
+#ifdef APPLYBC  
+      call applybc_BGK<<<dimGrid, dimBlock >>>(step, flipflop)    
+      call fixPeriodic(.true., .false., "applybc_BGK")
+#endif
       
       call flipflopPop0_BGK<<<dimGrid, dimBlock>>>(step, flipflop)
       call stream_BGK<<<dimGrid, dimBlock >>>(step, flipflop)
@@ -359,7 +366,8 @@ program TestLB
       integer               :: itest, found, max_vel_found,i,count
       logical :: lcheck,lexist
 #ifdef NEWINPUT      
-      namelist /simulation/ nIter,nIterOut,nIterVTK,initType
+      namelist /simulation/ nIter,nIterOut,nIterVTK,initType, &
+       lreadisfluid,lwriteisf
       namelist /fluid/ vx,vy,vz,densR,densB,tauR,tauB
       namelist /particle/ withParticles,numAtoms,lrotate,ext_fxx,ext_fyy,&
       ext_fzz,ext_tqx,ext_tqy,ext_tqz,max_vel
@@ -1364,6 +1372,7 @@ program TestLB
         ex_d(l) = ex(l)
         ey_d(l) = ey(l)
         ez_d(l) = ez(l)
+        opp_d(l) = opp(l)
         a_d(l) = a(l)
         phi_d(l) = phi(l)
         varphi_d(l) = varphi(l)
@@ -1664,6 +1673,8 @@ program TestLB
       write(*,fmt=100) 'nIters',nIter
       write(*,fmt=100) 'nIterOut',nIterOut
       write(*,fmt=100) 'initType',initType
+      write(*,fmt=102) 'lreadisfluid',lreadisfluid
+      write(*,fmt=102) 'lwriteisf',lwriteisf
       write(*,fmt=108)lattice
       
       if (withCG) then
@@ -2158,7 +2169,15 @@ program TestLB
       endif
       call writeImageDataVTI(nz, mynamefile,step, 'rho1', rhoR, textVTK)
       call writeImageDataVTI_3d(nz, "vel",step, vel, textVTK)
-
+      if(lwriteisf)then
+        mynamefile = repeat(' ',120)
+        if (fname(1:5) == 'step_') then
+           mynamefile = 'isfluid'
+        else
+           mynamefile = trim(fname)//'_isfluid'
+        endif
+        call writeImageDataVTI_isfluid_nopart(nz, mynamefile,step, myfluid, flip, textVTK)
+      endif
       if (withParticles) then
         call system_clock(c_start2)
 
@@ -2802,8 +2821,11 @@ program TestLB
    subroutine setupRho_Pops()
     implicit none
     integer :: minx,maxx, miny,maxy, minz,maxz
-
-
+    integer(kind=1), allocatable, dimension(:,:,:) :: myis
+    
+    logical :: lexist
+    integer :: i,ii,j,jj,k,kk
+    
     if (myrank== 0) write(*,*) 'Initial setup...'
     rhoR = 0
     rhoB = 0
@@ -2875,8 +2897,53 @@ program TestLB
     else
       call setup<<<dimGrid, dimBlock>>>(vx,vy,vz)
     end if
+    
+    if(lreadisfluid)then
+      allocate(myis(glx,gly,glz))
+      inquire(file='isfluid.init.bin',exist=lexist)
+      if(.not. lexist)then
+        write(*,'(a)') 'File isfluid.init.bin not flound!'
+        call mystop
+      endif
+      open(unit=11, file='isfluid.init.bin', form='unformatted',action='read',status='old')
+      read(11) minx,maxx, miny,maxy, minz,maxz
+      if (minx/=1 .or. miny/=1 .or. minz/=1 .or. maxx/=glx .or. maxy/=gly .or. maxz/=glz) then
+        write(*,fmt=10) 'Wrong start isfluid file', minx,maxx, miny,maxy, minz,maxz
+10      format(a, 6i8)          
+        call mystop
+      endif
+      read(11) myis(1:glx, 1:gly, 1:glz)
+      close(11)
+      
+      myfluid(0:nx+1,0:ny+1,0:nz+1,1:2)=int(3,kind=1)
+      minx=start_idx(1)
+      miny=start_idx(2)
+      minz=start_idx(3)
+      maxx=minx+lsizes(1)-1
+      maxy=miny+lsizes(2)-1
+      maxz=minz+lsizes(3)-1
+      do k=1,glz
+        if(k<minz .or. k>maxz)cycle
+        kk=k-minz+1
+        do j=1,gly
+          if(j<miny .or. j>maxy)cycle
+          jj=j-miny+1
+          do i=1,glx
+            if(i<minx .or. i>maxx)cycle
+            ii=i-minx+1
+            myfluid(ii,jj,kk,1:2)=myis(i,j,k)
+          enddo
+        enddo
+      enddo
+      
+      myfluid_d = myfluid
+      
+    endif
 
     call abortOnLastErrorAndSync("setupRho_Pops",0, 1)
+    
+    if(lreadisfluid)deallocate(myis)
+    
   end subroutine
 
   subroutine set_random_dens_fluids

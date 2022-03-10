@@ -1503,7 +1503,311 @@
   
  end subroutine writeImageDataVTI_isfluid
 
+ subroutine writeImageDataVTI_isfluid_nopart(nz, fname, step, myfluid, flip, textual)
+  use mpi
+  use dimensions_m
+  use kernels_fluid
+  implicit none
+  integer(4), intent(in) :: nz
+  character(len=*),intent(in) :: fname
+  integer,intent(in) :: step, flip
+  integer(1), allocatable, intent(in) :: myfluid(:,:,:,:)
+  logical,intent(in) :: textual
+  character(len=120) :: fnameFull,extent
+  integer i,j,k, iotest
+  integer(4)         :: length
+  
+  integer :: e_io
+  character(1), parameter:: end_rec = char(10)
+  character(1) :: string1
+  character(len=500) :: headervtk
+  character(len=30) :: footervtk
+  integer :: iend,iini,nele,toffset,new_toffset,bytechar,byter4,byter8
+  integer :: indent,ioffset,vtkoffset,ndatavtk,nn,nheadervtk,endoff
+  integer :: new_myoffset,nnloc,byteint
+  character(len=8) :: namevar
+  integer, parameter :: ncomp=1
+  integer, parameter :: ndimvtk=1
+  character(len=*),parameter :: topology='ImageData' 
+  real(kind=4), allocatable, dimension(:,:,:) :: service1
+  
+  iini=0
+  bytechar=kind(end_rec)
+  byteint=kind(iini)
+  byter4  = 4
+  byter8  = 8
+  
+  nn=glx*gly*glz
+  
+  iotest = 55
+  
+  
 
+  ! fnameFull = 'output/' // 'partisfluid_' // trim(write_fmtnumb(step)) // '.txt'
+  ! open(unit=iotest,file=trim(fnameFull),status='replace',action='write')
+
+
+
+  if (nprocs==1) then
+    write(*,fmt=200) step, myrank
+    200     format('isfluid] step=', I8, ' rank=', I6)
+
+
+
+  else
+    call mpi_barrier(lbecomm,ierr)
+    if (myrank==0) then
+      write(*,fmt=203) step
+      203     format('isfluid] step=', I8)
+
+    endif
+  endif
+  
+  if (nprocs==1) then
+  
+  fnameFull = 'output/' // trim(fname) // '_' // trim(write_fmtnumb(myrank)) // '_' // trim(write_fmtnumb(step)) // '.vti'
+  open(unit=iotest,file=trim(fnameFull),status='replace',action='write')
+
+  extent =  trim(write_fmtnumb(1)) // ' ' // trim(write_fmtnumb(nx)) // ' ' &
+        // trim(write_fmtnumb(1)) // ' ' // trim(write_fmtnumb(ny)) // ' ' &
+        // trim(write_fmtnumb(offset(3) + 1)) // ' ' // trim(write_fmtnumb(offset(3) + nz))
+
+  write(iotest,*) '<VTKFile type="ImageData" version="1.0" byte_order="LittleEndian" >'
+  write(iotest,*) ' <ImageData WholeExtent="' // trim(extent) // '" >'
+  write(iotest,*) ' <Piece Extent="' // trim(extent) // '">'
+  write(iotest,*) '   <PointData>'
+
+  if (textual) then
+    write(iotest,*) '    <DataArray type="UInt8" Name="',trim(fname),'" format="ascii" >'
+
+    do k=1,nz
+      do j=1,ny
+        do i=1,nx
+          write(iotest,fmt='("     ", I3)') myfluid(i,j,k, flip)
+        enddo
+      enddo
+    enddo
+
+    write(iotest,*) '    </DataArray>'
+    write(iotest,*) '   </PointData>'
+    write(iotest,*) ' </Piece>'
+    write(iotest,*) ' </ImageData>'
+  else
+    write(iotest,*) '    <DataArray type="UInt8" Name="',trim(fname),'" format="appended" offset="0" />'
+    write(iotest,*) '   </PointData>'
+    write(iotest,*) ' </Piece>'
+    write(iotest,*) ' </ImageData>'
+    write(iotest,*) ' <AppendedData encoding="raw">'
+    close(iotest)
+
+    open(unit=iotest,file=trim(fnameFull),status='old',position='append', &
+                access='stream',form='unformatted',action='write')
+    write(iotest) '_'
+    length = 1*nx*ny*nz
+    write(iotest) length, myfluid(1:nx,1:ny,1:nz, flip)
+    close(iotest)
+
+    open(unit=iotest,file=trim(fnameFull),status='old',position='append', &
+                action='write')
+    write(iotest,*) ''
+    write(iotest,*) ' </AppendedData>'
+  endif
+
+  write(iotest,*) '</VTKFile >'
+  close(iotest)
+
+
+  else
+  
+  fnameFull=repeat(' ',120)
+  fnameFull = 'output/' // trim(fname) // '.' //trim(write_fmtnumb8(step)) // '.vti'
+  
+  call open_file_vtk_par(iotest,120,fnameFull,e_io)
+  
+  
+  
+    
+  namevar=repeat(' ',8)
+  namevar=trim(fname)
+    
+  extent =  space_fmtnumb(1) // ' ' // space_fmtnumb(glx) // ' ' &
+      // space_fmtnumb(1) // ' ' // space_fmtnumb(gly) // ' ' &
+      // space_fmtnumb(1) // ' ' // space_fmtnumb(glz)
+    
+  indent=0
+    
+  toffset=0
+  headervtk=repeat(' ',500)
+  iend=0
+  
+  iini=iend+1
+  nele=22
+  iend=iend+nele
+  headervtk(iini:iend)='<?xml version="1.0"?>'//end_rec
+  new_toffset=toffset
+  new_toffset = new_toffset + nele * bytechar
+    
+  iini=iend+1
+  nele=67
+  iend=iend+nele
+  if(lelittle)then  
+    headervtk(iini:iend) = '<VTKFile type="'//trim(topology)// &
+     '" version="0.1" byte_order="LittleEndian">'//end_rec
+  else
+    headervtk(iini:iend) = '<VTKFile type="'//trim(topology)// &
+     '" version="0.1" byte_order="BigEndian">   '//end_rec
+  endif
+  
+  new_toffset = new_toffset + 67 * bytechar
+  
+  indent = indent + 2
+  iini=iend+1
+  nele=70
+  iend=iend+nele
+  headervtk(iini:iend) = repeat(' ',indent)//'<'//trim(topology)//' WholeExtent="'//&
+               trim(extent)//'">'//end_rec
+  
+
+  new_toffset = new_toffset + 70 * bytechar
+    
+  indent = indent + 2
+  iini=iend+1
+  nele=63
+  iend=iend+nele
+  headervtk(iini:iend) = repeat(' ',indent)//'<Piece Extent="'//trim(extent)//'">'//end_rec
+  
+  new_toffset = new_toffset + 63 * bytechar
+    
+  ! initializing offset pointer
+  ioffset = 0 
+  
+  indent = indent + 2
+  iini=iend+1
+  nele=18
+  iend=iend+nele
+  headervtk(iini:iend)=repeat(' ',indent)//'<PointData>'//end_rec
+  
+  new_toffset = new_toffset + 18 * bytechar
+  
+  indent = indent + 2
+  iini=iend+1
+  nele=115
+  iend=iend+nele
+  
+    
+  
+  write(string1,'(i1)')ncomp
+   headervtk(iini:iend)=repeat(' ',indent)//'<DataArray type="Float32" Name="'// &
+   namevar//'" NumberOfComponents="'//string1// '" '//&
+   'format="appended" offset="'//space_fmtnumb12(ioffset)//'"/>'//end_rec
+  
+  new_toffset = new_toffset + 115 * bytechar
+ 
+  
+  indent = indent - 2
+  iini=iend+1
+  nele=19
+  iend=iend+nele
+  headervtk(iini:iend)=repeat(' ',indent)//'</PointData>'//end_rec
+  
+  new_toffset = new_toffset + 19 * bytechar
+  
+  
+  indent = indent - 2
+  iini=iend+1
+  nele=13
+  iend=iend+nele
+  headervtk(iini:iend)=repeat(' ',indent)//'</Piece>'//end_rec
+  
+  
+  new_toffset = new_toffset + 13 * bytechar
+  
+  
+  indent = indent - 2
+  iini=iend+1
+  nele=15
+  iend=iend+nele
+  headervtk(iini:iend)=repeat(' ',indent)//'</'//trim(topology)//'>'//end_rec
+  
+  new_toffset = new_toffset + 15 * bytechar
+   
+  
+  iini=iend+1
+  nele=32
+  iend=iend+nele
+  headervtk(iini:iend)=repeat(' ',indent)//'<AppendedData encoding="raw">'//end_rec
+  
+  new_toffset = new_toffset + 32 * bytechar
+  
+  iini=iend+1
+  nele=1
+  iend=iend+nele
+  headervtk(iini:iend)='_'
+  
+  new_toffset = new_toffset + 1 * bytechar
+  
+  vtkoffset=new_toffset
+  toffset=new_toffset+byteint+ndimvtk*nn*byter4
+  ndatavtk=ndimvtk*nn*byter4
+  nheadervtk=iend
+  
+  if(myrank==0)then
+    call print_header_vtk_par(iotest,0,nheadervtk,headervtk,e_io)  
+  endif
+  
+  footervtk=repeat(' ',30)
+  iini=0
+  iend=iini
+  
+  iini=iend+1
+  nele=1
+  iend=iend+nele
+  footervtk(iini:iend)=end_rec
+  
+  new_myoffset = toffset
+  new_myoffset = new_myoffset + 1 * bytechar
+  
+  iini=iend+1
+  nele=18
+  iend=iend+nele
+  footervtk(iini:iend)=repeat(' ',indent)//'</AppendedData>'//end_rec
+  
+  new_myoffset = new_myoffset + 18 * bytechar
+  
+  iini=iend+1
+  nele=11
+  iend=iend+nele
+  footervtk(iini:iend)='</VTKFile>'//end_rec
+  
+  endoff=vtkoffset+ndatavtk+byteint
+  if(myrank==0)call print_footer_vtk_par(iotest,endoff,footervtk,e_io)
+  nnloc=nx*ny*nz
+  allocate(service1(1:nx,1:ny,1:nz))
+  service1(1:nx,1:ny,1:nz)=0.0
+  do k=1,nz
+    do j=1,ny
+      do i=1,nx
+        !if(myfluid(i,j,kk)==3)cycle
+        service1(i,j,k)=real(myfluid(i,j,k,flip),kind=4)
+      enddo
+    enddo
+  enddo
+  
+  
+  call print_binary_1d_vtk_col(iotest,vtkoffset,ndatavtk,nnloc,myrank, &
+     gsizes,lsizes,start_idx,lbound(service1),ubound(service1),service1,e_io)
+  
+  call close_file_vtk_par(iotest,e_io)
+  
+  deallocate(service1)
+  
+  
+  endif
+  
+  
+ end subroutine writeImageDataVTI_isfluid_nopart
+ 
+ 
  subroutine writeImageDataVTI_2d(fname, step, varname, plane, z, textual)
     use dimensions_m
     implicit none

@@ -7,6 +7,7 @@
 #define noDIFFDENS
 #define NEWINPUT
 #define noD3Q27
+#define APPLYBC
 
 #ifndef MYDIMESION
 #define MYDIMESION 64

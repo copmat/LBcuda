@@ -32,6 +32,8 @@
     logical, parameter :: textVTK = .false.
     logical, parameter :: forced = .false.
     logical, parameter :: const_forced = .false.
+    logical, save :: lreadisfluid=.false.
+    logical, save :: lwriteisf=.false.
     real, dimension(3), parameter :: f_cost = (/ 0.0, 0.0, -0.000981 /)
 
     ! Moving boundaries..
@@ -315,7 +317,7 @@
     real, parameter :: cz=real(glz+1) * HALF
 
     ! Device constants...
-    integer, dimension(0:npops-1), constant :: ex_d,ey_d,ez_d
+    integer, dimension(0:npops-1), constant :: ex_d,ey_d,ez_d,opp_d
     integer, dimension(0:linksd3q27-1), constant :: exd3q27_d,eyd3q27_d,ezd3q27_d
     real, constant :: fx_d,fy_d,fz_d, buz_d
     real, constant :: viscR_d,viscB_d

@@ -120,7 +120,9 @@
       j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
       k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
       ! if (step==1 .and. 1==i*j*k) write(*,*) 'CUDA time_step] i,k:',i,j,k
+      
       if (myfluid_d(i,j,k, flip) == fluid_fluid) then
+      
         rho = manual_rho(popsR_d) !compute_rho(popsR_d,i,j,k,flip)
         if (rho<minRho .or. rho>10) then
          write(*,*) 'Rho error:',rho,i,j,k
@@ -516,6 +518,33 @@
       j = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
       k = (blockIdx%y-1) * TILE_DIM + threadIdx%y - 1
     end subroutine bc_BGK_corners
+    
+    attributes(global) subroutine applybc_BGK(step, flip)
+      integer, value :: step,flip
+      integer :: i,j,k, l, flop, lopp
+      integer :: i1,j1,k1
+
+
+      i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
+      j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
+      k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
+      ! if (step==1 .and. 1==i*j*k) write(*,*) 'CUDA stream_BGK] i,k:',i,j,k
+
+      flop = 3 - flip
+
+      ! Streaming      
+      if (myfluid_d(i,j,k, flip) == fluid_wall) then
+        do l = 1, npops-1
+          i1 = i + ex_d(l)
+          j1 = j + ey_d(l)
+          k1 = k + ez_d(l)
+          if (myfluid_d(i1,j1,k1, flip) == fluid_fluid) then
+            lopp=opp_d(l)
+            popsR_d(i,j,k,l, flip) = popsR_d(i1,j1,k1,lopp, flip)
+          endif
+        enddo
+      endif    
+    end subroutine applybc_BGK
 
     attributes(global) subroutine stream_BGK_old(step, flip)
       integer, value :: step,flip
@@ -660,6 +689,167 @@
       end do
     endif
   end subroutine stream_BGK_z   
+  
+  attributes(global) subroutine stream_BGK_newbc(step, flip)
+      integer, value :: step,flip
+      integer :: i,j,k, l, flop, lopp
+      integer :: i1,j1,k1
+
+
+      i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
+      j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
+      k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
+      ! if (step==1 .and. 1==i*j*k) write(*,*) 'CUDA stream_BGK] i,k:',i,j,k
+
+      flop = 3 - flip
+
+      ! Streaming      
+      if (myfluid_d(i,j,k, flip) == fluid_fluid) then
+        do l = 1, npops-1
+          i1 = i + ex_d(l)
+          j1 = j + ey_d(l)
+          k1 = k + ez_d(l)
+          if (myfluid_d(i1,j1,k1, flip) == fluid_fluid) then
+            popsR_d(i1,j1,k1,l, flop) = popsR_d(i,j,k,l, flip)
+          elseif(myfluid_d(i1,j1,k1, flip) == fluid_wall)then
+            lopp=opp_d(l)
+            popsR_d(i,j,k,lopp, flop) = popsR_d(i,j,k,l, flip)
+          endif
+        enddo
+      endif    
+    end subroutine stream_BGK_newbc
+
+    attributes(global) subroutine stream_BGK_x_newbc(step, flip)
+      integer, value :: step,flip
+      integer :: i,j,k, l, flop
+      integer :: i1,j1,k1
+  
+      j = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
+      k = (blockIdx%y-1) * TILE_DIM + threadIdx%y - 1
+
+      if (j>ny+1) return
+      if (k>nz_d+1) return
+
+      flop = 3 - flip
+
+      ! Stream x=0
+      i = 0
+      if (myfluid_d(i,j,k, flip) == fluid_fluid) then
+        do l = 1, npops-1
+          i1 = i + ex_d(l)
+          j1 = j + ey_d(l)
+          k1 = k + ez_d(l)
+          if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz_d) then
+            if (myfluid_d(i1,j1,k1, flip) == fluid_fluid) then
+              popsR_d(i1,j1,k1,l, flop) = popsR_d(i,j,k,l, flip)
+            endif
+          endif
+        end do
+      endif
+
+      ! Stream x=nx+1
+      i = nx+1
+      if (myfluid_d(i,j,k, flip) == fluid_fluid) then
+        do l = 1, npops-1
+          i1 = i + ex_d(l)
+          j1 = j + ey_d(l)
+          k1 = k + ez_d(l)
+          if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz_d) then
+            if (myfluid_d(i1,j1,k1, flip) == fluid_fluid) then
+              popsR_d(i1,j1,k1,l, flop) = popsR_d(i,j,k,l, flip)
+            endif
+          endif
+        end do
+      endif
+    end subroutine stream_BGK_x_newbc
+
+    attributes(global) subroutine stream_BGK_y_newbc(step, flip)
+    integer, value :: step,flip
+    integer :: i,j,k, l, flop
+    integer :: i1,j1,k1
+
+    i = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
+    k = (blockIdx%y-1) * TILE_DIM + threadIdx%y - 1
+    
+    if (i>nx+1) return
+    if (k>nz_d+1) return
+
+    flop = 3 - flip
+
+    ! Stream y=0
+    j = 0
+    if (myfluid_d(i,j,k, flip) == fluid_fluid) then
+      do l = 1, npops-1
+        i1 = i + ex_d(l)
+        j1 = j + ey_d(l)
+        k1 = k + ez_d(l)
+        if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz_d) then
+          if (myfluid_d(i1,j1,k1, flip) == fluid_fluid) then
+            popsR_d(i1,j1,k1,l, flop) = popsR_d(i,j,k,l, flip)
+          endif
+        endif
+      end do
+    endif
+
+    ! Stream y=ny+1
+    j = ny+1
+    if (myfluid_d(i,j,k, flip) == fluid_fluid) then
+      do l = 1, npops-1
+        i1 = i + ex_d(l)
+        j1 = j + ey_d(l)
+        k1 = k + ez_d(l)
+        if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz_d) then
+          if (myfluid_d(i1,j1,k1, flip) == fluid_fluid) then
+            popsR_d(i1,j1,k1,l, flop) = popsR_d(i,j,k,l, flip)
+          endif
+        endif
+      end do
+    endif
+  end subroutine stream_BGK_y_newbc
+
+  attributes(global) subroutine stream_BGK_z_newbc(step, flip)
+    integer, value :: step,flip
+    integer :: i,j,k, l, flop
+    integer :: i1,j1,k1
+
+    i = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
+    j = (blockIdx%y-1) * TILE_DIM + threadIdx%y - 1
+    
+    if (i>nx+1) return
+    if (j>ny+1) return
+
+    flop = 3 - flip
+
+    ! Stream z=0
+    k = 0
+    if (myfluid_d(i,j,k, flip) == fluid_fluid) then
+      do l = 1, npops-1
+        i1 = i + ex_d(l)
+        j1 = j + ey_d(l)
+        k1 = k + ez_d(l)
+        if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz_d) then
+          if (myfluid_d(i1,j1,k1, flip) == fluid_fluid) then
+            popsR_d(i1,j1,k1,l, flop) = popsR_d(i,j,k,l, flip)
+          endif
+        endif
+      end do
+    endif
+
+    ! Stream z=nz_d+1
+    k = nz_d+1
+    if (myfluid_d(i,j,k, flip) == fluid_fluid) then
+      do l = 1, npops-1
+        i1 = i + ex_d(l)
+        j1 = j + ey_d(l)
+        k1 = k + ez_d(l)
+        if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz_d) then
+          if (myfluid_d(i1,j1,k1, flip) == fluid_fluid) then
+            popsR_d(i1,j1,k1,l, flop) = popsR_d(i,j,k,l, flip)
+          endif
+        endif
+      end do
+    endif
+  end subroutine stream_BGK_z_newbc   
   
   attributes(global) subroutine stream_BGK(step, flip)
       integer, value :: step,flip
