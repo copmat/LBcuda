@@ -1,3 +1,4 @@
+
  module write_output
     use dimensions_m
     use, intrinsic ::  iso_c_binding
@@ -112,7 +113,7 @@
 
  end function space_fmtnumb12
 
- subroutine writeImageDataVTI(nz, fname, step, varname, myvar, textual)
+ subroutine writeImageDataVTI(nz, fname, step, varname, myvar, textual, myfluid, flip)
   use dimensions_m
   
   implicit none
@@ -121,7 +122,9 @@
   integer,intent(in) :: step
   real(4),allocatable,intent(in) :: myvar(:,:,:)
   logical,intent(in) :: textual
-  character(len=120) :: fnameFull,extent
+  integer(1), allocatable, intent(in) :: myfluid(:,:,:,:)
+  integer, intent(in) :: flip
+  character(len=120) :: fnameFull,extent,fnameFullraw
   integer i,j,k, iotest
   integer(4)         :: length
   
@@ -133,6 +136,7 @@
   integer :: iend,iini,nele,toffset,new_toffset,bytechar,byter4,byter8
   integer :: indent,ioffset,vtkoffset,ndatavtk,nn,nheadervtk,endoff
   integer :: new_myoffset,nnloc,byteint
+  integer :: iotestraw,rawoffset,ndataraw
   character(len=8) :: namevar
   integer, parameter :: ncomp=1
   integer, parameter :: ndimvtk=1
@@ -148,6 +152,34 @@
   nn=glx*gly*glz
   
   iotest = 55
+  iotestraw = 65
+  
+  if(lraw)then
+    fnameFullraw=repeat(' ',120)
+    fnameFullraw = 'output/' // trim(fname) // '.' //trim(write_fmtnumb8(step)) // '.raw'
+    nnloc=nx*ny*nz
+    allocate(service1(1:nx,1:ny,1:nz))
+    service1(1:nx,1:ny,1:nz)=0.0
+    do k=1,nz
+      do j=1,ny
+        do i=1,nx
+          !if(myfluid(i,j,kk)==3)cycle
+          service1(i,j,k)=real(myvar(i,j,k),kind=4)
+        enddo
+      enddo
+    enddo
+    rawoffset=0
+    ndataraw=ndimvtk*nn*byter4
+    
+    call open_file_vtk_par(iotestraw,120,fnameFullraw,e_io)
+    
+    call print_binary_1d_vtk_col(iotestraw,rawoffset,ndataraw,nnloc,myrank, &
+       gsizes,lsizes,start_idx,lbound(service1),ubound(service1),service1,e_io)
+  
+    call close_file_vtk_par(iotestraw,e_io)
+    
+    deallocate(service1)
+  endif
   
   if (nprocs==1) then
   
@@ -392,7 +424,7 @@
  
  
 
- subroutine writeImageDataVTI_3d(nz, fname, step, velsub, textual)
+ subroutine writeImageDataVTI_3d(nz, fname, step, velsub, textual, myfluid, flip)
   use dimensions_m
   implicit none
   integer(4), intent(in) :: nz
@@ -400,7 +432,9 @@
   integer,intent(in) :: step
   real(4),allocatable,intent(in) :: velsub(:,:,:,:)
   logical,intent(in) :: textual
-  character(len=120) :: fnameFull,extent
+  integer(1), allocatable, intent(in) :: myfluid(:,:,:,:)
+  integer, intent(in) :: flip
+  character(len=120) :: fnameFull,extent,fnameFullraw
   integer i,j,k, iotest
   integer(4)         :: length
   
@@ -412,6 +446,7 @@
   integer :: iend,iini,nele,toffset,new_toffset,bytechar,byter4,byter8
   integer :: indent,ioffset,vtkoffset,ndatavtk,nn,nheadervtk,endoff
   integer :: new_myoffset,nnloc,byteint
+  integer :: iotestraw,rawoffset,ndataraw
   character(len=8) :: namevar
   integer, parameter :: ncomp=3
   integer, parameter :: ndimvtk=3
@@ -428,6 +463,38 @@
   
 
   iotest = 55
+  iotestraw = 65
+  
+  if(lraw)then
+    fnameFullraw=repeat(' ',120)
+    fnameFullraw = 'output/' // trim(fname) // '.' //trim(write_fmtnumb8(step)) // '.raw'
+    nnloc=nx*ny*nz
+    
+    allocate(service4(1:3,1:nx,1:ny,1:nz))
+    service4(1:3,1:nx,1:ny,1:nz)=0.0
+    do k=1,nz
+      do j=1,ny
+        do i=1,nx
+          !if(myfluid(i,j,kk)==3)cycle
+          service4(1:3,i,j,k)=real(velsub(1:3,i,j,k),kind=4)
+        enddo
+      enddo
+    enddo
+  
+  
+  
+    rawoffset=0
+    ndataraw=ndimvtk*nn*byter4
+    
+    call open_file_vtk_par(iotestraw,120,fnameFullraw,e_io)
+    
+    call print_binary_3d_vtk_col(iotestraw,rawoffset,ndataraw,nnloc,myrank, &
+     gsizes,lsizes,start_idx,lbound(service4),ubound(service4),service4,e_io)
+  
+    call close_file_vtk_par(iotestraw,e_io)
+    
+    deallocate(service4)
+  endif
   
   if (nprocs==1) then
   
@@ -913,18 +980,78 @@
   endif
  end function write_fmtnumb0
 
-
- subroutine moments1Fl(nz, pops, rhoR,vel)
+ subroutine moments1Fl(nz, pops, rhoR,vel, myfluid, flip)
   use dimensions_m
   implicit none
   integer(4), intent(in) :: nz
   real(4), allocatable, pinned,intent(in) :: pops(:,:,:,:)
   real(4), allocatable :: rhoR(:,:,:), vel(:,:,:,:)
+  integer(1), allocatable, intent(in) :: myfluid(:,:,:,:)
+  integer, intent(in) :: flip
   integer i,j,k, l
   real(4) locrho,invrho, locu,locv,locw
-  real(4), parameter :: MINDENS = 0.0
+  real(4), parameter :: MINDENS = real(0.d0,kind=4)
 
+  if(lattice=='D3Q27')then
+  do k=1,nz
+    do j=1,ny
+      do i=1,nx
+       
+       locrho = pops(i,j,k,0) + pops(i,j,k,1) + pops(i,j,k,2) + &
+        pops(i,j,k,3) + pops(i,j,k,4) + &
+        pops(i,j,k,5) + pops(i,j,k,6) + pops(i,j,k,7) + &
+        pops(i,j,k,8) + pops(i,j,k,9) + &
+        pops(i,j,k,10) + pops(i,j,k,11) + pops(i,j,k,12) + &
+        pops(i,j,k,13) + pops(i,j,k,14) + &
+        pops(i,j,k,15) + pops(i,j,k,16) + &
+        pops(i,j,k,17) + pops(i,j,k,18) + &
+        pops(i,j,k,19) + pops(i,j,k,20) + &
+        pops(i,j,k,21) + pops(i,j,k,22) + &
+        pops(i,j,k,23) + pops(i,j,k,24) + &
+        pops(i,j,k,25) + pops(i,j,k,26)
+        
+        invrho = ONE / locrho
 
+        locu   = invrho * ( pops(i,j,k,1) - pops(i,j,k,2) + pops(i,j,k,7) - &
+         pops(i,j,k,8) - pops(i,j,k,9) + &
+         pops(i,j,k,10) + pops(i,j,k,11) - pops(i,j,k,12) - &
+         pops(i,j,k,13) + pops(i,j,k,14) + pops(i,j,k,19) - &
+         pops(i,j,k,20) + pops(i,j,k,21) - pops(i,j,k,22) - &
+         pops(i,j,k,23) + pops(i,j,k,24) + pops(i,j,k,25) - &
+         pops(i,j,k,26) )
+
+        locv    = invrho * ( pops(i,j,k,3) - pops(i,j,k,4) + pops(i,j,k,7) - &
+         pops(i,j,k,8) + pops(i,j,k,9) - &
+         pops(i,j,k,10) + pops(i,j,k,15) - pops(i,j,k,16) - &
+         pops(i,j,k,17) + pops(i,j,k,18) + pops(i,j,k,19) - &
+         pops(i,j,k,20) + pops(i,j,k,21) - pops(i,j,k,22) + &
+         pops(i,j,k,23) - pops(i,j,k,24) - pops(i,j,k,25) + &
+         pops(i,j,k,26) )
+
+        locw    = invrho * ( pops(i,j,k,5) - pops(i,j,k,6) + pops(i,j,k,11) - &
+         pops(i,j,k,12) + pops(i,j,k,13) - &
+         pops(i,j,k,14) + pops(i,j,k,15) - pops(i,j,k,16) + &
+         pops(i,j,k,17) - pops(i,j,k,18) + pops(i,j,k,19) - &
+         pops(i,j,k,20) - pops(i,j,k,21) + pops(i,j,k,22) + &
+         pops(i,j,k,23) - pops(i,j,k,24) + pops(i,j,k,25) - &
+         pops(i,j,k,26) )
+
+        if (locrho > MINDENS) then
+          rhoR(i,j,k) = locrho
+          vel(1,i,j,k) = locu
+          vel(2,i,j,k) = locv
+          vel(3,i,j,k) = locw
+        else
+          rhoR(i,j,k) = MINDENS
+          vel(1,i,j,k) = 0.0
+          vel(2,i,j,k) = 0.0
+          vel(3,i,j,k) = 0.0
+        endif
+
+      enddo
+    enddo
+  enddo
+  else
   do k=1,nz
     do j=1,ny
       do i=1,nx
@@ -936,7 +1063,7 @@
         pops(i,j,k,13) + pops(i,j,k,14) + &
         pops(i,j,k,15) + pops(i,j,k,16) + &
         pops(i,j,k,17) + pops(i,j,k,18)
-
+        
         invrho = ONE / locrho
 
         locu   = invrho * ( pops(i,j,k,1) - pops(i,j,k,2) + pops(i,j,k,7) - &
@@ -969,6 +1096,7 @@
       enddo
     enddo
   enddo
+  endif
   ! write (*,*) 1,1,1, rhoR(1,1,1), (pops(1,1,1,l), l=0,18)
  end subroutine moments1Fl
 
@@ -982,12 +1110,96 @@
   integer, intent(in) :: flip
   integer i,j,k, l
   real(4) locrhor,locrhob,rhosum,invrho, locu,locv,locw
-  real(4), parameter :: MINDENS = 0.0
+  real(4), parameter :: MINDENS = real(0.d0,kind=4)
 
-
+  if(lattice=='D3Q27')then
   do k=1,nz
     do j=1,ny
       do i=1,nx
+        
+        locrhor = pops(i,j,k,0) + pops(i,j,k,1) + pops(i,j,k,2) + pops(i,j,k,3) + pops(i,j,k,4) + &
+          pops(i,j,k,5) + pops(i,j,k,6) + pops(i,j,k,7) + pops(i,j,k,8) + pops(i,j,k,9) + &
+          pops(i,j,k,10) + pops(i,j,k,11) + pops(i,j,k,12) + pops(i,j,k,13) + pops(i,j,k,14) + &
+          pops(i,j,k,15) + pops(i,j,k,16) + pops(i,j,k,17) + pops(i,j,k,18) + &
+          pops(i,j,k,19) + pops(i,j,k,20) + pops(i,j,k,21) + pops(i,j,k,22) + &
+          pops(i,j,k,23) + pops(i,j,k,24) + pops(i,j,k,25) + pops(i,j,k,26)
+
+        locrhob = popsB(i,j,k,0) + popsB(i,j,k,1) + popsB(i,j,k,2) + popsB(i,j,k,3) + popsB(i,j,k,4) + &
+          popsB(i,j,k,5) + popsB(i,j,k,6) + popsB(i,j,k,7) + popsB(i,j,k,8) + popsB(i,j,k,9) + &
+          popsB(i,j,k,10) + popsB(i,j,k,11) + popsB(i,j,k,12) + popsB(i,j,k,13) + popsB(i,j,k,14) + &
+          popsB(i,j,k,15) + popsB(i,j,k,16) + popsB(i,j,k,17) + popsB(i,j,k,18) + &
+          popsB(i,j,k,19) + popsB(i,j,k,20) + popsB(i,j,k,21) + popsB(i,j,k,22) + &
+          popsB(i,j,k,23) + popsB(i,j,k,24) + popsB(i,j,k,25) + popsB(i,j,k,26)
+        
+        rhosum = locrhor + locrhob
+        invrho = ONE / rhosum
+         
+        locu   = invrho * ( pops(i,j,k,1) - pops(i,j,k,2) + pops(i,j,k,7) - &
+         pops(i,j,k,8) - pops(i,j,k,9) + &
+         pops(i,j,k,10) + pops(i,j,k,11) - pops(i,j,k,12) - &
+         pops(i,j,k,13) + pops(i,j,k,14) + pops(i,j,k,19) - &
+         pops(i,j,k,20) + pops(i,j,k,21) - pops(i,j,k,22) - &
+         pops(i,j,k,23) + pops(i,j,k,24) + pops(i,j,k,25) - &
+         pops(i,j,k,26) + popsB(i,j,k,1) - popsB(i,j,k,2) + popsB(i,j,k,7) - &
+         popsB(i,j,k,8) - popsB(i,j,k,9) + &
+         popsB(i,j,k,10) + popsB(i,j,k,11) - popsB(i,j,k,12) - &
+         popsB(i,j,k,13) + popsB(i,j,k,14) + popsB(i,j,k,19) - &
+         popsB(i,j,k,20) + popsB(i,j,k,21) - popsB(i,j,k,22) - &
+         popsB(i,j,k,23) + popsB(i,j,k,24) + popsB(i,j,k,25) - &
+         popsB(i,j,k,26))
+
+        locv    = invrho * ( pops(i,j,k,3) - pops(i,j,k,4) + pops(i,j,k,7) - &
+         pops(i,j,k,8) + pops(i,j,k,9) - &
+         pops(i,j,k,10) + pops(i,j,k,15) - pops(i,j,k,16) - &
+         pops(i,j,k,17) + pops(i,j,k,18) + pops(i,j,k,19) - &
+         pops(i,j,k,20) + pops(i,j,k,21) - pops(i,j,k,22) + &
+         pops(i,j,k,23) - pops(i,j,k,24) - pops(i,j,k,25) + &
+         pops(i,j,k,26) + popsB(i,j,k,3) - popsB(i,j,k,4) + popsB(i,j,k,7) - &
+         popsB(i,j,k,8) + popsB(i,j,k,9) - &
+         popsB(i,j,k,10) + popsB(i,j,k,15) - popsB(i,j,k,16) - &
+         popsB(i,j,k,17) + popsB(i,j,k,18) + popsB(i,j,k,19) - &
+         popsB(i,j,k,20) + popsB(i,j,k,21) - popsB(i,j,k,22) + &
+         popsB(i,j,k,23) - popsB(i,j,k,24) - popsB(i,j,k,25) + &
+         popsB(i,j,k,26))
+
+        locw    = invrho * ( pops(i,j,k,5) - pops(i,j,k,6) + pops(i,j,k,11) - &
+         pops(i,j,k,12) + pops(i,j,k,13) - &
+         pops(i,j,k,14) + pops(i,j,k,15) - pops(i,j,k,16) + &
+         pops(i,j,k,17) - pops(i,j,k,18) + pops(i,j,k,19) - &
+         pops(i,j,k,20) - pops(i,j,k,21) + pops(i,j,k,22) + &
+         pops(i,j,k,23) - pops(i,j,k,24) + pops(i,j,k,25) - &
+         pops(i,j,k,26) + popsB(i,j,k,5) - popsB(i,j,k,6) + popsB(i,j,k,11) - &
+         popsB(i,j,k,12) + popsB(i,j,k,13) - &
+         popsB(i,j,k,14) + popsB(i,j,k,15) - popsB(i,j,k,16) + &
+         popsB(i,j,k,17) - popsB(i,j,k,18) + popsB(i,j,k,19) - &
+         popsB(i,j,k,20) - popsB(i,j,k,21) + popsB(i,j,k,22) + &
+         popsB(i,j,k,23) - popsB(i,j,k,24) + popsB(i,j,k,25) - &
+         popsB(i,j,k,26))
+
+        if (myfluid(i,j,k, flip) == fluid_fluid .and. rhosum > MINDENS) then
+          rhoR(i,j,k) = locrhor
+          rhoB(i,j,k) = locrhob
+          vel(1,i,j,k) = locu
+          vel(2,i,j,k) = locv
+          vel(3,i,j,k) = locw
+          phase(i,j,k) = (locrhor - locrhob) / (locrhor + locrhob)
+        else
+          rhoR(i,j,k) = MINDENS
+          rhoB(i,j,k) = MINDENS
+          vel(1,i,j,k) = 0.0
+          vel(2,i,j,k) = 0.0
+          vel(3,i,j,k) = 0.0
+          phase(i,j,k) = 0.0
+        endif
+
+      enddo
+    enddo
+  enddo
+  else
+    do k=1,nz
+    do j=1,ny
+      do i=1,nx
+        
         locrhor = pops(i,j,k,0) + pops(i,j,k,1) + pops(i,j,k,2) + pops(i,j,k,3) + pops(i,j,k,4) + &
           pops(i,j,k,5) + pops(i,j,k,6) + pops(i,j,k,7) + pops(i,j,k,8) + pops(i,j,k,9) + &
           pops(i,j,k,10) + pops(i,j,k,11) + pops(i,j,k,12) + pops(i,j,k,13) + pops(i,j,k,14) + &
@@ -997,7 +1209,7 @@
           popsB(i,j,k,5) + popsB(i,j,k,6) + popsB(i,j,k,7) + popsB(i,j,k,8) + popsB(i,j,k,9) + &
           popsB(i,j,k,10) + popsB(i,j,k,11) + popsB(i,j,k,12) + popsB(i,j,k,13) + popsB(i,j,k,14) + &
           popsB(i,j,k,15) + popsB(i,j,k,16) + popsB(i,j,k,17) + popsB(i,j,k,18)
-
+        
         rhosum = locrhor + locrhob
         invrho = ONE / rhosum
 
@@ -1038,6 +1250,7 @@
       enddo
     enddo
   enddo
+  endif
  end subroutine moments2Fl
 
  subroutine writeImageDataVTI_isfluid(nz, fname, step, myfluid, flip, textual, totSphere)
@@ -1050,7 +1263,7 @@
   integer,intent(in) :: step, flip, totSphere
   integer(1), allocatable, intent(in) :: myfluid(:,:,:,:)
   logical,intent(in) :: textual
-  character(len=120) :: fnameFull,extent
+  character(len=120) :: fnameFull,extent,fnameFullraw
   integer i,j,k, iotest
   integer(4)         :: length
   real(8)            :: totSumR
@@ -1070,6 +1283,7 @@
   integer, parameter :: ndimvtk=1
   character(len=*),parameter :: topology='ImageData' 
   real(kind=4), allocatable, dimension(:,:,:) :: service1
+  integer :: rawoffset,ndataraw,iotestraw
   
   iini=0
   bytechar=kind(end_rec)
@@ -1080,8 +1294,35 @@
   nn=glx*gly*glz
   
   iotest = 55
+  iotestraw = 65
   
+  if(lraw)then
+    fnameFullraw=repeat(' ',120)
+    fnameFullraw = 'output/' // trim(fname) // '.' //trim(write_fmtnumb8(step)) // '.raw'
+    
+    nnloc=nx*ny*nz
+    allocate(service1(1:nx,1:ny,1:nz))
+    service1(1:nx,1:ny,1:nz)=0.0
+    do k=1,nz
+      do j=1,ny
+        do i=1,nx
+          !if(myfluid(i,j,kk)==3)cycle
+          service1(i,j,k)=real(myfluid(i,j,k,flip),kind=4)
+        enddo
+      enddo
+    enddo
+    rawoffset=0
+    ndataraw=ndimvtk*nn*byter4
+    
+    call open_file_vtk_par(iotestraw,120,fnameFullraw,e_io)
+    
+    call print_binary_1d_vtk_col(iotestraw,rawoffset,ndataraw,nnloc,myrank, &
+       gsizes,lsizes,start_idx,lbound(service1),ubound(service1),service1,e_io)
   
+    call close_file_vtk_par(iotestraw,e_io)
+    
+    deallocate(service1)
+  endif
 
   ! fnameFull = 'output/' // 'partisfluid_' // trim(write_fmtnumb(step)) // '.txt'
   ! open(unit=iotest,file=trim(fnameFull),status='replace',action='write')
@@ -1513,8 +1754,8 @@
   integer,intent(in) :: step, flip
   integer(1), allocatable, intent(in) :: myfluid(:,:,:,:)
   logical,intent(in) :: textual
-  character(len=120) :: fnameFull,extent
-  integer i,j,k, iotest
+  character(len=120) :: fnameFull,extent,fnameFullraw
+  integer i,j,k, iotest, iotestraw
   integer(4)         :: length
   
   integer :: e_io
@@ -1524,7 +1765,7 @@
   character(len=30) :: footervtk
   integer :: iend,iini,nele,toffset,new_toffset,bytechar,byter4,byter8
   integer :: indent,ioffset,vtkoffset,ndatavtk,nn,nheadervtk,endoff
-  integer :: new_myoffset,nnloc,byteint
+  integer :: new_myoffset,nnloc,byteint,rawoffset,ndataraw
   character(len=8) :: namevar
   integer, parameter :: ncomp=1
   integer, parameter :: ndimvtk=1
@@ -1540,7 +1781,7 @@
   nn=glx*gly*glz
   
   iotest = 55
-  
+  iotestraw = 65
   
 
   ! fnameFull = 'output/' // 'partisfluid_' // trim(write_fmtnumb(step)) // '.txt'
@@ -1549,8 +1790,8 @@
 
 
   if (nprocs==1) then
-    write(*,fmt=200) step, myrank
-    200     format('isfluid] step=', I8, ' rank=', I6)
+    write(*,fmt=200) step
+    200     format('isfluid step=', I8)
 
 
 
@@ -1558,13 +1799,41 @@
     call mpi_barrier(lbecomm,ierr)
     if (myrank==0) then
       write(*,fmt=203) step
-      203     format('isfluid] step=', I8)
+      203     format('isfluid step=', I8)
 
     endif
   endif
   
-  if (nprocs==1) then
+  if(lraw)then
+    fnameFullraw=repeat(' ',120)
+    fnameFullraw = 'output/' // trim(fname) // '.' //trim(write_fmtnumb8(step)) // '.raw'
+    
+    nnloc=nx*ny*nz
+    allocate(service1(1:nx,1:ny,1:nz))
+    service1(1:nx,1:ny,1:nz)=0.0
+    do k=1,nz
+      do j=1,ny
+        do i=1,nx
+          !if(myfluid(i,j,kk)==3)cycle
+          service1(i,j,k)=real(myfluid(i,j,k,flip),kind=4)
+        enddo
+      enddo
+    enddo
+    rawoffset=0
+    ndataraw=ndimvtk*nn*byter4
+    
+    call open_file_vtk_par(iotestraw,120,fnameFullraw,e_io)
+    
+    call print_binary_1d_vtk_col(iotestraw,rawoffset,ndataraw,nnloc,myrank, &
+       gsizes,lsizes,start_idx,lbound(service1),ubound(service1),service1,e_io)
   
+    call close_file_vtk_par(iotestraw,e_io)
+    
+    deallocate(service1)
+  endif
+  
+  if (nprocs==1) then
+  fnameFull=repeat(' ',120)
   fnameFull = 'output/' // trim(fname) // '_' // trim(write_fmtnumb(myrank)) // '_' // trim(write_fmtnumb(step)) // '.vti'
   open(unit=iotest,file=trim(fnameFull),status='replace',action='write')
 

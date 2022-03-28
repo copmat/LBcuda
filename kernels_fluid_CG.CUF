@@ -920,7 +920,7 @@
 
 
       ! Streaming      
-      if (myfluid_d(i,j,k, flip) /= fluid_spheredead) then
+      if (myfluid_d(i,j,k, flip) < fluid_dead) then
         do l = 1, npops-1
           i1 = i + ex_d(l)
           j1 = j + ey_d(l)
@@ -950,25 +950,26 @@
       flop = 3 - flip
 
       ! Streaming
-      if (myfluid_d(i,j,k, flip) /= fluid_spheredead) then
-          popsR_d(i+1,j+0,k+0,01, flop) = popsR_d(i,j,k,01,flip)
-          popsR_d(i-1,j+0,k+0,02, flop) = popsR_d(i,j,k,02,flip)
-          popsR_d(i+0,j+1,k+0,03, flop) = popsR_d(i,j,k,03,flip)
-          popsR_d(i+0,j-1,k+0,04, flop) = popsR_d(i,j,k,04,flip)
-          popsR_d(i+0,j+0,k+1,05, flop) = popsR_d(i,j,k,05,flip)
-          popsR_d(i+0,j+0,k-1,06, flop) = popsR_d(i,j,k,06,flip)
-          popsR_d(i+1,j+1,k+0,07, flop) = popsR_d(i,j,k,07,flip)
-          popsR_d(i-1,j-1,k+0,08, flop) = popsR_d(i,j,k,08,flip)
-          popsR_d(i-1,j+1,k+0,09, flop) = popsR_d(i,j,k,09,flip)
-          popsR_d(i+1,j-1,k+0,10, flop) = popsR_d(i,j,k,10,flip)
-          popsR_d(i+1,j+0,k+1,11, flop) = popsR_d(i,j,k,11,flip)
-          popsR_d(i-1,j+0,k-1,12, flop) = popsR_d(i,j,k,12,flip)
-          popsR_d(i-1,j+0,k+1,13, flop) = popsR_d(i,j,k,13,flip)
-          popsR_d(i+1,j+0,k-1,14, flop) = popsR_d(i,j,k,14,flip)
-          popsR_d(i+0,j+1,k+1,15, flop) = popsR_d(i,j,k,15,flip)
-          popsR_d(i+0,j-1,k-1,16, flop) = popsR_d(i,j,k,16,flip)
-          popsR_d(i+0,j-1,k+1,17, flop) = popsR_d(i,j,k,17,flip)
-          popsR_d(i+0,j+1,k-1,18, flop) = popsR_d(i,j,k,18,flip)
+      if (myfluid_d(i,j,k, flip) < fluid_dead) then
+          popsR_d(i  ,j  ,k  , 0, flop) = popsR_d(i,j,k, 0,flip)
+          popsR_d(i+1,j  ,k  , 1, flop) = popsR_d(i,j,k, 1,flip)
+          popsR_d(i-1,j  ,k  , 2, flop) = popsR_d(i,j,k, 2,flip)
+          popsR_d(i  ,j+1,k  , 3, flop) = popsR_d(i,j,k, 3,flip)
+          popsR_d(i  ,j-1,k  , 4, flop) = popsR_d(i,j,k, 4,flip)
+          popsR_d(i  ,j  ,k+1, 5, flop) = popsR_d(i,j,k, 5,flip)
+          popsR_d(i  ,j  ,k-1, 6, flop) = popsR_d(i,j,k, 6,flip)
+          popsR_d(i+1,j+1,k  , 7, flop) = popsR_d(i,j,k, 7,flip)
+          popsR_d(i-1,j-1,k  , 8, flop) = popsR_d(i,j,k, 8,flip)
+          popsR_d(i-1,j+1,k  , 9, flop) = popsR_d(i,j,k, 9,flip)
+          popsR_d(i+1,j-1,k  ,10, flop) = popsR_d(i,j,k,10,flip)
+          popsR_d(i+1,j  ,k+1,11, flop) = popsR_d(i,j,k,11,flip)
+          popsR_d(i-1,j  ,k-1,12, flop) = popsR_d(i,j,k,12,flip)
+          popsR_d(i-1,j  ,k+1,13, flop) = popsR_d(i,j,k,13,flip)
+          popsR_d(i+1,j  ,k-1,14, flop) = popsR_d(i,j,k,14,flip)
+          popsR_d(i  ,j+1,k+1,15, flop) = popsR_d(i,j,k,15,flip)
+          popsR_d(i  ,j-1,k-1,16, flop) = popsR_d(i,j,k,16,flip)
+          popsR_d(i  ,j-1,k+1,17, flop) = popsR_d(i,j,k,17,flip)
+          popsR_d(i  ,j+1,k-1,18, flop) = popsR_d(i,j,k,18,flip)
 #ifdef D3Q27
           popsR_d(i+1,j+1,k+1,19, flop) = popsR_d(i,j,k,19,flip)
           popsR_d(i-1,j-1,k-1,20, flop) = popsR_d(i,j,k,20,flip)
@@ -994,25 +995,26 @@
       flop = 3 - flip
 
       ! Streaming
-      if (myfluid_d(i,j,k, flip) /= fluid_spheredead) then
-          popsB_d(i+1,j+0,k+0,01, flop) = popsB_d(i,j,k,01,flip)
-          popsB_d(i-1,j+0,k+0,02, flop) = popsB_d(i,j,k,02,flip)
-          popsB_d(i+0,j+1,k+0,03, flop) = popsB_d(i,j,k,03,flip)
-          popsB_d(i+0,j-1,k+0,04, flop) = popsB_d(i,j,k,04,flip)
-          popsB_d(i+0,j+0,k+1,05, flop) = popsB_d(i,j,k,05,flip)
-          popsB_d(i+0,j+0,k-1,06, flop) = popsB_d(i,j,k,06,flip)
-          popsB_d(i+1,j+1,k+0,07, flop) = popsB_d(i,j,k,07,flip)
-          popsB_d(i-1,j-1,k+0,08, flop) = popsB_d(i,j,k,08,flip)
-          popsB_d(i-1,j+1,k+0,09, flop) = popsB_d(i,j,k,09,flip)
-          popsB_d(i+1,j-1,k+0,10, flop) = popsB_d(i,j,k,10,flip)
-          popsB_d(i+1,j+0,k+1,11, flop) = popsB_d(i,j,k,11,flip)
-          popsB_d(i-1,j+0,k-1,12, flop) = popsB_d(i,j,k,12,flip)
-          popsB_d(i-1,j+0,k+1,13, flop) = popsB_d(i,j,k,13,flip)
-          popsB_d(i+1,j+0,k-1,14, flop) = popsB_d(i,j,k,14,flip)
-          popsB_d(i+0,j+1,k+1,15, flop) = popsB_d(i,j,k,15,flip)
-          popsB_d(i+0,j-1,k-1,16, flop) = popsB_d(i,j,k,16,flip)
-          popsB_d(i+0,j-1,k+1,17, flop) = popsB_d(i,j,k,17,flip)
-          popsB_d(i+0,j+1,k-1,18, flop) = popsB_d(i,j,k,18,flip)
+      if (myfluid_d(i,j,k, flip) < fluid_dead) then
+          popsB_d(i  ,j  ,k  , 0, flop) = popsB_d(i,j,k, 0,flip)
+          popsB_d(i+1,j  ,k  , 1, flop) = popsB_d(i,j,k, 1,flip)
+          popsB_d(i-1,j  ,k  , 2, flop) = popsB_d(i,j,k, 2,flip)
+          popsB_d(i  ,j+1,k  , 3, flop) = popsB_d(i,j,k, 3,flip)
+          popsB_d(i  ,j-1,k  , 4, flop) = popsB_d(i,j,k, 4,flip)
+          popsB_d(i  ,j  ,k+1, 5, flop) = popsB_d(i,j,k, 5,flip)
+          popsB_d(i  ,j  ,k-1, 6, flop) = popsB_d(i,j,k, 6,flip)
+          popsB_d(i+1,j+1,k  , 7, flop) = popsB_d(i,j,k, 7,flip)
+          popsB_d(i-1,j-1,k  , 8, flop) = popsB_d(i,j,k, 8,flip)
+          popsB_d(i-1,j+1,k  , 9, flop) = popsB_d(i,j,k, 9,flip)
+          popsB_d(i+1,j-1,k  ,10, flop) = popsB_d(i,j,k,10,flip)
+          popsB_d(i+1,j  ,k+1,11, flop) = popsB_d(i,j,k,11,flip)
+          popsB_d(i-1,j  ,k-1,12, flop) = popsB_d(i,j,k,12,flip)
+          popsB_d(i-1,j  ,k+1,13, flop) = popsB_d(i,j,k,13,flip)
+          popsB_d(i+1,j  ,k-1,14, flop) = popsB_d(i,j,k,14,flip)
+          popsB_d(i  ,j+1,k+1,15, flop) = popsB_d(i,j,k,15,flip)
+          popsB_d(i  ,j-1,k-1,16, flop) = popsB_d(i,j,k,16,flip)
+          popsB_d(i  ,j-1,k+1,17, flop) = popsB_d(i,j,k,17,flip)
+          popsB_d(i  ,j+1,k-1,18, flop) = popsB_d(i,j,k,18,flip)
 #ifdef D3Q27
           popsB_d(i+1,j+1,k+1,19, flop) = popsB_d(i,j,k,19,flip)
           popsB_d(i-1,j-1,k-1,20, flop) = popsB_d(i,j,k,20,flip)
@@ -1041,7 +1043,7 @@
 
       ! Stream x=0
       i = 0
-      if (myfluid_d(i,j,k, flip) /= fluid_spheredead) then
+      if (myfluid_d(i,j,k, flip) < fluid_dead) then
         do l = 1, npops-1
           i1 = i + ex_d(l)
           j1 = j + ey_d(l)
@@ -1055,7 +1057,7 @@
 
       ! Stream x=nx+1
       i = nx+1
-      if (myfluid_d(i,j,k, flip) /= fluid_spheredead) then
+      if (myfluid_d(i,j,k, flip) < fluid_dead) then
         do l = 1, npops-1
           i1 = i + ex_d(l)
           j1 = j + ey_d(l)
@@ -1083,7 +1085,7 @@
 
     ! Stream y=0
     j = 0
-    if (myfluid_d(i,j,k, flip) /= fluid_spheredead) then
+    if (myfluid_d(i,j,k, flip) < fluid_dead) then
       do l = 1, npops-1
         i1 = i + ex_d(l)
         j1 = j + ey_d(l)
@@ -1097,7 +1099,7 @@
 
     ! Stream y=ny+1
     j = ny+1
-    if (myfluid_d(i,j,k, flip) /= fluid_spheredead) then
+    if (myfluid_d(i,j,k, flip) < fluid_dead) then
       do l = 1, npops-1
         i1 = i + ex_d(l)
         j1 = j + ey_d(l)
@@ -1125,7 +1127,7 @@
 
     ! Stream z=0
     k = 0
-    if (myfluid_d(i,j,k, flip) /= fluid_spheredead) then
+    if (myfluid_d(i,j,k, flip) < fluid_dead) then
       do l = 1, npops-1
         i1 = i + ex_d(l)
         j1 = j + ey_d(l)
@@ -1139,7 +1141,7 @@
 
     ! Stream z=nz_d+1
     k = nz_d+1
-    if (myfluid_d(i,j,k, flip) /= fluid_spheredead) then
+    if (myfluid_d(i,j,k, flip) < fluid_dead) then
       do l = 1, npops-1
         i1 = i + ex_d(l)
         j1 = j + ey_d(l)
@@ -1447,89 +1449,107 @@
     end subroutine bc_corners
 
     !!! Periodic treat myfluid
-    attributes(global) subroutine isfluid_per_x2(step, flip)
+    attributes(global) subroutine isfluid_per_x(step, flip)
       integer, value :: step,flip
-      integer :: j,k, l
+      integer :: i,j,k, l
   
-      j = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
-      k = (blockIdx%y-1) * TILE_DIM + threadIdx%y - 1
+      j = (blockIdx%x-1) * TILE_DIM + threadIdx%x
+      k = (blockIdx%y-1) * TILE_DIM + threadIdx%y
 
-      if (1<=j .and. j<=ny .and. 1<=k .and. k<=nz_d) then
-        myfluid_d(nx+1, j,k, flip) = myfluid_d( 1,j,k, flip)
-        myfluid_d(   0, j,k, flip) = myfluid_d(nx,j,k, flip)
+      if (j<=ny .and. k<=nz_d) then
+        do i=1,nbuff
+          myfluid_d(nx+i, j,k, flip) = myfluid_d( i,j,k, flip)
+          myfluid_d(1-i, j,k, flip) = myfluid_d(nx+1-i,j,k, flip)
+        enddo
       endif
-    end subroutine isfluid_per_x2
+    end subroutine isfluid_per_x
 
 
-    attributes(global) subroutine isfluid_per_y2(step, flip)
+    attributes(global) subroutine isfluid_per_y(step, flip)
       integer, value :: step,flip
-      integer :: i,k, l
+      integer :: i,j,k, l
   
-      i = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
-      k = (blockIdx%y-1) * TILE_DIM + threadIdx%y - 1
+      i = (blockIdx%x-1) * TILE_DIM + threadIdx%x
+      k = (blockIdx%y-1) * TILE_DIM + threadIdx%y
 
-      if (1<=i .and. i<=nx .and. 1<=k .and. k<=nz_d) then
-        myfluid_d(i,ny+1,k, flip) = myfluid_d(i, 1,k, flip)
-        myfluid_d(i,   0,k, flip) = myfluid_d(i,ny,k, flip)
+      if (i<=nx .and. k<=nz_d) then
+        do j=1,nbuff
+          myfluid_d(i,ny+j,k, flip) = myfluid_d(i, j,k, flip)
+          myfluid_d(i,1-j,k, flip) = myfluid_d(i,ny+1-j,k, flip)
+        enddo
       endif
-    end subroutine isfluid_per_y2
+    end subroutine isfluid_per_y
 
 
-    attributes(global) subroutine isfluid_per_z2(step, flip)
+    attributes(global) subroutine isfluid_per_z(step, flip)
       integer, value :: step,flip
-      integer :: i,j, l
+      integer :: i,j,k, l
   
-      i = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
-      j = (blockIdx%y-1) * TILE_DIM + threadIdx%y - 1
+      i = (blockIdx%x-1) * TILE_DIM + threadIdx%x
+      j = (blockIdx%y-1) * TILE_DIM + threadIdx%y
 
-      if (1<=j .and. j<=ny .and. 1<=i .and. i<=nx) then
-        myfluid_d(i,j,nz_d+1, flip) = myfluid_d(i,j, 1, flip)        
-        myfluid_d(i,j,   0, flip) = myfluid_d(i,j,nz_d, flip)
+      if (j<=ny .and. i<=nx) then
+        do k=1,nbuff
+          myfluid_d(i,j,nz_d+k, flip) = myfluid_d(i,j, k, flip)        
+          myfluid_d(i,j,1-k, flip) = myfluid_d(i,j,nz_d+1-k, flip)
+        enddo
       endif
-    end subroutine isfluid_per_z2
+    end subroutine isfluid_per_z
 
 
-    attributes(global) subroutine isfluid_edge_z2(step, flip)
+    attributes(global) subroutine isfluid_edge_z(step, flip)
       integer, value :: step,flip
-      integer :: k, l
+      integer :: i,j,k, l
   
-      k = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
+      k = (blockIdx%x-1) * TILE_DIM + threadIdx%x - nbuff
 
-      if (0<=k .and. k<=nz_d+1) then
-        myfluid_d (   0,   0,k, flip) = myfluid_d (nx,ny,k, flip)
-        myfluid_d (   0,ny+1,k, flip) = myfluid_d (nx, 1,k, flip)
-        myfluid_d (nx+1,   0,k, flip) = myfluid_d ( 1,ny,k, flip)
-        myfluid_d (nx+1,ny+1,k, flip) = myfluid_d ( 1, 1,k, flip)
+      if (k<=nz_d+nbuff) then
+        do j=1,nbuff
+          do i=1,nbuff
+             myfluid_d (1-i,1-j,k, flip) = myfluid_d (nx+1-i,ny+1-j,k, flip)
+             myfluid_d (1-i,ny+j,k, flip) = myfluid_d (nx+1-i,j,k, flip)
+             myfluid_d (nx+i,1-j,k, flip) = myfluid_d ( i,ny+1-j,k, flip)
+             myfluid_d (nx+i,ny+j,k, flip) = myfluid_d ( i, j,k, flip)
+           enddo
+         enddo
       endif
-    end subroutine isfluid_edge_z2
+    end subroutine isfluid_edge_z
 
-    attributes(global) subroutine isfluid_edge_y2(step, flip)
+    attributes(global) subroutine isfluid_edge_y(step, flip)
       integer, value :: step,flip
-      integer :: j, l
+      integer :: i,j,k, l
   
-      j = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
+      j = (blockIdx%x-1) * TILE_DIM + threadIdx%x
 
-      if (1<=j .and. j<=ny) then
-        myfluid_d (   0,j,   0, flip) = myfluid_d (nx,j, nz_d, flip)
-        myfluid_d (   0,j,nz_d+1, flip) = myfluid_d (nx,j,  1, flip)
-        myfluid_d (nx+1,j,   0, flip) = myfluid_d ( 1,j, nz_d, flip)
-        myfluid_d (nx+1,j,nz_d+1, flip) = myfluid_d ( 1,j,  1, flip)
+      if (j<=ny) then
+        do k=1,nbuff
+          do i=1,nbuff
+            myfluid_d (1-i,j,1-k, flip) = myfluid_d (nx+1-i,j, nz_d+1-k, flip)
+            myfluid_d (1-i,j,nz_d+k, flip) = myfluid_d (nx+1-i,j,  k, flip)
+            myfluid_d (nx+i,j,1-k, flip) = myfluid_d ( i,j, nz_d+1-k, flip)
+            myfluid_d (nx+i,j,nz_d+k, flip) = myfluid_d ( i,j,  k, flip)
+          enddo
+        enddo
       endif
-    end subroutine isfluid_edge_y2
+    end subroutine isfluid_edge_y
 
-    attributes(global) subroutine isfluid_edge_x2(step, flip)
+    attributes(global) subroutine isfluid_edge_x(step, flip)
       integer, value :: step,flip
-      integer :: i, l
+      integer :: i,j,k, l
   
-      i = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
+      i = (blockIdx%x-1) * TILE_DIM + threadIdx%x
 
-      if (1<=i .and. i<=nx) then
-        myfluid_d (i,   0,   0, flip) = myfluid_d (i,ny,nz_d, flip)
-        myfluid_d (i,   0,nz_d+1, flip) = myfluid_d (i,ny, 1, flip)
-        myfluid_d (i,ny+1,   0, flip) = myfluid_d (i, 1,nz_d, flip)
-        myfluid_d (i,ny+1,nz_d+1, flip) = myfluid_d (i, 1, 1, flip)
+      if (i<=nx) then
+        do k=1,nbuff
+          do j=1,nbuff
+            myfluid_d (i,1-j,1-k, flip) = myfluid_d (i,ny+1-j,nz_d+1-k, flip)
+            myfluid_d (i,1-j,nz_d+k, flip) = myfluid_d (i,ny+1-j,k, flip)
+            myfluid_d (i,ny+j,1-k, flip) = myfluid_d (i,j,nz_d+1-k, flip)
+            myfluid_d (i,ny+j,nz_d+k, flip) = myfluid_d (i, j, k, flip)
+          enddo
+        enddo
       endif
-    end subroutine isfluid_edge_x2
+    end subroutine isfluid_edge_x
 
 
     attributes(global) subroutine bc_periodic_ext_x(step, flip)

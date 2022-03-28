@@ -7,10 +7,12 @@
     ! integer(4), parameter :: glx = 128, gly = glx, glz = glx
     integer(4), parameter :: nx = glx, ny = gly
     !integer(4) :: nz
+    integer, parameter :: nbuff=2
+    logical, parameter :: lraw=.true.
 !
 ! mpi stuff
     integer:: nprocs, myrank, ierr
-    integer:: xyplane, xyplane_int1
+    integer:: xyplane, xyplane_int1, xyplane3, xyplanebuff
     integer, parameter::  mpid=3
     integer:: front(2),rear(2),right(2)
     integer:: up(2),down(2),left(2)
@@ -23,18 +25,32 @@
     integer:: mpicoords(mpid)
     integer:: gsizes(3),lsizes(3),start_idx(3)
     integer:: offset(3)
+    integer, save :: numbc=0
+    integer, allocatable :: bctype(:)
+    real, allocatable :: bcvec(:,:)
+    real, allocatable :: bcvel(:,:)
+    real, allocatable :: bcrho(:,:)
 !
+#ifdef PBC
     logical, parameter :: xperiodic = .true.
     logical, parameter :: yperiodic = .true.
     logical, parameter :: zperiodic = .true.
+#else
+    logical, parameter :: xperiodic = .false.
+    logical, parameter :: yperiodic = .false.
+    logical, parameter :: zperiodic = .false.
+#endif
     logical, parameter :: uniqueOmega = .true.
     logical, parameter :: wantOut = .true.
     logical, parameter :: textVTK = .false.
-    logical, parameter :: forced = .false.
-    logical, parameter :: const_forced = .false.
+    logical, save :: forced = .false.
+    logical, save :: const_forced = .false.
+    logical, save :: store_vel = .false.
     logical, save :: lreadisfluid=.false.
     logical, save :: lwriteisf=.false.
-    real, dimension(3), parameter :: f_cost = (/ 0.0, 0.0, -0.000981 /)
+    logical, save :: lwriteisf_every=.false.
+    logical, save :: lbcforce=.false.
+    real, dimension(3), save :: f_cost = (/ 0.0, 0.0, 0.0 /)
 
     ! Moving boundaries..
     real, dimension(3), parameter :: wall_x0 = (/ 0.0, 0.0, 0.0 /), wall_x1 = (/ 0.0, 0.0, 0.0 /)
@@ -307,6 +323,7 @@
     integer, parameter :: fluid_wall = 0
     integer, parameter :: fluid_fluid = 1
     integer, parameter :: fluid_spherelist = 2
+    integer, parameter :: fluid_dead = 3
     integer, parameter :: fluid_spheredead = 4
     integer, parameter :: fluid_particleCM = 5
 
@@ -317,6 +334,9 @@
     real, parameter :: cz=real(glz+1) * HALF
 
     ! Device constants...
+    logical, constant :: store_vel_d
+    integer, constant :: numbc_d
+    integer, constant :: nbuff_d
     integer, dimension(0:npops-1), constant :: ex_d,ey_d,ez_d,opp_d
     integer, dimension(0:linksd3q27-1), constant :: exd3q27_d,eyd3q27_d,ezd3q27_d
     real, constant :: fx_d,fy_d,fz_d, buz_d
@@ -347,6 +367,12 @@
 
     ! MPI
     integer, constant  :: offset_d(3)
+    
+    !BC
+    integer, allocatable, device :: bctype_d(:)
+    real, allocatable, device :: bcvec_d(:,:)
+    real, allocatable, device :: bcvel_d(:,:)
+    real, allocatable, device :: bcrho_d(:,:)
 
     ! Particles
     real, parameter    :: atmWeight = 1.0 / rmass

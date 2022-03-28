@@ -8,13 +8,18 @@
 
     ! device arrays
     real(4), allocatable, device :: popsR_d(:,:,:,:,:), popsB_d(:,:,:,:,:)
-    real(4), allocatable, device :: force_d(:, :,:,:)
+    real(4), allocatable, device :: force_d(:,:,:,:)
     real(4), allocatable, device :: rhoR_d(:,:,:),rhoB_d(:,:,:)
+    real(4), allocatable, device :: vel_d(:,:,:,:)
 
     real(4), allocatable, device :: pos_d(:,:,:)
     real(4), allocatable, device :: forceAtoms_d(:,:,:)
     real(8), allocatable, device :: myf_d(:,:), myt_d(:,:)
     real(8), allocatable, device :: myf2_d(:,:), myt2_d(:,:)
+    
+    real(4), allocatable, device :: force_buf_up_d(:,:,:,:)
+    real(4), allocatable, device :: force_buf_down_d(:,:,:,:)
+    
     ! integer(2), allocatable, device :: listAtoms_d(:)
     ! integer(2), allocatable, device :: findAtoms_d(:,:,:,:)
 
@@ -78,6 +83,27 @@
        pops(i,j,k,17, flip) + pops(i,j,k,18, flip)
 #endif       
     end function compute_rho  
+    
+    attributes(global) subroutine copy_isfluid(step, flip)
+      integer, value :: step,flip
+      integer :: i,j,k, flop
+      real    :: rhoR
+
+      i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x - nbuff
+      j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y - nbuff
+      k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z - nbuff
+      
+      if (i>nx+nbuff) return
+      if (j>ny+nbuff) return
+      if (k>nz_d+nbuff) return
+      
+      flop = 3 - flip
+      
+      myfluid_d(i,j,k, flop) = myfluid_d(i,j,k, flip)
+
+
+    end subroutine copy_isfluid
+    
     
 !    attributes(device) function compute_u_1fl(pops, i,j,k, flip, invrho)
 !     integer, intent(in) :: i,j,k, flip

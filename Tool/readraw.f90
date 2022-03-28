@@ -8,11 +8,19 @@
  integer, parameter :: inx=1
  integer, parameter :: iny=1
  integer, parameter :: inz=1
- integer, parameter :: nx=128
- integer, parameter :: ny=128
- integer, parameter :: nz=128
+ integer, parameter :: nx=8
+ integer, parameter :: ny=8
+ integer, parameter :: nz=8
+ character(len=*), parameter :: filename = 'output/isfluid.00000000.raw'
+ logical :: lexist
  integer(1), dimension(inx:nx,iny:ny,inz:nz) :: isfluid
  logical :: lpbc(3)
+ integer :: ndim,izero,itre
+ integer(1), parameter :: THREE=int(3,kind=1)
+ integer(1), parameter :: ZERO=int(0,kind=1)
+ real(4),allocatable :: data1(:,:,:)
+ real(4),allocatable :: data3(:,:,:,:)
+ 
 #ifdef D3Q27
     
     ! Q3D17 related
@@ -64,7 +72,7 @@
   	opp =(/ 0, 2, 1, 4, 3, 6, 5, 8, 7,10, 9,12,11,14,13,16,15,18,17/)
     
 #endif
-
+  
  lpbc=.true.
  isfluid=int(3,kind=1)
  cm(1)=dble(nx)*0.5d0
@@ -82,52 +90,29 @@
   cell(8)=0.d0
   cell(9)=real(nz,kind=8)
  
- write(6,*)'dig'
- do k=1,nz
-   do j=1,ny
-     do i=1,nx
-       
-       dist(1)=dble(i)-cm(1)
-       dist(2)=dble(j)-cm(2)
-       dist(3)=dble(k)-cm(3)
-       call pbc_images_onevec(7,cell,dist)
-       rdist=dsqrt(dist(1)**2.d0+dist(2)**2.d0+dist(3)**2.d0)
-       if(rdist<=radius)then
-         isfluid(i,j,k)=int(3,kind=1)
-       else
-         isfluid(i,j,k)=int(1,kind=1)
-       endif
+ ndim=1
+ inquire(file=filename,exist=lexist)
+ if(.not. lexist)then
+   write(6,*)'file ',filename,' not found!'
+   stop
+ endif
+ open(unit=15,file=filename,access='stream',status='old')
+ 
+ 
+ if(ndim==1)then
+   allocate(data1(nx,ny,nz))
+   read(15)data1(1:nx,1:ny,1:nz)
+   
+   do k=1,nz
+     do j=1,ny
+       do i=1,nx
+         write(6,*)i,j,k,nint(data1(i,j,k))
+       enddo
      enddo
    enddo
- enddo
- write(6,*)'put zeros'
- do k=1,nz
-   do j=1,ny
-     do i=1,nx
-	   if(isfluid(i,j,k).eq.3)then
-	     do ll=1,npops-1
-		   ii=i+ex(ll)
-		   jj=j+ey(ll)
-		   kk=k+ez(ll) 
-		   ii=pimage(lpbc(1),ii,nx)
-		   jj=pimage(lpbc(2),jj,ny)
-		   kk=pimage(lpbc(3),kk,nz)
-		   if(ii>=1 .and. ii<=nx .and. jj>=1 .and. jj<=ny .and. kk>=1 .and. kk<=nz)then
-		     if(isfluid(ii,jj,kk).eq.1)then
-			   isfluid(i,j,k)=0
-			 endif
-		   endif
-		 enddo
-	   endif
-	 enddo
-   enddo
- enddo
+ endif
+ 
 
- write(6,*)'writing'
- open(16,file='isfluid.init.bin',status='replace',action='write',form='unformatted') 
- write(16) inx,nx, iny,ny, inz,nz
- write(16)isfluid(inx:nx,iny:ny,inz:nz)
- close(16)
  
  write(6,*)'Everything is ok'
  

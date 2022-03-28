@@ -29,7 +29,7 @@ program TestLB
   real(4), allocatable :: pos(:,:,:)
   real(4), allocatable :: forceAtoms(:,:,:)
   integer(1), allocatable :: myfluid(:,:,:,:)
-  
+  integer(1) :: prova1
   integer :: nsphere=0,nspheredead=0, totSphere
   integer, allocatable :: spherelist(:,:),spherelistdead(:,:)
 
@@ -38,15 +38,17 @@ program TestLB
   integer(8)	   :: clock_rate, c_stopAtom,c_startAtom, diff_listatomGPU
 
   ! misc
-  type (dim3) :: dimGrid, dimBlock, dimGridx,dimGridy,dimGridz, dimBlock2
-  type (dim3) :: dimGridhalox
+  type (dim3) :: dimGrid,dimBlock, dimGridx,dimGridy,dimGridz,dimBlock2
+  type (dim3) :: dimGridhalo,dimBlockhalo 
+  type (dim3) :: dimGridhalox,dimGridhaloy,dimGridhaloz
+  type (dim3) :: dimGridsidex,dimGridsidey,dimGridsidez
   
   integer     :: dimGridAtm, dimBlockAtm
   type (dim3) :: dimGridSubd, dimBlockSubd
   type (cudaDeviceProp) :: prop
   real(4) :: mytime
   integer :: istat, flipflop, nIter,nIterOut,nIterVTK, step
-
+  integer :: i,j,k
   logical :: pinnedFlag = .true.
 
   ! Phys params
@@ -109,14 +111,31 @@ program TestLB
 #endif
   call setupRho_Pops
   if (withCG) then
-    call fixPeriodic(.true., .true., "after_setup")
+    call fixPeriodic(.true., .false., "after_setup")
+    call fixPeriodic_hvar(.true.,.true.,.false.,"after_setup")
   else
-    call fixPeriodic_BGK(.true., .true., "after_setup")
+    call fixPeriodic_BGK(.true., .false., "after_setup")
+    call fixPeriodic_hvar(.true.,.false.,.false.,"after_setup")
   endif
   call fixPeriodic_isfluid("after_setup")
+  call copy_isfluid<<<dimGridhalo,dimBlockhalo>>>(step, flipflop)
+!  myfluid = myfluid_d
+!  istat = cudaDeviceSynchronize
+!  open(unit=16,file='mio.data',status='replace')
+!  do k=1-nbuff,nz+nbuff
+!    do j=1-nbuff,ny+nbuff
+!      do i=1-nbuff,nx+nbuff
+!        write(16,'(5i4)')i,j,k,myfluid(i,j,k,1:2)
+!      enddo
+!    enddo
+!  enddo
+  
   ! if (wantOut) call DumpBorderPlanez("step_", 0, 1)  
   if (wantOut) call OutputVTK("step_", 0, 1)
-
+!  istat = cudaDeviceSynchronize
+!  call MPI_FINALIZE(ierr)
+!  stop
+  
   step = 1
 
   if (myrank== 0) then
@@ -141,7 +160,7 @@ program TestLB
         call dumpPartvol(step)
 #endif
       endif
-#endif
+
 
 #ifdef FLUIDSPLIT 
       call init_rhoB_CG<<<dimGrid, dimBlock>>>(step, flipflop) 
@@ -153,7 +172,7 @@ program TestLB
       call fixPeriodic(.false., .true., "init_rho_CG")
       if (debug1) call OutputVTK("rho_isfluid_",step, flipflop)
 
-#ifdef PARTICLES
+
       if (withParticles) then
         call make_fluid_CG<<<dimGrid, dimBlock>>>(step, flipflop, lrotate)
         call fixPeriodic(.false., .true., "make_fluid_CG")
@@ -171,14 +190,14 @@ program TestLB
         call fixPeriodic(.false., .true., "compute_densities_wall")
         if (debug1) call OutputVTK("wall_",step, flipflop)
       endif
-#endif
+
 
       call time_step_CG<<<dimGrid, dimBlock>>>(step, flipflop)
       if (debug1) call OutputVTK("cg_",step, flipflop)
 
       call fixPeriodic(.true., .false., "time_step_CG")
       
-#ifdef PARTICLES
+
       if (withParticles) then
         call partBB_CG<<<dimGrid, dimBlock>>>(step, flipflop, lrotate)
         call abortOnLastErrorAndSync("partBB_CG",step, flipflop)
@@ -200,7 +219,7 @@ program TestLB
         call dumpTerms_p2n(step)
 #endif
       endif
-#endif
+
 
       ! Boundary Conditions with new flipflop
       !call doBoundary
@@ -208,10 +227,10 @@ program TestLB
       
 ! 
 #ifdef FLUIDSPLIT 
-      call flipflopRPop0_CG<<<dimGrid, dimBlock>>>(step, flipflop)
+      !call flipflopRPop0_CG<<<dimGrid, dimBlock>>>(step, flipflop)
       call streamR_CG<<<dimGrid, dimBlock >>>(step, flipflop)
 
-      call flipflopBPop0_CG<<<dimGrid, dimBlock>>>(step, flipflop)
+      !call flipflopBPop0_CG<<<dimGrid, dimBlock>>>(step, flipflop)
       call streamB_CG<<<dimGrid, dimBlock >>>(step, flipflop) 
 ! 
 #else 
@@ -223,7 +242,7 @@ program TestLB
       call stream_CG_y<<<dimGridy, dimBlock2>>>(step, flipflop)
       call stream_CG_z<<<dimGridz, dimBlock2>>>(step, flipflop)
       
-#ifdef PARTICLES
+
       if (withParticles) then
         call inter_force_particles<<<dimGridAtm, dimBlockAtm>>>(step, flipflop, numAtoms)
 # ifdef SERIAL
@@ -243,6 +262,50 @@ program TestLB
 
         call updateListAtoms(3 - flipflop)  ! Use new pos
       endif
+! if not def PARTICLE      
+#else
+
+
+
+      call init_rhoB_CG<<<dimGrid, dimBlock>>>(step, flipflop) 
+      call init_rhoR_CG<<<dimGrid, dimBlock>>>(step, flipflop) 
+
+
+      !call fixPeriodic(.false., .true., "init_rho_CG")
+      call fixPeriodic_hvar(.true.,.true.,.false.,"init_rho_CG")
+      if (debug1) call OutputVTK("rho_isfluid_",step, flipflop)
+
+
+
+
+
+      call time_step_CG<<<dimGrid, dimBlock>>>(step, flipflop)
+      if (debug1) call OutputVTK("cg_",step, flipflop)
+
+      call fixPeriodic(.true., .false., "time_step_CG")
+      
+
+
+
+
+      ! Boundary Conditions with new flipflop
+      !call doBoundary
+      if (debug1) call OutputVTK("bb_",step, flipflop)
+      
+! 
+
+      !call flipflopRPop0_CG<<<dimGrid, dimBlock>>>(step, flipflop)
+      call streamR_CG<<<dimGrid, dimBlock >>>(step, flipflop)
+
+      !call flipflopBPop0_CG<<<dimGrid, dimBlock>>>(step, flipflop)
+      call streamB_CG<<<dimGrid, dimBlock >>>(step, flipflop) 
+! 
+
+      call stream_CG_x<<<dimGridx, dimBlock2>>>(step, flipflop)
+      call stream_CG_y<<<dimGridy, dimBlock2>>>(step, flipflop)
+      call stream_CG_z<<<dimGridz, dimBlock2>>>(step, flipflop)
+      
+      
 #endif
     else
 #ifdef BGK
@@ -265,13 +328,13 @@ program TestLB
 #ifdef MOMBGK      
       
       call init_rho_isfluid_BGK<<<dimGrid, dimBlock>>>(step, flipflop)
-      call fixPeriodic_BGK(.false., .true., "init_rho")
+      call fixPeriodic_hvar(.true.,.false.,.false.,"init_rho")
       call time_step_BGK<<<dimGrid, dimBlock>>>(step, flipflop, omega)
 
 #else
       
       call time_step_mom_BGK<<<dimGrid, dimBlock>>>(step, flipflop, omega)
-      
+      call fixPeriodic_hvar(.true.,.false.,.false.,"init_rho")
 #endif
       
       ! Boundary Conditions with new flipflop
@@ -281,17 +344,14 @@ program TestLB
       call fixPeriodic_BGK(.true., .false., "time_step_BGK")
            
 #ifdef APPLYBC  
-      call applybc_BGK<<<dimGrid, dimBlock >>>(step, flipflop)    
-      call fixPeriodic(.true., .false., "applybc_BGK")
+      call fixPeriodic_hvar(.false.,.false.,.true.,"applybc_BGK")
+      call applybchalo_BGK<<<dimGridhalo,dimBlockhalo >>>(step, flipflop) 
 #endif
-      
-      call flipflopPop0_BGK<<<dimGrid, dimBlock>>>(step, flipflop)
-      call stream_BGK<<<dimGrid, dimBlock >>>(step, flipflop)
       
       
 !      call copy_BGK<<<dimGrid, dimBlock>>>(step, flipflop)
 !      
-!      call stream_BGK<<<dimGrid, dimBlock>>>(step, flipflop)
+      call stream_BGK<<<dimGrid, dimBlock >>>(step, flipflop)
       call stream_BGK_x<<<dimGridx, dimBlock2>>>(step, flipflop)
       call stream_BGK_y<<<dimGridy, dimBlock2>>>(step, flipflop)
       call stream_BGK_z<<<dimGridz, dimBlock2>>>(step, flipflop)
@@ -363,12 +423,14 @@ program TestLB
       integer, parameter :: maxlen=120
       integer, parameter :: inputio=25
       character(len = maxlen)  :: string,inipFile,arg
-      integer               :: itest, found, max_vel_found,i,count
+      integer               :: i, itest, found, max_vel_found,count
       logical :: lcheck,lexist
+      real :: mydist
 #ifdef NEWINPUT      
       namelist /simulation/ nIter,nIterOut,nIterVTK,initType, &
-       lreadisfluid,lwriteisf
-      namelist /fluid/ vx,vy,vz,densR,densB,tauR,tauB
+       lreadisfluid,lwriteisf,store_vel,numbc,lwriteisf_every
+      namelist /fluid/ vx,vy,vz,densR,densB,tauR,tauB,f_cost,const_forced,forced,&
+       bctype,bcvec,bcvel,bcrho
       namelist /particle/ withParticles,numAtoms,lrotate,ext_fxx,ext_fyy,&
       ext_fzz,ext_tqx,ext_tqy,ext_tqz,max_vel
 #endif      
@@ -429,9 +491,53 @@ program TestLB
       endif
       open(unit=inputio,file=trim(inipFile),status='old')
       read(inputio,nml=simulation)
+      if(numbc>0)then
+        allocate(bctype(numbc), STAT=istat)
+        if (istat /= 0) then
+          write(*,*) 'Allocation of particle bctype failed'
+        endif
+        bctype(1:numbc) = 0
+        allocate(bcvec(3,numbc), STAT=istat)
+        if (istat /= 0) then
+          write(*,*) 'Allocation of particle bcvec failed'
+        endif
+        bcvec(1:3,1:numbc) = 0.0
+        allocate(bcvel(3,numbc), STAT=istat)
+        if (istat /= 0) then
+          write(*,*) 'Allocation of particle bcvel failed'
+        endif
+        bcvel(1:3,1:numbc) = 0.0
+        if(withCG)then
+          allocate(bcrho(2,numbc), STAT=istat)
+          if (istat /= 0) then
+            write(*,*) 'Allocation of particle bcrho failed'
+          endif
+          bcrho(1:2,1:numbc) = 0.0
+        else
+          allocate(bcrho(1,numbc), STAT=istat)
+          if (istat /= 0) then
+            write(*,*) 'Allocation of particle bcrho failed'
+          endif
+          bcrho(1,1:numbc) = 0.0
+        endif
+      endif
       read(inputio,nml=fluid)
       read(inputio,nml=particle)
       close(inputio)
+      
+      if(numbc>0)then
+        if(.not. store_vel)then
+          write (*,*) 'when numbc>0 store_vel should be true'
+          write (*,*) 'now store_vel = ',store_vel
+          call mystop
+        else
+          do i=1,numbc
+            mydist=sqrt(bcvec(1,i)**2.0+bcvec(2,i)**2.0+bcvec(3,i)**2.0)
+            bcvec(1:3,i)=bcvec(1:3,i)/mydist
+          enddo
+        endif
+      endif
+      
 #else
       
       open(unit=11, file='input.dat', status='old', form='FORMATTED', action='read', iostat=itest)
@@ -506,7 +612,9 @@ program TestLB
       close(11)
       
       ! write (*,*) 'found',found, withParticles, lrotate
-
+      
+      
+      
       if ((lrotate .and. found /= 10) .or. &
           (.not. lrotate .and. withParticles .and. found /= 9) .or. &
           .not. withParticles .and. found /= 6) then
@@ -534,15 +642,21 @@ program TestLB
       implicit none
       character(len=*), intent(in) :: msg
 
-      if (withCG) then
-        call isfluid_per_x2<<<dimGridx, dimBlock2>>>(step, flipflop)
-        call isfluid_per_y2<<<dimGridy, dimBlock2>>>(step, flipflop)
-        call isfluid_per_z2<<<dimGridz, dimBlock2>>>(step, flipflop)
+      
+        if(xperiodic)&
+         call isfluid_per_x<<<dimGridsidex, dimBlock2>>>(step, flipflop)
+        if(yperiodic)&
+         call isfluid_per_y<<<dimGridsidey, dimBlock2>>>(step, flipflop)
+        if(zperiodic)&
+         call isfluid_per_z<<<dimGridsidez, dimBlock2>>>(step, flipflop)
 
-        call isfluid_edge_x2<<<(nx+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
-        call isfluid_edge_y2<<<(ny+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
-        call isfluid_edge_z2<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
-    endif
+        if(xperiodic)&
+         call isfluid_edge_x<<<(nx+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
+        if(yperiodic)&
+         call isfluid_edge_y<<<(ny+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
+        if(zperiodic)&
+         call isfluid_edge_z<<<(nz+2*nbuff+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
+    
 #else
       use mpi
       implicit none
@@ -555,34 +669,35 @@ program TestLB
       integer      :: reqs_down(5)
       integer      :: tag
 
-      if (withCG) then
-        call isfluid_per_x2<<<dimGridx, dimBlock2>>>(step, flipflop)
-        call isfluid_per_y2<<<dimGridy, dimBlock2>>>(step, flipflop)
+        if(.not. (xperiodic .or. yperiodic .or. zperiodic))return
+        
+        call isfluid_per_x<<<dimGridsidex, dimBlock2>>>(step, flipflop)
+        call isfluid_per_y<<<dimGridsidey, dimBlock2>>>(step, flipflop)
 
         call abortOnLastErrorAndSync(msg,step, flipflop)
 
         ! if it is the same task, there's no need to send/recv data
         if(up(2) == myrank) then
-          call isfluid_per_z2<<<dimGridz, dimBlock2>>>(step, flipflop)
+          call isfluid_per_z<<<dimGridsidez, dimBlock2>>>(step, flipflop)
         else
           ! 1) isend to up task 
           tag = 405
-          call mpi_isend(myfluid_d(0,0,nz, flipflop), 1, xyplane_int1, up(2), tag, &
+          call mpi_isend(myfluid_d(1-nbuff,1-nbuff,nz+1-nbuff, flipflop), 1, xyplane_int1, up(2), tag, &
                             lbecomm, reqs_up(1), ierr)
           !
           ! 2) recv from down task
           tag = 405
-          call  mpi_recv(myfluid_d(0,0, 0, flipflop), 1, xyplane_int1, down(2), tag, &
+          call  mpi_recv(myfluid_d(1-nbuff,1-nbuff,1-nbuff, flipflop), 1, xyplane_int1, down(2), tag, &
                             lbecomm, status_up, ierr)
           !
           ! 3) isend to down task
           tag = 406
-          call mpi_isend(myfluid_d(0,0, 1, flipflop), 1, xyplane_int1, down(2), tag, &
+          call mpi_isend(myfluid_d(1-nbuff,1-nbuff, 1, flipflop), 1, xyplane_int1, down(2), tag, &
                             lbecomm, reqs_down(1), ierr)
           !
           ! 4) recv from up task
           tag = 406
-          call  mpi_recv(myfluid_d(0,0,nz+1, flipflop), 1, xyplane_int1, up(2), tag, &
+          call  mpi_recv(myfluid_d(1-nbuff,1-nbuff,nz+1, flipflop), 1, xyplane_int1, up(2), tag, &
                             lbecomm, status_down, ierr)
           !
           ! 5) syncronize
@@ -592,13 +707,13 @@ program TestLB
 
         ! if it is the same task, there's no need to send/recv data
         if(up(2) == myrank) then
-          call isfluid_edge_x2<<<(nx+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
-          call isfluid_edge_y2<<<(ny+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
-          call isfluid_edge_z2<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
+          call isfluid_edge_x<<<(nx+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
+          call isfluid_edge_y<<<(ny+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
+          call isfluid_edge_z<<<(nz+2*nbuff+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
         else
-          call isfluid_edge_z2<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
+          call isfluid_edge_z<<<(nz+2*nbuff+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
         endif
-      endif
+      
 #endif      
     end subroutine fixPeriodic_isfluid
 
@@ -627,18 +742,18 @@ program TestLB
 
       if (withCG) then
 #ifdef SERIAL
-          call bc_per_x2<<<dimGridx, dimBlock2>>>(step, flipflop, faiPops,faiRho)
-          call bc_per_y2<<<dimGridy, dimBlock2>>>(step, flipflop, faiPops,faiRho)
-          call bc_per_z2<<<dimGridz, dimBlock2>>>(step, flipflop, faiPops,faiRho)
+          if(xperiodic)call bc_per_x2<<<dimGridx, dimBlock2>>>(step, flipflop, faiPops,faiRho)
+          if(yperiodic)call bc_per_y2<<<dimGridy, dimBlock2>>>(step, flipflop, faiPops,faiRho)
+          if(zperiodic)call bc_per_z2<<<dimGridz, dimBlock2>>>(step, flipflop, faiPops,faiRho)
 
           call bc_edge_x2<<<(nx+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
           call bc_edge_y2<<<(ny+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
           call bc_edge_z2<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
 
-          call bc_corners<<<dimGridz, dimBlock2>>>(step, flipflop)
+          !call bc_corners<<<dimGridz, dimBlock2>>>(step, flipflop)
 #else
-          call bc_per_x2<<<dimGridx, dimBlock2>>>(step, flipflop, faiPops,faiRho)
-          call bc_per_y2<<<dimGridy, dimBlock2>>>(step, flipflop, faiPops,faiRho)
+          if(xperiodic)call bc_per_x2<<<dimGridx, dimBlock2>>>(step, flipflop, faiPops,faiRho)
+          if(yperiodic)call bc_per_y2<<<dimGridy, dimBlock2>>>(step, flipflop, faiPops,faiRho)
           
           
           
@@ -646,7 +761,7 @@ program TestLB
 
 ! if it is the same task, there's no need to send/recv data
           if(up(2) == myrank) then
-             call bc_per_z2<<<dimGridz, dimBlock2>>>(step, flipflop, faiPops,faiRho)
+             if(zperiodic)call bc_per_z2<<<dimGridz, dimBlock2>>>(step, flipflop, faiPops,faiRho)
           else 
             if (faiRho) then
 ! 
@@ -1010,18 +1125,22 @@ program TestLB
           endif
 
           if(up(2) == myrank) then
-            call bc_edge_x2<<<(nx+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
-            call bc_edge_y2<<<(ny+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)  
-            call bc_edge_z2<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
+            if(xperiodic)&
+             call bc_edge_x2<<<(nx+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
+            if(yperiodic)&
+             call bc_edge_y2<<<(ny+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)  
+            if(zperiodic)&
+             call bc_edge_z2<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
           else
             ! NON VA FATTO
               !call abortOnLastErrorAndSync(msg,step, flipflop)
               
 !             mpi rho+pop myrank <--> up(2)
-             call bc_edge_z2<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
+             if(zperiodic)&
+              call bc_edge_z2<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
           endif
 
-          call bc_corners<<<dimGridz, dimBlock2>>>(step, flipflop)
+          !call bc_corners<<<dimGridz, dimBlock2>>>(step, flipflop)
 
 #endif
       
@@ -1057,15 +1176,15 @@ program TestLB
 
       
 
-          call bc_BGK_per_x<<<dimGridx, dimBlock2>>>(step, flipflop, faiPops,faiRho)
-          call bc_BGK_per_y<<<dimGridy, dimBlock2>>>(step, flipflop, faiPops,faiRho)
+          if(xperiodic)call bc_BGK_per_x<<<dimGridx, dimBlock2>>>(step, flipflop, faiPops,faiRho)
+          if(yperiodic)call bc_BGK_per_y<<<dimGridy, dimBlock2>>>(step, flipflop, faiPops,faiRho)
           
           
           call abortOnLastErrorAndSync(msg,step, flipflop)
 
 ! if it is the same task, there's no need to send/recv data
           if(up(2) == myrank) then
-             call bc_BGK_per_z<<<dimGridz, dimBlock2>>>(step, flipflop, faiPops,faiRho)
+             if(zperiodic)call bc_BGK_per_z<<<dimGridz, dimBlock2>>>(step, flipflop, faiPops,faiRho)
           else 
             if (faiRho) then
 ! 
@@ -1255,18 +1374,22 @@ program TestLB
           endif
 
           if(up(2) == myrank) then
-            call bc_BGK_edge_x<<<(nx+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
-            call bc_BGK_edge_y<<<(ny+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)  
-            call bc_BGK_edge_z<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
+            if(xperiodic)&
+             call bc_BGK_edge_x<<<(nx+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
+            if(yperiodic)&
+             call bc_BGK_edge_y<<<(ny+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)  
+            if(zperiodic)&
+             call bc_BGK_edge_z<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
           else
             ! NON VA FATTO
               !call abortOnLastErrorAndSync(msg,step, flipflop)
               
 !             mpi rho+pop myrank <--> up(2)
-             call bc_BGK_edge_z<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
+             if(zperiodic)&
+              call bc_BGK_edge_z<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
           endif
 
-          call bc_corners<<<dimGridz, dimBlock2>>>(step, flipflop)
+          !call bc_corners<<<dimGridz, dimBlock2>>>(step, flipflop)
 
 
       
@@ -1276,6 +1399,243 @@ program TestLB
       
       
     end subroutine fixPeriodic_BGK
+    
+    subroutine fixPeriodic_hvar(faiRho,faiRhoB,faiVelsub, msg)
+#ifdef SERIAL
+      implicit none
+      character(len=*), intent(in) :: msg
+#else
+      use mpi
+      implicit none
+      character(len=*), intent(in) :: msg
+
+      integer      :: reqs_up(5)
+      integer      :: reqs_down(5)
+
+      
+      integer      :: status_up(MPI_STATUS_SIZE)
+      integer      :: status_down(MPI_STATUS_SIZE)
+      integer      :: tag
+
+#endif
+      logical :: faiRho,faiRhoB,faiVelsub
+      logical :: faivel
+          
+          if(.not. (xperiodic .or. yperiodic .or. zperiodic))return
+          
+          faivel = (faivelsub .and. store_vel)
+          
+
+          call bc_per_x_hvar<<<dimGridsidex, dimBlock2>>>(step,faiRho,faiRhoB,faiVel)
+          call bc_per_y_hvar<<<dimGridsidey, dimBlock2>>>(step,faiRho,faiRhoB,faiVel)
+          
+          
+          call abortOnLastErrorAndSync(msg,step, flipflop)
+
+! if it is the same task, there's no need to send/recv data
+          if(up(2) == myrank) then
+             call bc_per_z_hvar<<<dimGridsidez, dimBlock2>>>(step,faiRho,faiRhoB,faiVel)
+          else 
+            if (faiRho) then
+! 
+! I've to exchange pop with other task
+! -----------------------------------------------------------------------------------
+! send RED rho
+! 1) isend to up task 
+              tag = 405
+              call mpi_isend(rhoR_d(1-nbuff,1-nbuff,nz+1-nbuff), 1, xyplanebuff, up(2), tag, &
+                                lbecomm, reqs_up(1), ierr)
+!
+! 2) recv from down task
+              tag = 405
+              call  mpi_recv(rhoR_d(1-nbuff,1-nbuff,1-nbuff), 1, xyplanebuff, down(2), tag, &
+                                lbecomm, status_up, ierr)
+!
+! 3) isend to down task
+              tag = 406
+              call mpi_isend(rhoR_d(1-nbuff,1-nbuff, 1), 1, xyplanebuff, down(2), tag, &
+                                lbecomm, reqs_down(1), ierr)
+!
+! 4) recv from up task
+              tag = 406
+              call  mpi_recv(rhoR_d(1-nbuff,1-nbuff,nz+1), 1, xyplanebuff, up(2), tag, &
+                                lbecomm, status_down, ierr)
+!
+! 5) syncronize
+              call mpi_wait(reqs_up(1), status_up, ierr)
+              call mpi_wait(reqs_down(1), status_down, ierr)
+            endif
+            if (faiRhoB) then
+! 
+! I've to exchange pop with other task
+! -----------------------------------------------------------------------------------
+! send BLUE rho
+! 1) isend to up task 
+              tag = 205
+              call mpi_isend(rhoB_d(1-nbuff,1-nbuff,nz+1-nbuff), 1, xyplanebuff, up(2), tag, &
+                                lbecomm, reqs_up(1), ierr)
+!
+! 2) recv from down task
+              tag = 205
+              call  mpi_recv(rhoB_d(1-nbuff,1-nbuff,1-nbuff), 1, xyplanebuff, down(2), tag, &
+                                lbecomm, status_up, ierr)
+!
+! 3) isend to down task
+              tag = 206
+              call mpi_isend(rhoB_d(1-nbuff,1-nbuff, 1), 1, xyplanebuff, down(2), tag, &
+                                lbecomm, reqs_down(1), ierr)
+!
+! 4) recv from up task
+              tag = 206
+              call  mpi_recv(rhoB_d(1-nbuff,1-nbuff,nz+1), 1, xyplanebuff, up(2), tag, &
+                                lbecomm, status_down, ierr)
+!
+! 5) syncronize
+              call mpi_wait(reqs_up(1), status_up, ierr)
+              call mpi_wait(reqs_down(1), status_down, ierr)
+            endif
+            
+            if (faiVel) then
+! 
+! I've to exchange pop with other task
+! -----------------------------------------------------------------------------------
+! send BLUE rho
+! 1) isend to up task 
+              tag = 605
+              call mpi_isend(vel_d(1,1-nbuff,1-nbuff,nz+1-nbuff), 1, xyplane3, up(2), tag, &
+                                lbecomm, reqs_up(1), ierr)
+!
+! 2) recv from down task
+              tag = 605
+              call  mpi_recv(vel_d(1,1-nbuff,1-nbuff,1-nbuff), 1, xyplane3, down(2), tag, &
+                                lbecomm, status_up, ierr)
+!
+! 3) isend to down task
+              tag = 606
+              call mpi_isend(vel_d(1,1-nbuff,1-nbuff, 1), 1, xyplane3, down(2), tag, &
+                                lbecomm, reqs_down(1), ierr)
+!
+! 4) recv from up task
+              tag = 606
+              call  mpi_recv(vel_d(1,1-nbuff,1-nbuff,nz+1), 1, xyplane3, up(2), tag, &
+                                lbecomm, status_down, ierr)
+!
+! 5) syncronize
+              call mpi_wait(reqs_up(1), status_up, ierr)
+              call mpi_wait(reqs_down(1), status_down, ierr)
+            endif
+
+          endif
+
+          if(up(2) == myrank) then
+            call bc_edge_x_hvar<<<(nx+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step,faiRho,faiRhoB,faiVel)
+            call bc_edge_y_hvar<<<(ny+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step,faiRho,faiRhoB,faiVel)  
+            call bc_edge_z_hvar<<<(nz+2*nbuff+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step,faiRho,faiRhoB,faiVel)
+          else
+            ! NON VA FATTO
+              !call abortOnLastErrorAndSync(msg,step, flipflop)
+              
+!             mpi rho+pop myrank <--> up(2)
+             call bc_edge_z_hvar<<<(nz+2*nbuff+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step,faiRho,faiRhoB,faiVel)
+          endif
+
+          
+
+      
+    end subroutine fixPeriodic_hvar
+    
+    subroutine fixPeriodic_back_force(faiF, msg)
+#ifdef SERIAL
+      implicit none
+      character(len=*), intent(in) :: msg
+#else
+      use mpi
+      implicit none
+      character(len=*), intent(in) :: msg
+
+      integer      :: reqs_up(5)
+      integer      :: reqs_down(5)
+
+      
+      integer      :: status_up(MPI_STATUS_SIZE)
+      integer      :: status_down(MPI_STATUS_SIZE)
+      integer      :: tag
+
+#endif
+      logical :: faiF
+
+          if(.not. lbcforce)return
+ 
+          if(xperiodic)&
+           call bc_per_x_backf<<<dimGridx, dimBlock2>>>(step,faiF)
+          if(yperiodic)&
+           call bc_per_y_backf<<<dimGridy, dimBlock2>>>(step,faiF)
+          
+          
+          call abortOnLastErrorAndSync(msg,step, flipflop)
+
+! if it is the same task, there's no need to send/recv data
+          if(up(2) == myrank) then
+             if(zperiodic)&
+              call bc_per_z_backf<<<dimGridz, dimBlock2>>>(step,faiF)
+          else 
+            
+            
+            if (faiF) then
+! 
+! I've to exchange pop with other task
+! -----------------------------------------------------------------------------------
+! send BLUE rho
+! 1) isend to up task 
+              tag = 605
+              call mpi_isend(force_d(1,0,0,   0), 1, xyplane3, up(2), tag, &
+                                lbecomm, reqs_up(1), ierr)
+!
+! 2) recv from down task
+              tag = 605
+              call  mpi_recv(force_buf_down_d(1,0,0,   0), 1, xyplane3, down(2), tag, &
+                                lbecomm, status_up, ierr) !force_d(1,0,0,  nz)
+!
+! 3) isend to down task
+              tag = 606
+              call mpi_isend(force_d(1,0,0,nz+1), 1, xyplane3, down(2), tag, &
+                                lbecomm, reqs_down(1), ierr)
+!
+! 4) recv from up task
+              tag = 606
+              call  mpi_recv(force_buf_up_d(1,0,0,1), 1, xyplane3, up(2), tag, &
+                                lbecomm, status_down, ierr) !force_d(1,0,0,   1)
+!
+! 5) syncronize
+              call mpi_wait(reqs_up(1), status_up, ierr)
+              call mpi_wait(reqs_down(1), status_down, ierr)
+              
+            endif
+            
+            call merge_per_z_backf<<<dimGridz, dimBlock2>>>(step,faiF)
+
+          endif
+
+          if(up(2) == myrank) then
+            if(xperiodic)&
+             call bc_edge_x_backf<<<(nx+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step,faiF)
+            if(yperiodic)&
+             call bc_edge_y_backf<<<(ny+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step,faiF)  
+            if(zperiodic)&
+             call bc_edge_z_backf<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step,faiF)
+          else
+            ! NON VA FATTO
+              !call abortOnLastErrorAndSync(msg,step, flipflop)
+              
+!             mpi rho+pop myrank <--> up(2)
+             if(zperiodic)&
+              call bc_edge_z_backf<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step,faiF)
+          endif
+
+          !call bc_corners<<<dimGridz, dimBlock2>>>(step, flipflop)
+
+      
+    end subroutine fixPeriodic_back_force
 
     subroutine doBoundary
       implicit none
@@ -1349,9 +1709,12 @@ program TestLB
       viscB = cssq*(tauB-HALF)
       omega = ONE / tauR
       
-      
       viscR_d = viscR
       viscB_d = viscB
+      
+      nbuff_d = nbuff
+      
+      store_vel_d = store_vel
       
       if(densR.eq.1.0)then
         alphaCG(1)=p(0)
@@ -1675,6 +2038,7 @@ program TestLB
       write(*,fmt=100) 'initType',initType
       write(*,fmt=102) 'lreadisfluid',lreadisfluid
       write(*,fmt=102) 'lwriteisf',lwriteisf
+      write(*,fmt=102) 'lwriteisf_every',lwriteisf_every
       write(*,fmt=108)lattice
       
       if (withCG) then
@@ -1712,7 +2076,22 @@ program TestLB
       write(*,fmt=102) 'Constant omega mode', uniqueOmega
       write(*,fmt=101) 'Omega',  omega
       write(*,fmt=102) 'Forced', forced
+      write(*,fmt=102) 'const_forced', const_forced
       if (forced .and. const_forced) write(*,fmt=104) 'Const Forced', (f_cost(i), i=1,3)
+      write(*,fmt=100) 'numbc', numbc 
+      if(numbc>0)then
+        do i=1,numbc
+          write(*,'(a,i4,a,i4)')'bc number: ',i,'   type: ',bctype(i)
+          write(*,'(a,3f8.4)')'bc dir: ',bcvec(1:3,i)
+          if(withCG)then
+            write(*,'(a,2f8.4)')'bc rho: ',bcrho(1:2,i)
+          else
+            write(*,'(a,1f8.4)')'bc rho: ',bcrho(1:1,i)
+          endif
+          write(*,'(a,3f8.4)')'bc vel: ',bcvel(1:3,i)
+        enddo
+      endif
+      write(*,fmt=102) 'store_vel', store_vel
       write(*,fmt=102) 'VTK output', wantOut
       if (wantOut) then
         write(*,fmt=100) 'VTK every', nIterVTK 
@@ -2099,14 +2478,15 @@ program TestLB
       character(len=120) :: mynamefile, mynamefile0, mynamefile1
       real(4)     :: plane0(nx+2,ny+2), plane1(nx+2,ny+2)
       
-
+      myfluid = myfluid_d
+      istat = cudaDeviceSynchronize
+      if (istat/=0) write(*,*) 'status after myfluid',istat
+      
       ! if (fname(1:5) /= 'step_' .and. fname(1:4)/= 'stop') return
-
+      
       call system_clock(c_start)
-
       istat = cudaMemcpy(pop_pinned, popsR_d(:,:,:,:,flip), (nx+2)*(ny+2)*(nz+2)*npops )
       if (istat/=0) write(*,*) 'status after copy R:',istat, 'flipflop',flipflop
-
       istat = cudaDeviceSynchronize
       if (istat/=0) write(*,*) 'status after deviceSync',istat
 
@@ -2114,33 +2494,33 @@ program TestLB
       diff_xfer = c_stop-c_start
 
       if (.not. withCG) then
-        call moments1Fl(nz, pop_pinned,rhoR, vel)
-        istat = cudaMemcpy(rhoR, rhoR_d(:,:,:), (nx+2)*(ny+2)*(nz+2) )
-        if (istat/=0) write(*,*) 'status after rho R:',istat
-        istat = cudaDeviceSynchronize
-        if (istat/=0) write(*,*) 'status after rho R',istat
+        call moments1Fl(nz, pop_pinned,rhoR, vel, myfluid, flip)
+        
+!        istat = cudaMemcpy(rhoR, rhoR_d(:,:,:), (nx+2*nbuff)*(ny+2*nbuff)*(nz+2*nbuff) )
+!        if (istat/=0) write(*,*) 'status after rho R:',istat
+!        istat = cudaDeviceSynchronize
+!        if (istat/=0) write(*,*) 'status after rho R',istat
       endif
 
       if (withCG) then
         call system_clock(c_start2)
-        
-         istat = cudaMemcpy(popB_pinned, popsB_d(:,:,:,:,flip), (nx+2)*(ny+2)*(nz+2)*npops )
-         if (istat/=0) write(*,*) 'status after copy B:',istat, 'flipflop',flipflop
-         istat = cudaDeviceSynchronize
-         if (istat/=0) write(*,*) 'status after deviceSync B',istat
-
-         myfluid = myfluid_d
+         
+        istat = cudaMemcpy(popB_pinned, popsB_d(:,:,:,:,flip), (nx+2)*(ny+2)*(nz+2)*npops )
+        if (istat/=0) write(*,*) 'status after copy B:',istat, 'flipflop',flipflop
+        istat = cudaDeviceSynchronize
+        if (istat/=0) write(*,*) 'status after deviceSync B',istat
+         
          call moments2Fl(nz, pop_pinned,rhoR, popB_pinned,rhoB, vel, phase, myfluid, flip)
 
-         istat = cudaMemcpy(rhoR, rhoR_d(:,:,:), (nx+2)*(ny+2)*(nz+2) )
-         if (istat/=0) write(*,*) 'status after rho R:',istat
-         istat = cudaDeviceSynchronize
-         if (istat/=0) write(*,*) 'status after rho R',istat
+!         istat = cudaMemcpy(rhoR, rhoR_d(:,:,:), (nx+2*nbuff)*(ny+2*nbuff)*(nz+2*nbuff) )
+!         if (istat/=0) write(*,*) 'status after rho R:',istat
+!         istat = cudaDeviceSynchronize
+!         if (istat/=0) write(*,*) 'status after rho R',istat
 
-         istat = cudaMemcpy(rhoB, rhoB_d(:,:,:), (nx+2)*(ny+2)*(nz+2) )
-         if (istat/=0) write(*,*) 'status after rho B:',istat
-         istat = cudaDeviceSynchronize
-         if (istat/=0) write(*,*) 'status after rho B',istat
+!         istat = cudaMemcpy(rhoB, rhoB_d(:,:,:), (nx+2*nbuff)*(ny+2*nbuff)*(nz+2*nbuff) )
+!         if (istat/=0) write(*,*) 'status after rho B:',istat
+!         istat = cudaDeviceSynchronize
+!         if (istat/=0) write(*,*) 'status after rho B',istat
 
          call system_clock(c_stop)
          diff_xfer = diff_xfer + c_stop-c_start2
@@ -2156,20 +2536,42 @@ program TestLB
          else
           mynamefile = trim(fname)//'rhoB'
          endif
+         
+         do k=1,nz
+           do j=1,ny
+             do i=1,nx
+               if(myfluid(i,j,k,flip) /= fluid_fluid )then
+                 rhoB(i,j,k) = ZERO
+                 phase(i,j,k) = ZERO
+               endif
+             enddo
+           enddo
+         enddo
 
-         call writeImageDataVTI(nz, mynamefile,step, 'rho2', rhoB, textVTK)
-         call writeImageDataVTI(nz, "phase",step, 'phase', phase, textVTK)
+         call writeImageDataVTI(nz, mynamefile,step, 'rho2', rhoB, textVTK, myfluid, flip)
+         call writeImageDataVTI(nz, "phase",step, 'phase', phase, textVTK, myfluid, flip)
       endif
-
+      
+      do k=1,nz
+         do j=1,ny
+           do i=1,nx
+             if(myfluid(i,j,k,flip) /= fluid_fluid )then
+               rhoR(i,j,k) = ZERO
+               vel(1:3,i,j,k) = ZERO
+             endif
+           enddo
+         enddo
+       enddo
+      
       mynamefile = repeat(' ',120)
       if (fname(1:5) == 'step_') then
         mynamefile = 'rho'
       else
         mynamefile = trim(fname)//'rho'
       endif
-      call writeImageDataVTI(nz, mynamefile,step, 'rho1', rhoR, textVTK)
-      call writeImageDataVTI_3d(nz, "vel",step, vel, textVTK)
-      if(lwriteisf)then
+      call writeImageDataVTI(nz, mynamefile,step, 'rho1', rhoR, textVTK, myfluid, flip)
+      call writeImageDataVTI_3d(nz, "vel",step, vel, textVTK, myfluid, flip)
+      if(lwriteisf .and. (lwriteisf_every .or. step==0))then
         mynamefile = repeat(' ',120)
         if (fname(1:5) == 'step_') then
            mynamefile = 'isfluid'
@@ -2436,6 +2838,7 @@ program TestLB
         write(*,*) 'nz must be a multiple of TILE_DIMz'
         call mystop
     end if
+    
   
     ! if (withParticles .and. mod(numAtoms, TILE_DIMPART) /= 0) then
     !    write(*,*) 'numAtoms(',numAtoms,') must be a multiple of TILE_DIMPART(',TILE_DIMPART,')'
@@ -2447,12 +2850,22 @@ program TestLB
     !(ceiling((ny+2)/TILE_DIM)) 
     dimGridx  = dim3((ny+2+TILE_DIM-1)/TILE_DIM, (nz+2+TILE_DIM-1)/TILE_DIM, 1)
     dimGridy  = dim3((nx+2+TILE_DIM-1)/TILE_DIM, (nz+2+TILE_DIM-1)/TILE_DIM, 1)
-    
-    
-    
-    
     dimGridz  = dim3((nx+2+TILE_DIM-1)/TILE_DIM, (ny+2+TILE_DIM-1)/TILE_DIM, 1)
+    
     dimBlock2 = dim3(TILE_DIM, TILE_DIM, 1)
+    
+    
+    dimGridhalox = dim3((ny+2*nbuff+TILE_DIM-1)/TILE_DIM, (nz+2*nbuff+TILE_DIM-1)/TILE_DIM, 1)
+    dimGridhaloy = dim3((nx+2*nbuff+TILE_DIM-1)/TILE_DIM, (nz+2*nbuff+TILE_DIM-1)/TILE_DIM, 1)
+    dimGridhaloz = dim3((nx+2*nbuff+TILE_DIM-1)/TILE_DIM, (ny+2*nbuff+TILE_DIM-1)/TILE_DIM, 1)
+    
+    dimGridsidex = dim3((ny+TILE_DIM-1)/TILE_DIM, (nz+TILE_DIM-1)/TILE_DIM, 1)
+    dimGridsidey = dim3((nx+TILE_DIM-1)/TILE_DIM, (nz+TILE_DIM-1)/TILE_DIM, 1)
+    dimGridsidez = dim3((nx+TILE_DIM-1)/TILE_DIM, (ny+TILE_DIM-1)/TILE_DIM, 1)
+    
+    dimGridhalo = dim3((nx+2*nbuff+TILE_DIMx-1)/TILE_DIMx, &
+     (ny+2*nbuff+TILE_DIMy-1)/TILE_DIMy,(nz+2*nbuff+TILE_DIMz-1)/TILE_DIMz)
+    dimBlockhalo = dim3(TILE_DIMx, TILE_DIMy, TILE_DIMz)
   
     dimGridAtm  = (numAtoms+TILE_DIMPART-1)/TILE_DIMPART
     dimBlockAtm = TILE_DIMPART
@@ -2496,16 +2909,16 @@ program TestLB
     end if
     pop_pinned = 0.0
   
-    allocate(rhoR(0:nx+1,0:ny+1,0:nz+1), STAT=istat)
+    allocate(rhoR(1-nbuff:nx+nbuff,1-nbuff:ny+nbuff,1-nbuff:nz+nbuff), STAT=istat)
     if (istat /= 0) then
        write(*,*) 'Allocation of rhoR failed'
     end if
-    allocate(vel(3,0:nx+1,0:ny+1,0:nz+1), STAT=istat)
+    allocate(vel(3,1-nbuff:nx+nbuff,1-nbuff:ny+nbuff,1-nbuff:nz+nbuff), STAT=istat)
     if (istat /= 0) then
        write(*,*) 'Allocation of velocity failed'
     end if
 
-    allocate(myfluid(0:nx+1,0:ny+1,0:nz+1, 2), STAT=istat)
+    allocate(myfluid(1-nbuff:nx+nbuff,1-nbuff:ny+nbuff,1-nbuff:nz+nbuff, 2), STAT=istat)
     if (istat /= 0) then
       write(*,*) 'Allocation of particle myfluid failed'
     end if
@@ -2518,23 +2931,77 @@ program TestLB
     end if
     pop_pinned = 0.0
   
-    allocate(rhoR_d(0:nx+1,0:ny+1,0:nz+1), STAT=istat)
+    allocate(rhoR_d(1-nbuff:nx+nbuff,1-nbuff:ny+nbuff,1-nbuff:nz+nbuff), STAT=istat)
     if (istat /= 0) then
        write(*,*) 'Allocation of rhoR_d failed'
     end if
+    
+    if(store_vel) then
+      allocate(vel_d(1:3,1-nbuff:nx+nbuff,1-nbuff:ny+nbuff,1-nbuff:nz+nbuff), STAT=istat)
+      if (istat /= 0) then
+        write(*,*) 'Allocation of vel_d failed'
+      endif
+      vel_d = 0.0
+    endif
 
     if (.not. withCG .and. forced .and. .not. const_forced) then
-      allocate(force_d(3, 0:nx+1,0:ny+1,0:nz+1), STAT=istat)
+      allocate(force_d(3,1-nbuff:nx+nbuff,1-nbuff:ny+nbuff,1-nbuff:nz+nbuff), STAT=istat)
       if (istat /= 0) then
         write(*,*) 'Allocation of force_d failed'
       endif
+      if(lbcforce)then
+        allocate(force_buf_up_d(3, 0:nx+1,0:ny+1,1), STAT=istat)
+        if (istat /= 0) then
+          write(*,*) 'Allocation of force_buf_up_d failed'
+        endif
+        
+        allocate(force_buf_down_d(3, 0:nx+1,0:ny+1,1), STAT=istat)
+        if (istat /= 0) then
+          write(*,*) 'Allocation of force_buf_down_d failed'
+        endif
+      endif
+    endif
+    
+    numbc_d = numbc
+    
+    if(numbc>0)then
+      allocate(bctype_d(numbc), STAT=istat)
+      if (istat /= 0) then
+        write(*,*) 'Allocation of particle bctype_d failed'
+      end if
+      bctype_d = bctype
+      
+      allocate(bcvec_d(3,numbc), STAT=istat)
+      if (istat /= 0) then
+        write(*,*) 'Allocation of particle bcvec_d failed'
+      endif
+      bcvec_d = bcvec
+      
+      allocate(bcvel_d(3,numbc), STAT=istat)
+      if (istat /= 0) then
+        write(*,*) 'Allocation of particle bcvel_d failed'
+      endif
+      bcvel_d = bcvel
+      
+      if(withCG)then
+        allocate(bcrho_d(2,numbc), STAT=istat)
+        if (istat /= 0) then
+          write(*,*) 'Allocation of particle bcrho_d failed'
+        endif
+      else
+        allocate(bcrho_d(1,numbc), STAT=istat)
+        if (istat /= 0) then
+          write(*,*) 'Allocation of particle bcrho_d failed'
+        endif
+      endif
+      bcrho_d = bcrho
     endif
 
-    allocate(myfluid_d(0:nx+1,0:ny+1,0:nz+1, 2), STAT=istat)
+    allocate(myfluid_d(1-nbuff:nx+nbuff,1-nbuff:ny+nbuff,1-nbuff:nz+nbuff,2), STAT=istat)
     if (istat /= 0) then
       write(*,*) 'Allocation of particle myfluid_d failed'
     end if
-    allocate(debugfluid_d(0:nx+1,0:ny+1,0:nz+1), STAT=istat)
+    allocate(debugfluid_d(1-nbuff:nx+nbuff,1-nbuff:ny+nbuff,1-nbuff:nz+nbuff), STAT=istat)
     if (istat /= 0) then
       write(*,*) 'Allocation of particle debugfluid_d failed'
     end if
@@ -2549,12 +3016,12 @@ program TestLB
       end if
       popB_pinned = 0.0
   
-      allocate(rhoB(0:nx+1,0:ny+1,0:nz+1), STAT=istat)
+      allocate(rhoB(1-nbuff:nx+nbuff,1-nbuff:ny+nbuff,1-nbuff:nz+nbuff), STAT=istat)
       if (istat /= 0) then
         write(*,*) 'Allocation of rhoB failed'
       end if
   
-      allocate(phase(0:nx+1,0:ny+1,0:nz+1), STAT=istat)
+      allocate(phase(1-nbuff:nx+nbuff,1-nbuff:ny+nbuff,1-nbuff:nz+nbuff), STAT=istat)
       if (istat /= 0) then
         write(*,*) 'Allocation of phase failed'
       end if
@@ -2567,7 +3034,7 @@ program TestLB
       end if
       popB_pinned = 0.0
   
-      allocate(rhoB_d(0:nx+1,0:ny+1,0:nz+1), STAT=istat)
+      allocate(rhoB_d(1-nbuff:nx+nbuff,1-nbuff:ny+nbuff,1-nbuff:nz+nbuff), STAT=istat)
       if (istat /= 0) then
         write(*,*) 'Allocation of rhoB_d failed'
       end if
@@ -2824,7 +3291,7 @@ program TestLB
     integer(kind=1), allocatable, dimension(:,:,:) :: myis
     
     logical :: lexist
-    integer :: i,ii,j,jj,k,kk
+    integer :: i,ii,j,jj,k,kk,itemp
     
     if (myrank== 0) write(*,*) 'Initial setup...'
     rhoR = 0
@@ -2895,7 +3362,11 @@ program TestLB
       endif
 #endif
     else
-      call setup<<<dimGrid, dimBlock>>>(vx,vy,vz)
+      if (initType == 0) then
+        call setup<<<dimGrid, dimBlock>>>(vx,vy,vz)
+      elseif (initType == 1) then
+        call setup_p<<<dimGrid, dimBlock>>>(vx,vy,vz)
+      endif  
     end if
     
     if(lreadisfluid)then
@@ -2915,6 +3386,21 @@ program TestLB
       read(11) myis(1:glx, 1:gly, 1:glz)
       close(11)
       
+      do k=1,glz
+        do j=1,gly
+          do i=1,glx
+            if(myis(i,j,k)<0)then
+              itemp=-int(myis(i,j,k))
+              if(itemp>numbc)then
+                if(myrank==0)write(*,*)'BC type larger than numbc : ', &
+                 itemp,numbc
+                call mystop
+              endif
+            endif
+          enddo
+        enddo
+      enddo
+      
       myfluid(0:nx+1,0:ny+1,0:nz+1,1:2)=int(3,kind=1)
       minx=start_idx(1)
       miny=start_idx(2)
@@ -2931,12 +3417,16 @@ program TestLB
           do i=1,glx
             if(i<minx .or. i>maxx)cycle
             ii=i-minx+1
-            myfluid(ii,jj,kk,1:2)=myis(i,j,k)
+            myfluid(ii,jj,kk,1:2)=myis(i,j,k) !i+j+k!nint(rand_noseeded(i,j,k,1)*120.0) 
           enddo
         enddo
       enddo
       
       myfluid_d = myfluid
+      
+    else
+    
+      myfluid_d = fluid_fluid
       
     endif
 

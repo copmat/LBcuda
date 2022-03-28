@@ -1,6 +1,6 @@
 #define BGK
 #define noMOMBGK
-#define noCG
+#define CG
 #define noPARTICLES
 #define FLUIDSPLIT
 #define HIGHGRAD
@@ -8,6 +8,7 @@
 #define NEWINPUT
 #define noD3Q27
 #define APPLYBC
+#define PBC
 
 #ifndef MYDIMESION
 #define MYDIMESION 64
