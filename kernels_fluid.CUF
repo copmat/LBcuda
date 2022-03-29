@@ -8,9 +8,12 @@
 
     ! device arrays
     real(4), allocatable, device :: popsR_d(:,:,:,:,:), popsB_d(:,:,:,:,:)
+    real(4), allocatable, device :: popsSCP_d(:,:,:,:,:,:)
     real(4), allocatable, device :: force_d(:,:,:,:)
     real(4), allocatable, device :: rhoR_d(:,:,:),rhoB_d(:,:,:)
     real(4), allocatable, device :: vel_d(:,:,:,:)
+    
+    real(4), allocatable, device :: scalar_d(:,:,:,:)
 
     real(4), allocatable, device :: pos_d(:,:,:)
     real(4), allocatable, device :: forceAtoms_d(:,:,:)
@@ -40,6 +43,7 @@
 
     real, device :: minRho = -10.0, maxRho = 10.0
     real, device :: max_vel_d = 0.0
+    real, device :: minSCP = -10.0, maxSCP = 10.0
 
     ! Debug
     real, allocatable, device :: debugline_d(:,:,:)

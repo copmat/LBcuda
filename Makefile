@@ -8,10 +8,10 @@ CUDAFLAGS = -cuda -fast -gpu=cc70 -DMYDIMESION=128 -DTILE1=128 -DTILE2=1 -DTILE3
 
 
 
-lbCUDA: main.o dimensions_m.o kernels_fluid.o kernels_fluid_CG.o kernels_fluid_BGK.o kernels_fluid_PART.o write_output.o setupMPI.o
-	$(FC) $(CUDAFLAGS) $(F90FLAGS) -o $@ main.o dimensions_m.o kernels_fluid.o write_output.o kernels_fluid_CG.o kernels_fluid_BGK.o kernels_fluid_PART.o setupMPI.o
+lbCUDA: main.o dimensions_m.o kernels_fluid.o kernels_fluid_CG.o kernels_fluid_BGK.o kernels_fluid_SCP.o kernels_fluid_PART.o write_output.o setupMPI.o
+	$(FC) $(CUDAFLAGS) $(F90FLAGS) -o $@ main.o dimensions_m.o kernels_fluid.o write_output.o kernels_fluid_CG.o kernels_fluid_BGK.o kernels_fluid_SCP.o kernels_fluid_PART.o setupMPI.o
 
-main.o: Makefile dimensions_m.mod kernels_fluid.o kernels_fluid_CG.o kernels_fluid_BGK.o kernels_fluid_PART.o write_output.o main.CUF 
+main.o: Makefile dimensions_m.mod kernels_fluid.o kernels_fluid_CG.o kernels_fluid_BGK.o kernels_fluid_SCP.o kernels_fluid_PART.o write_output.o main.CUF 
 	$(FC) $(CUDAFLAGS) $(F90FLAGS) -c main.CUF
 
 dimensions_m.o: Makefile defines.h dimensions_m.CUF
@@ -25,6 +25,9 @@ kernels_fluid_PART.o: Makefile dimensions_m.mod kernels_fluid_PART.CUF
 
 kernels_fluid_BGK.o: Makefile dimensions_m.mod kernels_fluid_BGK.CUF
 	$(FC) $(CUDAFLAGS) $(F90FLAGS) -c kernels_fluid_BGK.CUF
+
+kernels_fluid_SCP.o: Makefile dimensions_m.mod kernels_fluid_SCP.CUF
+	$(FC) $(CUDAFLAGS) $(F90FLAGS) -c kernels_fluid_SCP.CUF
 
 kernels_fluid_CG.o: Makefile dimensions_m.mod kernels_fluid_CG.CUF
 	$(FC) $(CUDAFLAGS) $(F90FLAGS) -c kernels_fluid_CG.CUF

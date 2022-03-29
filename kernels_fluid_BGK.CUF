@@ -426,7 +426,7 @@
     attributes(global) subroutine bc_per_x_hvar(step,faiRho,faiRhoB,faiVel)
       integer, value :: step
       logical, value :: faiRho,faiRhoB,faiVel
-      integer :: j,k, l
+      integer :: i,j,k, l
   
       j = (blockIdx%x-1) * TILE_DIM + threadIdx%x
       k = (blockIdx%y-1) * TILE_DIM + threadIdx%y
@@ -435,22 +435,25 @@
       if (j<=ny .and. k<=nz_d) then
 
         if (faiRho) then
-          rhoR_d (nx+1,j,k) = rhoR_d (1,j,k)
+          do i=1,nbuff
+            rhoR_d (nx+i,j,k) = rhoR_d (i,j,k)
 
-          rhoR_d (0,j,k) = rhoR_d (nx,j,k)
-
+            rhoR_d (1-i,j,k) = rhoR_d (nx+1-i,j,k)
+          enddo
         endif
         if (faiRhoB) then
-          rhoB_d (nx+1,j,k) = rhoB_d (1,j,k)
+          do i=1,nbuff
+            rhoB_d (nx+i,j,k) = rhoB_d (i,j,k)
 
-          rhoB_d (0,j,k) = rhoB_d (nx,j,k)
-
+            rhoB_d (1-i,j,k) = rhoB_d (nx+1-i,j,k)
+          enddo
         endif
         if (faiVel) then
-          vel_d (1:3,nx+1,j,k) = vel_d (1:3,1,j,k)
+          do i=1,nbuff
+            vel_d (1:3,nx+i,j,k) = vel_d (1:3,i,j,k)
 
-          vel_d (1:3,0,j,k) = vel_d (1:3,nx,j,k)
-
+            vel_d (1:3,1-i,j,k) = vel_d (1:3,nx+1-i,j,k)
+          enddo
         endif
 
       endif
@@ -516,7 +519,7 @@
     attributes(global) subroutine bc_per_y_hvar(step,faiRho,faiRhoB,faiVel)
       integer, value :: step
       logical, value :: faiRho,faiRhoB,faiVel
-      integer :: i,k, l
+      integer :: i,j,k, l
   
       i = (blockIdx%x-1) * TILE_DIM + threadIdx%x
       k = (blockIdx%y-1) * TILE_DIM + threadIdx%y
@@ -527,19 +530,25 @@
           
 
         if (faiRho) then
-          rhoR_d(i,ny+1,k) = rhoR_d(i,1,k)
+          do j=1,nbuff
+            rhoR_d(i,ny+j,k) = rhoR_d(i,j,k)
 
-          rhoR_d(i,0,k) = rhoR_d(i,ny,k)
+            rhoR_d(i,1-j,k) = rhoR_d(i,ny+1-j,k)
+          enddo
         endif
         if (faiRhoB) then
-          rhoB_d(i,ny+1,k) = rhoB_d(i,1,k)
+          do j=1,nbuff
+            rhoB_d(i,ny+j,k) = rhoB_d(i,j,k)
 
-          rhoB_d(i,0,k) = rhoB_d(i,ny,k)
+            rhoB_d(i,1-j,k) = rhoB_d(i,ny+1-j,k)
+          enddo
         endif
         if (faiVel) then
-          vel_d(1:3,i,ny+1,k) = vel_d(1:3,i,1,k)
+          do j=1,nbuff
+            vel_d(1:3,i,ny+j,k) = vel_d(1:3,i,j,k)
 
-          vel_d(1:3,i,0,k) = vel_d(1:3,i,ny,k)
+            vel_d(1:3,i,1-j,k) = vel_d(1:3,i,ny+1-j,k)
+          enddo
         endif
         
       endif
@@ -602,7 +611,7 @@
     attributes(global) subroutine bc_per_z_hvar(step,faiRho,faiRhoB,faiVel)
       integer, value :: step
       logical, value :: faiRho,faiRhoB,faiVel
-      integer :: i,j, l
+      integer :: i,j,k, l
   
       i = (blockIdx%x-1) * TILE_DIM + threadIdx%x
       j = (blockIdx%y-1) * TILE_DIM + threadIdx%y
@@ -611,19 +620,25 @@
       if (j<=ny .and. i<=nx) then
 
         if (faiRho) then
-          rhoR_d(i,j,nz_d+1) = rhoR_d(i,j,1)
+          do k=1,nbuff
+            rhoR_d(i,j,nz_d+k) = rhoR_d(i,j,k)
 
-          rhoR_d(i,j,0) = rhoR_d(i,j,nz_d)
+            rhoR_d(i,j,1-k) = rhoR_d(i,j,nz_d+1-k)
+          enddo
         endif
         if (faiRhoB) then
-          rhoB_d(i,j,nz_d+1) = rhoB_d(i,j,1)
+          do k=1,nbuff
+            rhoB_d(i,j,nz_d+k) = rhoB_d(i,j,k)
 
-          rhoB_d(i,j,0) = rhoB_d(i,j,nz_d)
+            rhoB_d(i,j,1-k) = rhoB_d(i,j,nz_d+1-k)
+          enddo
         endif
         if (faiVel) then
-          vel_d(1:3,i,j,nz_d+1) = vel_d(1:3,i,j,1)
+          do k=1,nbuff
+            vel_d(1:3,i,j,nz_d+k) = vel_d(1:3,i,j,k)
 
-          vel_d(1:3,i,j,0) = vel_d(1:3,i,j,nz_d)
+            vel_d(1:3,i,j,1-k) = vel_d(1:3,i,j,nz_d+1-k)
+          enddo
         endif
       endif
     end subroutine bc_per_z_hvar

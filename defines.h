@@ -9,6 +9,7 @@
 #define noD3Q27
 #define APPLYBC
 #define PBC
+#define SCPD3Q19GRAD
 
 #ifndef MYDIMESION
 #define MYDIMESION 64
