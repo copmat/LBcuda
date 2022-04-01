@@ -303,9 +303,9 @@ program TestLB
 
       !call fixPeriodic(.false., .true., "init_rho_CG")
       
-      if(ldiagnostic)call start_timing2("LB","fix_hvar")
+      if(ldiagnostic)call start_timing2("LB","fixPhvar")
       call fixPeriodic_hvar(.true.,.true.,.false.,"init_rho_CG")
-      if(ldiagnostic)call end_timing2("LB","fix_hvar")
+      if(ldiagnostic)call end_timing2("LB","fixPhvar")
       
       if (debug1) call OutputVTK("rho_isfluid_",step, flipflop)
 
@@ -318,9 +318,9 @@ program TestLB
       
       if (debug1) call OutputVTK("cg_",step, flipflop)
       
-      if(ldiagnostic)call start_timing2("LB","fix_pop")
+      if(ldiagnostic)call start_timing2("LB","fixPpop")
       call fixPeriodic(.true., .false., "time_step_CG")
-      if(ldiagnostic)call end_timing2("LB","fix_pop")
+      if(ldiagnostic)call end_timing2("LB","fixPpop")
 
 
 

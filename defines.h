@@ -3,7 +3,7 @@
 #define CG
 #define noPARTICLES
 #define FLUIDSPLIT
-#define HIGHGRAD
+#define noHIGHGRAD
 #define noDIFFDENS
 #define NEWINPUT
 #define noD3Q27

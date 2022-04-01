@@ -1,7 +1,7 @@
 &simulation
-nIter=100    !niter  number of iterations
-nIterOut=10  !stat print on screen every n
-nIterVTK=500  !vtk print every n
+nIter=5000    !niter  number of iterations
+nIterOut=500  !stat print on screen every n
+nIterVTK=10000  !vtk print every n
 initType=1    ! init TYPE 1=droplet, 2=planez, 3=read Rho, 4=read all, 5=cylinder, 6=RandomR+ b=1-R
 &end
 &fluid
