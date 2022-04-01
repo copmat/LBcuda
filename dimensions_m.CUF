@@ -7,6 +7,9 @@
     ! integer(4), parameter :: glx = 128, gly = glx, glz = glx
     integer(4), parameter :: nx = glx, ny = gly
     !integer(4) :: nz
+
+    logical, save :: diagnostic=.true.
+    integer, save :: tdiagnostic=1
 !
 ! mpi stuff
     integer:: nprocs, myrank, ierr
