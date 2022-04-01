@@ -8,7 +8,7 @@
 #define NEWINPUT
 #define noD3Q27
 #define noAPPLYBC
-#define npPBC
+#define PBC
 #define SCPD3Q19GRAD
 
 #ifndef MYDIMESION

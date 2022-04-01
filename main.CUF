@@ -313,6 +313,7 @@ program TestLB
 
 
       if(ldiagnostic)call start_timing2("LB","time_step")
+      
       call time_step_CG<<<dimGrid, dimBlock>>>(step, flipflop)
       if(ldiagnostic)call end_timing2("LB","time_step")
       
@@ -322,7 +323,7 @@ program TestLB
       call fixPeriodic(.true., .false., "time_step_CG")
       if(ldiagnostic)call end_timing2("LB","fixPpop")
 
-
+      
 
 
       ! Boundary Conditions with new flipflop
@@ -476,7 +477,7 @@ program TestLB
       real :: mydist
 #ifdef NEWINPUT      
       namelist /simulation/ nIter,nIterOut,nIterVTK,initType, &
-       lreadisfluid,lwriteisf,store_vel,numbc,lwriteisf_every   !,numscp
+       lreadisfluid,lwriteisf,store_vel,numbc,lwriteisf_every,diagnostic   !,numscp
       namelist /fluid/ vx,vy,vz,densR,densB,tauR,tauB,f_cost,const_forced,forced,&
        bctype,bcvec,bcvel,bcrho
       namelist /passive/ bcscptype,bcscp

@@ -989,7 +989,9 @@ SUBROUTINE start_timing2(secname,subname)
       ltiming_routine_cuda_i(isub)=.true.
       istat=cudaEventCreate(timing_routine_cuda_i(isub))
     endif
+    
     istat = cudaEventRecord(timing_routine_cuda_i(isub), 0)
+    !istat = cudaDeviceSynchronize
     !timing_routine(isub)=current_time()
     
     RETURN
@@ -1049,6 +1051,7 @@ SUBROUTINE start_timing2(secname,subname)
       ltiming_routine_cuda_e(isub)=.true.
       istat=cudaEventCreate(timing_routine_cuda_e(isub))
     endif
+    
     istat = cudaEventRecord(timing_routine_cuda_e(isub), 0)
     istat = cudaDeviceSynchronize
     istat = cudaEventSynchronize(timing_routine_cuda_e(isub))

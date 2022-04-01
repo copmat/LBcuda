@@ -626,7 +626,7 @@
 
       if (lj==TILE_DIMy .and. lk==1) loc_rhoR(li,lj+1,lk-1) = rhoR_d(i,j+1,k-1)
       if (lj==TILE_DIMy .and. lk==TILE_DIMz) loc_rhoR(li,lj+1,lk+1) = rhoR_d(i,j+1,k+1)
-      
+             
       ! Halo corner
       if (li==1 .and. lj==1 .and. lk==1) loc_rhoR(li-1,lj-1,lk-1) = rhoR_d(i-1,j-1,k-1) 
       if (li==TILE_DIMx .and. lj==1 .and. lk==1) loc_rhoR(li+1,lj-1,lk-1) = rhoR_d(i+1,j-1,k-1)
@@ -636,7 +636,7 @@
       if (li==TILE_DIMx .and. lj==1 .and. lk==TILE_DIMz) loc_rhoR(li+1,lj-1,lk+1) = rhoR_d(i+1,j-1,k+1) 
       if (li==TILE_DIMx .and. lj==TILE_DIMy .and. lk==1) loc_rhoR(li+1,lj+1,lk-1) = rhoR_d(i+1,j+1,k-1) 
       if (li==TILE_DIMx .and. lj==TILE_DIMy .and. lk==TILE_DIMz) loc_rhoR(li+1,lj+1,lk+1) = rhoR_d(i+1,j+1,k+1) 
-      
+           
       ! Ripeto per il blue
       loc_rhoB(li,lj,lk) = rhoB_d(i,j,k)
 
@@ -680,7 +680,7 @@
 
       if (lj==TILE_DIMy .and. lk==1) loc_rhoB(li,lj+1,lk-1) = rhoB_d(i,j+1,k-1)
       if (lj==TILE_DIMy .and. lk==TILE_DIMz) loc_rhoB(li,lj+1,lk+1) = rhoB_d(i,j+1,k+1)
-      
+         
       ! Halo corner
       if (li==1 .and. lj==1 .and. lk==1) loc_rhoB(li-1,lj-1,lk-1) = rhoB_d(i-1,j-1,k-1) 
       if (li==TILE_DIMx .and. lj==1 .and. lk==1) loc_rhoB(li+1,lj-1,lk-1) = rhoB_d(i+1,j-1,k-1)
@@ -690,8 +690,8 @@
       if (li==TILE_DIMx .and. lj==1 .and. lk==TILE_DIMz) loc_rhoB(li+1,lj-1,lk+1) = rhoB_d(i+1,j-1,k+1) 
       if (li==TILE_DIMx .and. lj==TILE_DIMy .and. lk==1) loc_rhoB(li+1,lj+1,lk-1) = rhoB_d(i+1,j+1,k-1) 
       if (li==TILE_DIMx .and. lj==TILE_DIMy .and. lk==TILE_DIMz) loc_rhoB(li+1,lj+1,lk+1) = rhoB_d(i+1,j+1,k+1) 
-
-      ! Non serve halo
+      
+      
       do l = 0, npops-1
         loc_tempR(l) = popsR_d(i,j,k, l,flip)
         loc_tempB(l) = popsB_d(i,j,k, l,flip)
@@ -703,13 +703,14 @@
         rhoR = loc_rhoR(li,lj,lk)
         rhoB = loc_rhoB(li,lj,lk)
         rhosum = rhoR + rhoB
+#ifdef DIFFDENS
         phase_field = (rhoR/densR_d - rhoB/densB_d) / &
            (rhoR/densR_d + rhoB/densB_d)
-
-        ! viscavg = rhoR/rhosum*viscR_d + rhoB/rhosum*viscB_d
         viscavg = 1.0 / (0.5*(1.0 + phase_field)*(1.0/viscR_d) & 
 			            +0.5*(1.0 - phase_field)*(1.0/viscB_d))
-        
+#else
+        viscavg = rhoR/rhosum*viscR_d + rhoB/rhosum*viscB_d
+#endif
         omega  = 1.0 / ( viscavg/cssq  + 0.5)
         oneminusomega = 1.0 - omega
 
@@ -759,19 +760,22 @@
 
           rhoR_shifted = loc_rhoR(i1,j1,k1)
           rhoB_shifted = loc_rhoB(i1,j1,k1)
+          
+#ifdef DIFFDENS
           psi_shifted = (rhoR_shifted/densR_d - rhoB_shifted/densB_d) / &
            (rhoR_shifted/densR_d + rhoB_shifted/densB_d)
-          psix = psix + a_d(l)*ex_d(l)* psi_shifted
-          psiy = psiy + a_d(l)*ey_d(l)* psi_shifted
-          psiz = psiz + a_d(l)*ez_d(l)* psi_shifted
-#ifdef DIFFDENS
           psi_R(1) = psi_R(1) + a_d(l)*ex_d(l)* rhoR_shifted
           psi_R(2) = psi_R(2) + a_d(l)*ey_d(l)* rhoR_shifted
           psi_R(3) = psi_R(3) + a_d(l)*ez_d(l)* rhoR_shifted
           psi_B(1) = psi_B(1) + a_d(l)*ex_d(l)* rhoB_shifted
           psi_B(2) = psi_B(2) + a_d(l)*ey_d(l)* rhoB_shifted
           psi_B(3) = psi_B(3) + a_d(l)*ez_d(l)* rhoB_shifted
+#else
+          psi_shifted = (rhoR_shifted - rhoB_shifted) / (rhoR_shifted + rhoB_shifted)
 #endif
+          psix = psix + a_d(l)*ex_d(l)* psi_shifted
+          psiy = psiy + a_d(l)*ey_d(l)* psi_shifted
+          psiz = psiz + a_d(l)*ez_d(l)* psi_shifted
         enddo
 #endif
         !relaxation step
