@@ -1,4 +1,4 @@
-#define BGK
+#define noBGK
 #define noMOMBGK
 #define CG
 #define noPARTICLES
@@ -7,8 +7,8 @@
 #define noDIFFDENS
 #define NEWINPUT
 #define noD3Q27
-#define APPLYBC
-#define PBC
+#define noAPPLYBC
+#define npPBC
 #define SCPD3Q19GRAD
 
 #ifndef MYDIMESION
@@ -35,3 +35,5 @@
 #define noMPI_DEBUG
 
 #define MINDENS   0.e-8
+
+

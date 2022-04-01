@@ -35,7 +35,7 @@
      real :: uv
 
      uv = (1.0/cssq) * (u*ex_d(l) + v*ey_d(l) + w*ez_d(l))
-     equil_SCP = rho(m) * p_scp(l)*(ONE+uv)
+     equil_SCP = rho(m) * p_scp(l)*(ONE+uv+HALF*(uv*uv)-(HALF/cssq) * (u*u + v*v + w*w))
     end function equil_SCP
  
     ! Setup

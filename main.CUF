@@ -3,6 +3,13 @@ program TestLB
 
   use cudafor
   use dimensions_m
+  use profiling_m,   only : timer_init,itime_start, &
+                        startPreprocessingTime,print_timing_partial, &
+                        reset_timing_partial,printSimulationTime, &
+                        print_timing_final,itime_counter,idiagnostic, &
+                        ldiagnostic,start_timing2,end_timing2, &
+                        set_value_ldiagnostic,set_value_idiagnostic, &
+                        startSimulationTime
   use kernels_fluid
   use kernels_bgk
   use kernels_fluid_cg
@@ -108,6 +115,16 @@ program TestLB
 #endif
   call makeOutput
   call SetConstants
+  
+  call set_value_ldiagnostic(diagnostic)
+  call set_value_idiagnostic(tdiagnostic)
+  ! start diagnostic if requested
+  if(ldiagnostic)then
+    call timer_init()
+    call startPreprocessingTime()  
+  endif
+  
+  
 #ifdef PARTICLES
   call spherical_template
 #endif
@@ -144,6 +161,15 @@ program TestLB
     call printParams
     write(*,*) 'Run...'
   endif
+  
+  ! start diagnostic if requested
+  if(ldiagnostic)then
+    !call print_timing_partial(1,1,itime_start,6)
+    !call reset_timing_partial()
+    call startSimulationTime()
+  endif
+  
+  
   istat = cudaEventRecord(startEvent, 0)
 
 
@@ -165,8 +191,10 @@ program TestLB
 
 
 #ifdef FLUIDSPLIT 
+      if(ldiagnostic)call start_timing2("LB","moments")
       call init_rhoB_CG<<<dimGrid, dimBlock>>>(step, flipflop) 
       call init_rhoR_CG<<<dimGrid, dimBlock>>>(step, flipflop) 
+      if(ldiagnostic)call end_timing2("LB","moments")
 #else
       call init_rho_CG<<<dimGrid, dimBlock>>>(step, flipflop)
 #endif
@@ -268,24 +296,31 @@ program TestLB
 #else
 
 
-
+      if(ldiagnostic)call start_timing2("LB","moments")
       call init_rhoB_CG<<<dimGrid, dimBlock>>>(step, flipflop) 
       call init_rhoR_CG<<<dimGrid, dimBlock>>>(step, flipflop) 
-
+      if(ldiagnostic)call end_timing2("LB","moments")
 
       !call fixPeriodic(.false., .true., "init_rho_CG")
+      
+      if(ldiagnostic)call start_timing2("LB","fix_hvar")
       call fixPeriodic_hvar(.true.,.true.,.false.,"init_rho_CG")
+      if(ldiagnostic)call end_timing2("LB","fix_hvar")
+      
       if (debug1) call OutputVTK("rho_isfluid_",step, flipflop)
 
 
 
 
-
+      if(ldiagnostic)call start_timing2("LB","time_step")
       call time_step_CG<<<dimGrid, dimBlock>>>(step, flipflop)
-      if (debug1) call OutputVTK("cg_",step, flipflop)
-
-      call fixPeriodic(.true., .false., "time_step_CG")
+      if(ldiagnostic)call end_timing2("LB","time_step")
       
+      if (debug1) call OutputVTK("cg_",step, flipflop)
+      
+      if(ldiagnostic)call start_timing2("LB","fix_pop")
+      call fixPeriodic(.true., .false., "time_step_CG")
+      if(ldiagnostic)call end_timing2("LB","fix_pop")
 
 
 
@@ -295,7 +330,7 @@ program TestLB
       if (debug1) call OutputVTK("bb_",step, flipflop)
       
 ! 
-
+      if(ldiagnostic)call start_timing2("LB","streaming")
       !call flipflopRPop0_CG<<<dimGrid, dimBlock>>>(step, flipflop)
       call streamR_CG<<<dimGrid, dimBlock >>>(step, flipflop)
 
@@ -306,7 +341,7 @@ program TestLB
       call stream_CG_x<<<dimGridx, dimBlock2>>>(step, flipflop)
       call stream_CG_y<<<dimGridy, dimBlock2>>>(step, flipflop)
       call stream_CG_z<<<dimGridz, dimBlock2>>>(step, flipflop)
-      
+      if(ldiagnostic)call end_timing2("LB","streaming")
       
 #endif
     else
@@ -391,10 +426,21 @@ program TestLB
 
     if (wantOut) then
       ! if (mod(step,niterVTK)==0) call DumpBorderPlanez("step_",step, flipflop)      
-      if (mod(step,niterVTK)==0) call OutputVTK("step_",step, flipflop)
+      if (mod(step,niterVTK)==0)then
+        if(ldiagnostic)call start_timing2("IO","OutVTK")
+        call OutputVTK("step_",step, flipflop)
+        if(ldiagnostic)call end_timing2("IO","OutVTK")  
+      endif
     endif
     
   enddo
+  
+  ! finalize and print the diagnostic data
+  if(ldiagnostic)then
+    call printSimulationTime()
+    call print_timing_final(idiagnostic,itime_counter, &
+     itime_start,1,1,6)
+  endif
 
 
 #ifdef SERIAL
@@ -553,6 +599,14 @@ program TestLB
             mydist=sqrt(bcvec(1,i)**2.0+bcvec(2,i)**2.0+bcvec(3,i)**2.0)
             bcvec(1:3,i)=bcvec(1:3,i)/mydist
           enddo
+        endif
+      endif
+      
+      if(withSCP)then
+        if(.not. store_vel)then
+          write (*,*) 'when withSCP is true store_vel should be true'
+          write (*,*) 'now store_vel = ',store_vel
+          call mystop
         endif
       endif
       
