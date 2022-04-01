@@ -8,13 +8,13 @@
 #endif
 
 #ifndef TILE1
-#define TILE1 8
+#define TILE1 128
 #endif
 #ifndef TILE2
-#define TILE2 4
+#define TILE2 1
 #endif
 #ifndef TILE3
-#define TILE3 4
+#define TILE3 1
 #endif
 
 #define noDEBUG_FORCE
