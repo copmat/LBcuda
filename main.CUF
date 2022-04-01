@@ -211,6 +211,7 @@ program TestLB
       call fixPeriodic(.true., .false., "time_step_CG")
       if(ldiagnostic)call end_timing2("LB","fixPpops")
       
+      
 #ifdef PARTICLES
       if (withParticles) then
         call partBB_CG<<<dimGrid, dimBlock>>>(step, flipflop, lrotate)
@@ -236,7 +237,7 @@ program TestLB
 #endif
 
       ! Boundary Conditions with new flipflop
-      call doBoundary
+     ! call doBoundary
       if (debug1) call OutputVTK("bb_",step, flipflop)
       
       if(ldiagnostic)call start_timing2("LB","stream")
