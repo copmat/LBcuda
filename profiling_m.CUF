@@ -1050,6 +1050,7 @@ SUBROUTINE start_timing2(secname,subname)
       istat=cudaEventCreate(timing_routine_cuda_e(isub))
     endif
     istat = cudaEventRecord(timing_routine_cuda_e(isub), 0)
+    istat = cudaDeviceSynchronize
     istat = cudaEventSynchronize(timing_routine_cuda_e(isub))
     istat = cudaEventElapsedTime(ttt,timing_routine_cuda_i(isub), &
      timing_routine_cuda_e(isub))
