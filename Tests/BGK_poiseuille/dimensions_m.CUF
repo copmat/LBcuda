@@ -7,7 +7,7 @@
     ! integer(4), parameter :: glx = 128, gly = glx, glz = glx
     integer(4), parameter :: nx = glx, ny = gly
     !integer(4) :: nz
-    integer, parameter :: nbuff=2
+    integer, parameter :: nbuff=1
     logical, parameter :: lraw=.true.
     
     logical, save :: diagnostic=.true.

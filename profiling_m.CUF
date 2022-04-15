@@ -94,15 +94,20 @@
  
  real(kind=PRC), save :: clock_huge=real(0.d0,kind=PRC)
  
-
+INTERFACE
+    FUNCTION get_mem ( ) bind ( C, name = "get_mem" )
+      USE ISO_C_BINDING, ONLY : c_double
+      REAL(kind=c_double) :: get_mem
+    END FUNCTION get_mem
+END INTERFACE
  
  
  public :: timer_init,startPreprocessingTime,reset_timing_partial
  public :: print_timing_partial,printSimulationTime
  public :: print_timing_final,start_timing2,end_timing2
  public :: set_value_idiagnostic,set_value_ldiagnostic,startSimulationTime
- public :: print_memory_registration
- 
+ public :: print_memory_registration,print_memory_registration_cuda
+ public :: get_memory_cuda,get_memory
  
  contains
  
@@ -1283,5 +1288,114 @@ SUBROUTINE start_timing2(secname,subname)
   return
   
  end subroutine print_memory_registration
+ 
+ subroutine print_memory_registration_cuda(iu,mybanner,mybanner2,&
+  mymemory,totmem)
+ 
+!***********************************************************************
+!     
+!     LBcuda subroutine for printing the memory registration
+!     
+!     licensed under the 3-Clause BSD License (BSD-3-Clause)
+!     author: M. Lauricella
+!     last modification April 2022
+!     
+!***********************************************************************
+  
+  implicit none
+  
+  integer, intent(in) :: iu
+  character(len=*), intent(in) :: mybanner,mybanner2
+  real(kind=PRC), intent(in) :: mymemory,totmem
+  
+  character(len=12) :: r_char,r_char2
+  
+  character(len=*),parameter :: of='(a)'
+  
+  
+  
+  if(myrank/=0)return
+  write (r_char,'(f12.4)')mymemory
+  write (r_char2,'(f12.4)')totmem
+  write(iu,of)"                                                                               "
+  write(iu,of)"******************************GPU MEMORY MONITOR*******************************"
+  write(iu,of)"                                                                               "
+  write(iu,'(4a)')trim(mybanner)," = ",trim(adjustl(r_char))," (GB)"
+  write(iu,'(4a)')trim(mybanner2)," = ",trim(adjustl(r_char2))," (GB)"
+  write(iu,of)"                                                                               "
+  write(iu,of)"*******************************************************************************"
+  write(iu,of)"                                                                               "
+  
+  return
+  
+ end subroutine print_memory_registration_cuda
+ 
+ subroutine get_memory_cuda(fout,fout2)
+
+!***********************************************************************
+!     
+!     LBsoft subroutine for register the memory usage
+!     
+!     licensed under the 3-Clause BSD License (BSD-3-Clause)
+!     modified by: M. Lauricella
+!     last modification July 2018
+!     
+!***********************************************************************  
+  
+  implicit none
+  
+  real(kind=PRC), intent(out) :: fout,fout2
+  real(kind=PRC) :: myd(2),myd2(2)
+  integer(kind=cuda_count_kind) :: free, total
+  integer :: istat
+  
+  istat = cudaMemGetInfo( free, total )
+  fout = real(total-free,kind=4)/(1024.0**3.0)
+  fout2 = real(total,kind=4)/(1024.0**3.0)
+  
+#ifdef MPI
+  myd(1)=fout
+  myd(2)=fout2
+  call MPI_ALLREDUCE(myd,myd2,2,MPI_REAL, &
+     MPI_SUM,MPI_COMM_WORLD,ier)
+  fout=myd2(1)
+  fout2=myd2(2)
+#endif  
+  
+  return
+  
+ end subroutine get_memory_cuda
+ 
+  subroutine get_memory(fout)
+ 
+!***********************************************************************
+!     
+!     LBsoft subroutine for register the memory usage
+!     
+!     licensed under the 3-Clause BSD License (BSD-3-Clause)
+!     modified by: M. Lauricella
+!     last modification July 2018
+!     
+!***********************************************************************
+  
+  use iso_c_binding
+  
+  implicit none
+  
+  real(kind=PRC), intent(out) :: fout
+  real(kind=PRC) :: myd(1),myd2(1)
+
+  fout = real( get_mem() ,kind=PRC)
+  
+#ifdef MPI
+  myd(1)=fout
+  call MPI_ALLREDUCE(myd,myd2,1,MPI_REAL, &
+     MPI_SUM,MPI_COMM_WORLD,ier)
+  fout=myd2(1)
+#endif  
+  
+  return
+  
+ end subroutine get_memory
   
  end module profiling_m

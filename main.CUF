@@ -9,9 +9,12 @@ program TestLB
                         print_timing_final,itime_counter,idiagnostic, &
                         ldiagnostic,start_timing2,end_timing2, &
                         set_value_ldiagnostic,set_value_idiagnostic, &
-                        startSimulationTime
+                        startSimulationTime,print_memory_registration, &
+                        get_memory_cuda,print_memory_registration_cuda, &
+                        get_memory
   use kernels_fluid
   use kernels_bgk
+  use kernels_scp
   use kernels_fluid_cg
   use kernels_fluid_part
   use write_output
@@ -55,7 +58,7 @@ program TestLB
   integer     :: dimGridAtm, dimBlockAtm
   type (dim3) :: dimGridSubd, dimBlockSubd
   type (cudaDeviceProp) :: prop
-  real(4) :: mytime
+  real(4) :: mytime,mymemory,totmemory,myramhost
   integer :: istat, flipflop, nIter,nIterOut,nIterVTK, step
   integer :: i,j,k
   logical :: pinnedFlag = .true.
@@ -128,7 +131,9 @@ program TestLB
 #ifdef PARTICLES
   call spherical_template
 #endif
+
   call setupRho_Pops
+  
   if (withCG) then
     call fixPeriodic(.true., .false., "after_setup")
     call fixPeriodic_hvar(.true.,.true.,.false.,"after_setup")
@@ -152,6 +157,7 @@ program TestLB
   ! if (wantOut) call DumpBorderPlanez("step_", 0, 1)  
   if (wantOut) call OutputVTK("step_", 0, 1)
 !  istat = cudaDeviceSynchronize
+!  if (myrank== 0) write(*,*) 'ciaone'
 !  call MPI_FINALIZE(ierr)
 !  stop
   
@@ -167,6 +173,12 @@ program TestLB
     !call print_timing_partial(1,1,itime_start,6)
     !call reset_timing_partial()
     call startSimulationTime()
+    call get_memory_cuda(mymemory,totmemory)
+    call print_memory_registration_cuda(6,'DEVICE memory occupied at the start', &
+       'total DEVICE memory',mymemory,totmemory)
+    call get_memory(myramhost)
+    call print_memory_registration(6,'HOST memory occupied at the start', &
+     myramhost)
   endif
   
   
@@ -300,8 +312,6 @@ program TestLB
       call init_rhoB_CG<<<dimGrid, dimBlock>>>(step, flipflop) 
       call init_rhoR_CG<<<dimGrid, dimBlock>>>(step, flipflop) 
       if(ldiagnostic)call end_timing2("LB","moments")
-
-      !call fixPeriodic(.false., .true., "init_rho_CG")
       
       if(ldiagnostic)call start_timing2("LB","fixPhvar")
       call fixPeriodic_hvar(.true.,.true.,.false.,"init_rho_CG")
@@ -313,7 +323,6 @@ program TestLB
 
 
       if(ldiagnostic)call start_timing2("LB","time_step")
-      
       call time_step_CG<<<dimGrid, dimBlock>>>(step, flipflop)
       if(ldiagnostic)call end_timing2("LB","time_step")
       
@@ -364,35 +373,73 @@ program TestLB
       ! call OutputVTK("bb_",step, flipflop)
       
 #ifdef MOMBGK      
-      
+      if(ldiagnostic)call start_timing2("LB","moments")
       call init_rho_isfluid_BGK<<<dimGrid, dimBlock>>>(step, flipflop)
-      call fixPeriodic_hvar(.true.,.false.,.false.,"init_rho")
-      call time_step_BGK<<<dimGrid, dimBlock>>>(step, flipflop, omega)
-
-#else
+      if(ldiagnostic)call end_timing2("LB","moments")
       
-      call time_step_mom_BGK<<<dimGrid, dimBlock>>>(step, flipflop, omega)
+      if(ldiagnostic)call start_timing2("LB","fixPhvar")
       call fixPeriodic_hvar(.true.,.false.,.false.,"init_rho")
+      if(ldiagnostic)call end_timing2("LB","fixPhvar")
+      
+      if(ldiagnostic)call start_timing2("LB","timestep")
+      call time_step_BGK<<<dimGrid, dimBlock>>>(step, flipflop, omega)
+      if(ldiagnostic)call end_timing2("LB","timestep")
+#else
+      if(ldiagnostic)call start_timing2("LB","timestep")
+      call time_step_mom_BGK<<<dimGrid, dimBlock>>>(step, flipflop, omega)
+      if(ldiagnostic)call end_timing2("LB","timestep")
+      
+      if(ldiagnostic)call start_timing2("LB","fixPhvar")
+      call fixPeriodic_hvar(.true.,.false.,.false.,"init_rho")
+      if(ldiagnostic)call end_timing2("LB","fixPhvar")
+      
+      if(withSCP)then
+        if(ldiagnostic)call start_timing2("LB","timestepSCP")
+        call time_step_mom_SCP<<<dimGrid, dimBlock>>>(step,flipflop,omega)
+        if(ldiagnostic)call end_timing2("LB","timestepSCP")
+        
+        if(ldiagnostic)call start_timing2("LB","fixPsvar")
+        call fixPeriodic_SCP(.false.,.true.,"init_scp")
+        if(ldiagnostic)call end_timing2("LB","fixPsvar")
+      endif
+      
 #endif
       
-      ! Boundary Conditions with new flipflop
-      !call doBoundary
 
-      
+      if(ldiagnostic)call start_timing2("LB","fixPpops")
       call fixPeriodic_BGK(.true., .false., "time_step_BGK")
-           
+      if(ldiagnostic)call end_timing2("LB","fixPpops")
+      
+      if(withSCP)then
+        if(ldiagnostic)call start_timing2("LB","fixPscp")
+        call fixPeriodic_SCP(.true.,.false.,"fixPscp")
+        if(ldiagnostic)call end_timing2("LB","fixPscp")
+      endif
+        
 #ifdef APPLYBC  
+      if(ldiagnostic)call start_timing2("LB","applybc")
       call fixPeriodic_hvar(.false.,.false.,.true.,"applybc_BGK")
       call applybchalo_BGK<<<dimGridhalo,dimBlockhalo >>>(step, flipflop) 
+      if(ldiagnostic)call end_timing2("LB","applybc")
 #endif
       
       
-!      call copy_BGK<<<dimGrid, dimBlock>>>(step, flipflop)
-!      
+      if(ldiagnostic)call start_timing2("LB","stream")
       call stream_BGK<<<dimGrid, dimBlock >>>(step, flipflop)
       call stream_BGK_x<<<dimGridx, dimBlock2>>>(step, flipflop)
       call stream_BGK_y<<<dimGridy, dimBlock2>>>(step, flipflop)
       call stream_BGK_z<<<dimGridz, dimBlock2>>>(step, flipflop)
+      if(ldiagnostic)call end_timing2("LB","stream")
+      
+      if(withSCP)then
+        if(ldiagnostic)call start_timing2("LB","streamscp")
+        call stream_SCP<<<dimGrid, dimBlock >>>(step, flipflop)
+        call stream_SCP_x<<<dimGridx, dimBlock2>>>(step, flipflop)
+        call stream_SCP_y<<<dimGridy, dimBlock2>>>(step, flipflop)
+        call stream_SCP_z<<<dimGridz, dimBlock2>>>(step, flipflop)
+        if(ldiagnostic)call end_timing2("LB","streamscp")
+      endif
+      
 #endif
     endif
 
@@ -441,6 +488,12 @@ program TestLB
     call printSimulationTime()
     call print_timing_final(idiagnostic,itime_counter, &
      itime_start,1,1,6)
+    call get_memory_cuda(mymemory,totmemory)
+    call print_memory_registration_cuda(6,'DEVICE memory occupied at the end', &
+       'total DEVICE memory',mymemory,totmemory)
+    call get_memory(myramhost)
+    call print_memory_registration(6,'HOST memory occupied at the end', &
+     myramhost)
   endif
 
 
@@ -598,7 +651,9 @@ program TestLB
         else
           do i=1,numbc
             mydist=sqrt(bcvec(1,i)**2.0+bcvec(2,i)**2.0+bcvec(3,i)**2.0)
-            bcvec(1:3,i)=bcvec(1:3,i)/mydist
+            if(mydist.ne.ZERO)then
+              bcvec(1:3,i)=bcvec(1:3,i)/mydist
+            endif
           enddo
         endif
       endif
@@ -610,6 +665,14 @@ program TestLB
           call mystop
         endif
       endif
+      
+#ifdef APPLYBC
+      if(nbuff<2)then
+        write (*,*) 'when APPLYBC is true nbuff should be true at least 2'
+        write (*,*) 'now nbuff = ',nbuff
+        call mystop
+      endif
+#endif      
       
 #else
       
@@ -1572,7 +1635,7 @@ program TestLB
 ! 
 ! I've to exchange pop with other task
 ! -----------------------------------------------------------------------------------
-! send BLUE rho
+! send velocity rho
 ! 1) isend to up task 
               tag = 605
               call mpi_isend(vel_d(1,1-nbuff,1-nbuff,nz+1-nbuff), 1, xyplane3, up(2), tag, &
@@ -1616,6 +1679,426 @@ program TestLB
 
       
     end subroutine fixPeriodic_hvar
+    
+    subroutine fixPeriodic_SCP(faiPops,faiRho, msg)
+#ifdef SERIAL
+      implicit none
+      character(len=*), intent(in) :: msg
+#else
+      use mpi
+      implicit none
+      character(len=*), intent(in) :: msg
+#ifdef D3Q27
+      integer      :: reqs_up(9)
+      integer      :: reqs_down(9)
+#else
+      integer      :: reqs_up(5)
+      integer      :: reqs_down(5)
+#endif
+      
+      integer      :: status_up(MPI_STATUS_SIZE)
+      integer      :: status_down(MPI_STATUS_SIZE)
+      integer      :: tag
+
+#endif
+      logical :: faiPops, faiRho
+
+      
+
+          if(xperiodic)call bc_SCP_per_x<<<dimGridx, dimBlock2>>>(step, flipflop, faiPops,faiRho)
+          if(yperiodic)call bc_SCP_per_y<<<dimGridy, dimBlock2>>>(step, flipflop, faiPops,faiRho)
+          
+          
+          call abortOnLastErrorAndSync(msg,step, flipflop)
+
+! if it is the same task, there's no need to send/recv data
+          if(up(2) == myrank) then
+             if(zperiodic)call bc_SCP_per_z<<<dimGridz, dimBlock2>>>(step, flipflop, faiPops,faiRho)
+          else 
+            if (faiRho) then
+! 
+! I've to exchange pop with other task
+! -----------------------------------------------------------------------------------
+! send RED rho
+! 1) isend to up task 
+              tag = 405
+              call mpi_isend(scalar_d(1,0,0,  nz), 1, xyplanescp, up(2), tag, &
+                                lbecomm, reqs_up(1), ierr)
+!
+! 2) recv from down task
+              tag = 405
+              call  mpi_recv(scalar_d(1,0,0,   0), 1, xyplanescp, down(2), tag, &
+                                lbecomm, status_up, ierr)
+!
+! 3) isend to down task
+              tag = 406
+              call mpi_isend(scalar_d(1,0,0,   1), 1, xyplanescp, down(2), tag, &
+                                lbecomm, reqs_down(1), ierr)
+!
+! 4) recv from up task
+              tag = 406
+              call  mpi_recv(scalar_d(1,0,0,nz+1), 1, xyplanescp, up(2), tag, &
+                                lbecomm, status_down, ierr)
+!
+! 5) syncronize
+              call mpi_wait(reqs_up(1), status_up, ierr)
+              call mpi_wait(reqs_down(1), status_down, ierr)
+            endif
+!
+! -----------------------------------------------------------------------------------
+! Send RED pops
+! 1) isend to up task
+            if (faiPops) then
+#ifdef SCPD3Q27
+              tag = 005
+              call mpi_isend(popsSCP_d(1,0,0,nz  , 5,flipflop), 1, xyplanescp, up(2), tag, &
+                                lbecomm, reqs_up(1), ierr)
+              tag = 011
+              call mpi_isend(popsSCP_d(1,0,0,nz  ,11,flipflop), 1, xyplanescp, up(2), tag, &
+                                lbecomm, reqs_up(2), ierr)
+              tag = 013
+              call mpi_isend(popsSCP_d(1,0,0,nz  ,13,flipflop), 1, xyplanescp, up(2), tag, &
+                                lbecomm, reqs_up(3), ierr)
+              tag = 015
+              call mpi_isend(popsSCP_d(1,0,0,nz  ,15,flipflop), 1, xyplanescp, up(2), tag, &
+                                lbecomm, reqs_up(4), ierr)
+              tag = 017
+              call mpi_isend(popsSCP_d(1,0,0,nz  ,17,flipflop), 1, xyplanescp, up(2), tag, &
+                                lbecomm, reqs_up(5), ierr)
+              tag = 019
+              call mpi_isend(popsSCP_d(1,0,0,nz  ,19,flipflop), 1, xyplanescp, up(2), tag, &
+                                lbecomm, reqs_up(6), ierr)
+              tag = 022
+              call mpi_isend(popsSCP_d(1,0,0,nz  ,22,flipflop), 1, xyplanescp, up(2), tag, &
+                                lbecomm, reqs_up(7), ierr)
+              tag = 023
+              call mpi_isend(popsSCP_d(1,0,0,nz  ,23,flipflop), 1, xyplanescp, up(2), tag, &
+                                lbecomm, reqs_up(8), ierr)
+              tag = 025
+              call mpi_isend(popsSCP_d(1,0,0,nz  ,25,flipflop), 1, xyplanescp, up(2), tag, &
+                                lbecomm, reqs_up(9), ierr)
+#elif defined SCPD3Q19
+              tag = 005
+              call mpi_isend(popsSCP_d(1,0,0,nz  , 5,flipflop), 1, xyplanescp, up(2), tag, &
+                                lbecomm, reqs_up(1), ierr)
+              tag = 011
+              call mpi_isend(popsSCP_d(1,0,0,nz  ,11,flipflop), 1, xyplanescp, up(2), tag, &
+                                lbecomm, reqs_up(2), ierr)
+              tag = 013
+              call mpi_isend(popsSCP_d(1,0,0,nz  ,13,flipflop), 1, xyplanescp, up(2), tag, &
+                                lbecomm, reqs_up(3), ierr)
+              tag = 015
+              call mpi_isend(popsSCP_d(1,0,0,nz  ,15,flipflop), 1, xyplanescp, up(2), tag, &
+                                lbecomm, reqs_up(4), ierr)
+              tag = 017
+              call mpi_isend(popsSCP_d(1,0,0,nz  ,17,flipflop), 1, xyplanescp, up(2), tag, &
+                                lbecomm, reqs_up(5), ierr)
+#else
+              tag = 005
+              call mpi_isend(popsSCP_d(1,0,0,nz  , 5,flipflop), 1, xyplanescp, up(2), tag, &
+                                lbecomm, reqs_up(1), ierr)
+#endif
+
+!
+! 2) recv from down task
+#ifdef SCPD3Q27
+              tag = 005
+              call mpi_recv(popsSCP_d(1,0,0,0  , 5,flipflop), 1, xyplanescp, down(2), tag, &
+                                lbecomm, status_up, ierr)
+              tag = 011
+              call mpi_recv(popsSCP_d(1,0,0, 0  ,11,flipflop), 1, xyplanescp, down(2), tag, &
+                                lbecomm, status_up, ierr)
+              tag = 013
+              call mpi_recv(popsSCP_d(1,0,0, 0  ,13,flipflop), 1, xyplanescp, down(2), tag, &
+                                lbecomm, status_up, ierr)
+              tag = 015
+              call mpi_recv(popsSCP_d(1,0,0, 0  ,15,flipflop), 1, xyplanescp, down(2), tag, &
+                                lbecomm, status_up, ierr)
+              tag = 017
+              call mpi_recv(popsSCP_d(1,0,0, 0  ,17,flipflop), 1, xyplanescp, down(2), tag, &
+                                lbecomm, status_up, ierr)
+              tag = 019
+              call mpi_recv(popsSCP_d(1,0,0, 0  ,19,flipflop), 1, xyplanescp, down(2), tag, &
+                                lbecomm, status_up, ierr)
+              tag = 022
+              call mpi_recv(popsSCP_d(1,0,0, 0  ,22,flipflop), 1, xyplanescp, down(2), tag, &
+                                lbecomm, status_up, ierr)
+              tag = 023
+              call mpi_recv(popsSCP_d(1,0,0, 0  ,23,flipflop), 1, xyplanescp, down(2), tag, &
+                                lbecomm, status_up, ierr)
+              tag = 025
+              call mpi_recv(popsSCP_d(1,0,0, 0  ,25,flipflop), 1, xyplanescp, down(2), tag, &
+                                lbecomm, status_up, ierr)
+#elif defined SCPD3Q19
+              tag = 005
+              call mpi_recv(popsSCP_d(1,0,0,0  , 5,flipflop), 1, xyplanescp, down(2), tag, &
+                                lbecomm, status_up, ierr)
+              tag = 011
+              call mpi_recv(popsSCP_d(1,0,0, 0  ,11,flipflop), 1, xyplanescp, down(2), tag, &
+                                lbecomm, status_up, ierr)
+              tag = 013
+              call mpi_recv(popsSCP_d(1,0,0, 0  ,13,flipflop), 1, xyplanescp, down(2), tag, &
+                                lbecomm, status_up, ierr)
+              tag = 015
+              call mpi_recv(popsSCP_d(1,0,0, 0  ,15,flipflop), 1, xyplanescp, down(2), tag, &
+                                lbecomm, status_up, ierr)
+              tag = 017
+              call mpi_recv(popsSCP_d(1,0,0, 0  ,17,flipflop), 1, xyplanescp, down(2), tag, &
+                                lbecomm, status_up, ierr)
+#else
+              tag = 005
+              call mpi_recv(popsSCP_d(1,0,0,0  , 5,flipflop), 1, xyplanescp, down(2), tag, &
+                                lbecomm, status_up, ierr)
+#endif
+!
+! 3) isend to down task
+#ifdef SCPD3Q27
+              tag = 006
+              call mpi_isend(popsSCP_d(1,0,0, 1  , 6,flipflop), 1, xyplanescp, down(2), tag, &
+                                lbecomm, reqs_down(1), ierr)
+              tag = 012
+              call mpi_isend(popsSCP_d(1,0,0, 1  ,12,flipflop), 1, xyplanescp, down(2), tag, &
+                                lbecomm, reqs_down(2), ierr)
+              tag = 014
+              call mpi_isend(popsSCP_d(1,0,0, 1  ,14,flipflop), 1, xyplanescp, down(2), tag, &
+                                lbecomm, reqs_down(3), ierr)
+              tag = 016
+              call mpi_isend(popsSCP_d(1,0,0, 1  ,16,flipflop), 1, xyplanescp, down(2), tag, &
+                                lbecomm, reqs_down(4), ierr)
+              tag = 018
+              call mpi_isend(popsSCP_d(1,0,0, 1  ,18,flipflop), 1, xyplanescp, down(2), tag, &
+                                lbecomm, reqs_down(5), ierr)
+              tag = 020
+              call mpi_isend(popsSCP_d(1,0,0, 1  ,20,flipflop), 1, xyplanescp, down(2), tag, &
+                                lbecomm, reqs_down(6), ierr)
+              tag = 021
+              call mpi_isend(popsSCP_d(1,0,0, 1  ,21,flipflop), 1, xyplanescp, down(2), tag, &
+                                lbecomm, reqs_down(7), ierr)
+              tag = 024
+              call mpi_isend(popsSCP_d(1,0,0, 1  ,24,flipflop), 1, xyplanescp, down(2), tag, &
+                                lbecomm, reqs_down(8), ierr)
+              tag = 026
+              call mpi_isend(popsSCP_d(1,0,0, 1  ,26,flipflop), 1, xyplanescp, down(2), tag, &
+                                lbecomm, reqs_down(9), ierr)
+#elif defined SCPD3Q19
+              tag = 006
+              call mpi_isend(popsSCP_d(1,0,0, 1  , 6,flipflop), 1, xyplanescp, down(2), tag, &
+                                lbecomm, reqs_down(1), ierr)
+              tag = 012
+              call mpi_isend(popsSCP_d(1,0,0, 1  ,12,flipflop), 1, xyplanescp, down(2), tag, &
+                                lbecomm, reqs_down(2), ierr)
+              tag = 014
+              call mpi_isend(popsSCP_d(1,0,0, 1  ,14,flipflop), 1, xyplanescp, down(2), tag, &
+                                lbecomm, reqs_down(3), ierr)
+              tag = 016
+              call mpi_isend(popsSCP_d(1,0,0, 1  ,16,flipflop), 1, xyplanescp, down(2), tag, &
+                                lbecomm, reqs_down(4), ierr)
+              tag = 018
+              call mpi_isend(popsSCP_d(1,0,0, 1  ,18,flipflop), 1, xyplanescp, down(2), tag, &
+                                lbecomm, reqs_down(5), ierr)
+#else
+              tag = 006
+              call mpi_isend(popsSCP_d(1,0,0, 1  , 6,flipflop), 1, xyplanescp, down(2), tag, &
+                                lbecomm, reqs_down(1), ierr)
+#endif
+!
+! 4) recv from up task
+#ifdef SCPD3Q27
+              tag = 006
+              call mpi_recv(popsSCP_d(1, 0,0,nz+1, 6,flipflop), 1, xyplanescp, up(2), tag, &
+                                lbecomm, status_down, ierr)
+              tag = 012
+              call mpi_recv(popsSCP_d(1, 0,0,nz+1,12,flipflop), 1, xyplanescp, up(2), tag, &
+                                lbecomm, status_down, ierr)
+              tag = 014
+              call mpi_recv(popsSCP_d(1, 0,0,nz+1,14,flipflop), 1, xyplanescp, up(2), tag, &
+                                lbecomm, status_down, ierr)
+              tag = 016
+              call mpi_recv(popsSCP_d(1, 0,0,nz+1,16,flipflop), 1, xyplanescp, up(2), tag, &
+                                lbecomm, status_down, ierr)
+              tag = 018
+              call mpi_recv(popsSCP_d(1, 0,0,nz+1,18,flipflop), 1, xyplanescp, up(2), tag, &
+                                lbecomm, status_down, ierr)
+              tag = 020
+              call mpi_recv(popsSCP_d(1, 0,0,nz+1,20,flipflop), 1, xyplanescp, up(2), tag, &
+                                lbecomm, status_down, ierr)
+              tag = 021
+              call mpi_recv(popsSCP_d(1, 0,0,nz+1,21,flipflop), 1, xyplanescp, up(2), tag, &
+                                lbecomm, status_down, ierr)
+              tag = 024
+              call mpi_recv(popsSCP_d(1, 0,0,nz+1,24,flipflop), 1, xyplanescp, up(2), tag, &
+                                lbecomm, status_down, ierr)
+              tag = 026
+              call mpi_recv(popsSCP_d(1, 0,0,nz+1,26,flipflop), 1, xyplanescp, up(2), tag, &
+                                lbecomm, status_down, ierr)
+#elif defined SCPD3Q19
+              tag = 006
+              call mpi_recv(popsSCP_d(1, 0,0,nz+1, 6,flipflop), 1, xyplanescp, up(2), tag, &
+                                lbecomm, status_down, ierr)
+              tag = 012
+              call mpi_recv(popsSCP_d(1, 0,0,nz+1,12,flipflop), 1, xyplanescp, up(2), tag, &
+                                lbecomm, status_down, ierr)
+              tag = 014
+              call mpi_recv(popsSCP_d(1, 0,0,nz+1,14,flipflop), 1, xyplanescp, up(2), tag, &
+                                lbecomm, status_down, ierr)
+              tag = 016
+              call mpi_recv(popsSCP_d(1, 0,0,nz+1,16,flipflop), 1, xyplanescp, up(2), tag, &
+                                lbecomm, status_down, ierr)
+              tag = 018
+              call mpi_recv(popsSCP_d(1, 0,0,nz+1,18,flipflop), 1, xyplanescp, up(2), tag, &
+                                lbecomm, status_down, ierr)
+#else
+              tag = 006
+              call mpi_recv(popsSCP_d(1, 0,0,nz+1, 6,flipflop), 1, xyplanescp, up(2), tag, &
+                                lbecomm, status_down, ierr)
+#endif
+!
+! 5) sincronizza
+#ifdef SCPD3Q27
+              call mpi_wait(reqs_up(1), status_up, ierr)
+              call mpi_wait(reqs_down(1), status_down, ierr)
+              call mpi_wait(reqs_up(2), status_up, ierr)
+              call mpi_wait(reqs_down(2), status_down, ierr)
+              call mpi_wait(reqs_up(3), status_up, ierr)
+              call mpi_wait(reqs_down(3), status_down, ierr)
+              call mpi_wait(reqs_up(4), status_up, ierr)
+              call mpi_wait(reqs_down(4), status_down, ierr)
+              call mpi_wait(reqs_up(5), status_up, ierr)
+              call mpi_wait(reqs_down(5), status_down, ierr)
+              call mpi_wait(reqs_up(6), status_up, ierr)
+              call mpi_wait(reqs_down(6), status_down, ierr)
+              call mpi_wait(reqs_up(7), status_up, ierr)
+              call mpi_wait(reqs_down(7), status_down, ierr)
+              call mpi_wait(reqs_up(8), status_up, ierr)
+              call mpi_wait(reqs_down(8), status_down, ierr)
+              call mpi_wait(reqs_up(9), status_up, ierr)
+              call mpi_wait(reqs_down(9), status_down, ierr)
+#elif defined SCPD3Q19
+              call mpi_wait(reqs_up(1), status_up, ierr)
+              call mpi_wait(reqs_down(1), status_down, ierr)
+              call mpi_wait(reqs_up(2), status_up, ierr)
+              call mpi_wait(reqs_down(2), status_down, ierr)
+              call mpi_wait(reqs_up(3), status_up, ierr)
+              call mpi_wait(reqs_down(3), status_down, ierr)
+              call mpi_wait(reqs_up(4), status_up, ierr)
+              call mpi_wait(reqs_down(4), status_down, ierr)
+              call mpi_wait(reqs_up(5), status_up, ierr)
+              call mpi_wait(reqs_down(5), status_down, ierr)
+#else
+              call mpi_wait(reqs_up(1), status_up, ierr)
+              call mpi_wait(reqs_down(1), status_down, ierr)
+#endif
+            endif
+!
+! -----------------------------------------------------------------------------------
+
+
+
+          endif
+
+          if(up(2) == myrank) then
+            if(xperiodic)&
+             call bc_SCP_edge_x<<<(nx+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
+            if(yperiodic)&
+             call bc_SCP_edge_y<<<(ny+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)  
+            if(zperiodic)&
+             call bc_SCP_edge_z<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
+          else
+            ! NON VA FATTO
+              !call abortOnLastErrorAndSync(msg,step, flipflop)
+              
+!             mpi rho+pop myrank <--> up(2)
+             if(zperiodic)&
+              call bc_SCP_edge_z<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop, faiPops,faiRho)
+          endif      
+      
+    end subroutine fixPeriodic_SCP
+    
+    subroutine fixPeriodic_svar(faiRho, msg)
+#ifdef SERIAL
+      implicit none
+      character(len=*), intent(in) :: msg
+#else
+      use mpi
+      implicit none
+      character(len=*), intent(in) :: msg
+
+      integer      :: reqs_up(5)
+      integer      :: reqs_down(5)
+
+      
+      integer      :: status_up(MPI_STATUS_SIZE)
+      integer      :: status_down(MPI_STATUS_SIZE)
+      integer      :: tag
+
+#endif
+      logical :: faiRho
+
+          
+          if(.not. (xperiodic .or. yperiodic .or. zperiodic))return
+          
+  
+          
+
+          call bc_per_x_svar<<<dimGridsidex, dimBlock2>>>(step,faiRho)
+          call bc_per_y_svar<<<dimGridsidey, dimBlock2>>>(step,faiRho)
+          
+          
+          call abortOnLastErrorAndSync(msg,step, flipflop)
+
+! if it is the same task, there's no need to send/recv data
+          if(up(2) == myrank) then
+             call bc_per_z_svar<<<dimGridsidez, dimBlock2>>>(step,faiRho)
+          else 
+            if (faiRho) then
+
+! 
+! I've to exchange pop with other task
+! -----------------------------------------------------------------------------------
+! send BLUE rho
+! 1) isend to up task 
+              tag = 805
+              call mpi_isend(scalar_d(1,1-nbuff,1-nbuff,nz+1-nbuff), 1, xyplanesvar, up(2), tag, &
+                                lbecomm, reqs_up(1), ierr)
+!
+! 2) recv from down task
+              tag = 805
+              call  mpi_recv(scalar_d(1,1-nbuff,1-nbuff,1-nbuff), 1, xyplanesvar, down(2), tag, &
+                                lbecomm, status_up, ierr)
+!
+! 3) isend to down task
+              tag = 806
+              call mpi_isend(scalar_d(1,1-nbuff,1-nbuff, 1), 1, xyplanesvar, down(2), tag, &
+                                lbecomm, reqs_down(1), ierr)
+!
+! 4) recv from up task
+              tag = 806
+              call  mpi_recv(scalar_d(1,1-nbuff,1-nbuff,nz+1), 1, xyplanesvar, up(2), tag, &
+                                lbecomm, status_down, ierr)
+!
+! 5) syncronize
+              call mpi_wait(reqs_up(1), status_up, ierr)
+              call mpi_wait(reqs_down(1), status_down, ierr)
+            endif
+
+          endif
+
+          if(up(2) == myrank) then
+            call bc_edge_x_svar<<<(nx+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step,faiRho)
+            call bc_edge_y_svar<<<(ny+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step,faiRho)  
+            call bc_edge_z_svar<<<(nz+2*nbuff+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step,faiRho)
+          else
+            ! NON VA FATTO
+              !call abortOnLastErrorAndSync(msg,step, flipflop)
+              
+!             mpi rho+pop myrank <--> up(2)
+             call bc_edge_z_svar<<<(nz+2*nbuff+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step,faiRho)
+          endif
+
+          
+
+      
+    end subroutine fixPeriodic_svar
     
     subroutine fixPeriodic_back_force(faiF, msg)
 #ifdef SERIAL
@@ -3023,26 +3506,26 @@ program TestLB
     end if
     
     if(withSCP)then
-      allocate(popSCP_pinned(numscp,0:nx+1,0:ny+1,0:nz+1,0:npops_scp-1), STAT=istat, PINNED=pinnedFlag)
+      allocate(popSCP_pinned(1:numscp,0:nx+1,0:ny+1,0:nz+1,0:npops_scp-1), STAT=istat, PINNED=pinnedFlag)
       if (istat /= 0) then
          write(*,*) 'Allocation of popSCP_pinned failed'
          call mystop
       end if
       popSCP_pinned = 0.0
     
-      allocate(popsSCP_d(numscp,0:nx+1,0:ny+1,0:nz+1,0:npops_scp-1, 2), STAT=istat)
+      allocate(popsSCP_d(1:numscp,0:nx+1,0:ny+1,0:nz+1,0:npops_scp-1, 2), STAT=istat)
       if (istat /= 0) then
          write(*,*) 'Allocation of popsSCP_d failed'
          call mystop
       end if
       
-      allocate(scalar(numscp,1-nbuff:nx+nbuff,1-nbuff:ny+nbuff,1-nbuff:nz+nbuff), STAT=istat)
+      allocate(scalar(1:numscp,1-nbuff:nx+nbuff,1-nbuff:ny+nbuff,1-nbuff:nz+nbuff), STAT=istat)
       if (istat /= 0) then
          write(*,*) 'Allocation of scalar failed'
          call mystop
       end if
       
-      allocate(scalar_d(numscp,1-nbuff:nx+nbuff,1-nbuff:ny+nbuff,1-nbuff:nz+nbuff), STAT=istat)
+      allocate(scalar_d(1:numscp,1-nbuff:nx+nbuff,1-nbuff:ny+nbuff,1-nbuff:nz+nbuff), STAT=istat)
       if (istat /= 0) then
          write(*,*) 'Allocation of scalar_d failed'
          call mystop
@@ -3296,16 +3779,16 @@ program TestLB
     implicit none
     integer, intent(in) :: step, flipflop
     character(len=*), intent(in) :: msg
-    integer :: gpustop, gpustop_forall, ierr
-
-    istat = cudaGetLastError()
-    if (istat/=0) then
+    integer :: gpustop, gpustop_forall, ierr,istat0
+    
+    istat0 = cudaGetLastError()
+    
+    istat = cudaDeviceSynchronize
+    if (istat0/=0) then
       write(*,*) 'status after ',msg,':', cudaGetErrorString(istat)
       write(*,*) 'Exiting ....'
       call mystop
     endif
-
-    istat = cudaDeviceSynchronize
     if (istat/=0) then
       write(*,*) 'status after ',msg,' Sync:', cudaGetErrorString(istat)
       write(*,*) 'Exiting ....'
@@ -3494,9 +3977,19 @@ program TestLB
         call setup<<<dimGrid, dimBlock>>>(vx,vy,vz)
       elseif (initType == 1) then
         call setup_p<<<dimGrid, dimBlock>>>(vx,vy,vz)
+      elseif (initType == 2) then
+        call setup_taylorgreen<<<dimGrid, dimBlock>>>(vx,vy,vz)
       endif  
     end if
     
+  
+  
+
+    if(withSCP)then
+      if (myrank== 0) write(*,*) 'Initial setup SCP...'
+      call setup_SCP<<<dimGrid, dimBlock>>>(vx,vy,vz)    
+    endif
+      
     if(lreadisfluid)then
       allocate(myis(glx,gly,glz))
       inquire(file='isfluid.init.bin',exist=lexist)
@@ -3557,11 +4050,15 @@ program TestLB
       myfluid_d = fluid_fluid
       
     endif
-
+    
+   
+    
+    
     call abortOnLastErrorAndSync("setupRho_Pops",0, 1)
     
     if(lreadisfluid)deallocate(myis)
-    
+
+ 
   end subroutine
 
   subroutine set_random_dens_fluids

@@ -724,8 +724,8 @@
         psiy = ZERO
         psiz = ZERO
 #ifdef DIFFDENS
-        psi_R(1:3) = ZERO
-        psi_B(1:3) = ZERO
+        psi_R = ZERO
+        psi_B = ZERO
         myvel(1) = u
         myvel(2) = v
         myvel(3) = w

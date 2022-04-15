@@ -50,11 +50,11 @@
       endif
 #endif
       
-      call MPI_type_contiguous((ny+2*nbuff)*(nx+2*nbuff), MPI_REAL, xyplanebuff, ierr)
+      call MPI_type_contiguous((ny+2*nbuff)*(nx+2*nbuff)*nbuff, MPI_REAL, xyplanebuff, ierr)
       call MPI_type_commit(xyplanebuff,ierr)
 #ifdef MPI_DEBUG
       if(myrank.eq.0) then
-         write(6,*) 'MPI-DEBUG) INFO: xyplanebuff (KB)-->', (ny+2*nbuff)*(nx+2*nbuff) *4 / 1024
+         write(6,*) 'MPI-DEBUG) INFO: xyplanebuff (KB)-->', (ny+2*nbuff)*(nx+2*nbuff)*nbuff *4 / 1024
       endif
 #endif
 
@@ -67,11 +67,28 @@
 #endif
 
 ! xy plane is contiguous arrays 
-      call MPI_type_contiguous((ny+2*nbuff)*(nx+2*nbuff)*3, MPI_REAL, xyplane3, ierr)
+      call MPI_type_contiguous((ny+2*nbuff)*(nx+2*nbuff)*nbuff*3, MPI_REAL, xyplane3, ierr)
       call MPI_type_commit(xyplane3,ierr)
 #ifdef MPI_DEBUG
       if(myrank.eq.0) then
-         write(6,*) 'MPI-DEBUG) INFO: xyplane3 (KB)-->', (ny+2*nbuff)*(nx+2*nbuff)*3 *4 / 1024
+         write(6,*) 'MPI-DEBUG) INFO: xyplane3 (KB)-->', (ny+2*nbuff)*(nx+2*nbuff)*nbuff*3 *4 / 1024
+      endif
+#endif
+
+! xy plane is contiguous arrays 
+      call MPI_type_contiguous((ny+2*nbuff)*(nx+2*nbuff)*numscp, MPI_REAL, xyplanesvar, ierr)
+      call MPI_type_commit(xyplanesvar,ierr)
+#ifdef MPI_DEBUG
+      if(myrank.eq.0) then
+         write(6,*) 'MPI-DEBUG) INFO: xyplanesvar (KB)-->', (ny+2*nbuff)*(nx+2*nbuff)*numscp *4 / 1024
+      endif
+#endif
+
+      call MPI_type_contiguous((ny+2)*(nx+2)*numscp, MPI_REAL, xyplanescp, ierr)
+      call MPI_type_commit(xyplanescp,ierr)
+#ifdef MPI_DEBUG
+      if(myrank.eq.0) then
+         write(6,*) 'MPI-DEBUG) INFO: xyplanescp (KB)-->', (ny+2)*(nx+2)*numscp *4 / 1024
       endif
 #endif
 

@@ -18,7 +18,7 @@
        pops(m,i,j,k,3, flip) + pops(m,i,j,k,4, flip) + pops(m,i,j,k,5, flip) + pops(m,i,j,k,6, flip)
 #endif
 
-  module kernels_scalar
+  module kernels_scp
     use dimensions_m
     use kernels_fluid
     implicit none
@@ -47,6 +47,8 @@
       i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
       j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
       k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
+      
+      if(i>nx .or. j>ny .or. k>nz_d)return
 
       ! if (k>nz/2) then
       !   rho = 1.01
@@ -57,7 +59,7 @@
       x = 3.14159265358979 / nx * i
       y = 3.14159265358979 / ny * j
       z = 3.14159265358979 / nz_d * k
-      rho = densR_d !1 + 0.1*sin(x)*sin(x) * sin(y)*sin(y) * sin(z)*sin(z)
+      rho = 1.0 !densR_d !1 + 0.1*sin(x)*sin(x) * sin(y)*sin(y) * sin(z)*sin(z)
       
       gli = i + offset_d(1)
       glj = j + offset_d(2)
@@ -67,16 +69,25 @@
       u = vx
       v = vy
       w = vz
+      
+      if(store_vel_d)then
+        u = vel_d(1,i,j,k)
+        v = vel_d(2,i,j,k)
+        w = vel_d(3,i,j,k)
+      endif
+      
       ! write(*,*) 'CUDA setup',rho,i,j,k
-  
-      scalar_d(1:numscp,i,j,k) = rho(1:numscp)
-      do l = 0, npops-1
+      do m=1,numscp
+        scalar_d(m,i,j,k) = rho(m)
+      enddo
+      do l = 0, npops_scp-1
         do m = 1, numscp
           eq = equil_SCP(rho, u,v,w, l,m)
           popsSCP_d(m,i,j,k, l, 1) = eq
         enddo
       end do
-
+      
+      
       
     end subroutine setup_SCP
     
@@ -112,9 +123,10 @@
       v = vy
       w = vz
       ! write(*,*) 'CUDA setup',rho,i,j,k
-  
-      scalar_d(1:numscp,i,j,k) = rho(1:numscp)
-      do l = 0, npops-1
+      do m=1,numscp
+        scalar_d(m,i,j,k) = rho(m)
+      enddo
+      do l = 0, npops_scp-1
         do m = 1, numscp
           eq = equil_SCP(rho, u,v,w, l,m)
           popsSCP_d(m,i,j,k, l, 1) = eq
@@ -157,16 +169,16 @@
     
 
         
-        vel_d(1,i,j,k) = u
-        vel_d(2,i,j,k) = v
-        vel_d(3,i,j,k) = w
+        u = vel_d(1,i,j,k)
+        v = vel_d(2,i,j,k)
+        w = vel_d(3,i,j,k)
         
         ush = u + fx_d * invrho
         vsh = v + fy_d * invrho
         wsh = w + fz_d * invrho
   
         flop = 3 - flip
-        do l = 0, npops-1
+        do l = 0, npops_scp-1
           !i1 = i + ex_d(l)
           !j1 = j + ey_d(l)
           !k1 = k + ez_d(l)
@@ -240,16 +252,16 @@
           myscalar(m) = scalar_d(m,i,j,k)
         enddo
 
-        vel_d(1,i,j,k) = u
-        vel_d(2,i,j,k) = v
-        vel_d(3,i,j,k) = w
+        u = vel_d(1,i,j,k)
+        v = vel_d(2,i,j,k)
+        w = vel_d(3,i,j,k)
         
         ush = u + fx_d * invrho
         vsh = v + fy_d * invrho
         wsh = w + fz_d * invrho
         
         !scp step
-        do l = 0, npops-1
+        do l = 0, npops_scp-1
           do m=1,numscp
             popsSCP_d(m,i,j,k,l, flip) = popsSCP_d(m,i,j,k, l, flip)*oneminusomega + &
              equil_SCP(myscalar, u,v,w, l,m)*omegaminusone + equil_SCP(myscalar, ush,vsh,wsh, l,m)
@@ -270,7 +282,7 @@
 
       flop = 3 - flip
       
-      do l = 0, npops-1
+      do l = 0, npops_scp-1
         do m=1,numscp
           popsSCP_d(m,i,j,k,l, flop) = popsSCP_d(m,i,j,k,l, flip)
         enddo
@@ -290,7 +302,7 @@
 
          
         if (faiPops) then
-          do l = 1, npops-1
+          do l = 1, npops_scp-1
             do m=1,numscp
               popsSCP_d(m,nx+1, j,k, l, flip) = popsSCP_d(m,1,j,k, l, flip)
             
@@ -314,7 +326,7 @@
     attributes(global) subroutine bc_per_x_svar(step,faiRho)
       integer, value :: step
       logical, value :: faiRho
-      integer :: i,j,k, l
+      integer :: i,j,k, l,m
   
       j = (blockIdx%x-1) * TILE_DIM + threadIdx%x
       k = (blockIdx%y-1) * TILE_DIM + threadIdx%y
@@ -324,9 +336,11 @@
 
         if (faiRho) then
           do i=1,nbuff
-            scalar_d (1:numscp,nx+i,j,k) = scalar_d (1:numscp,i,j,k)
+            do m=1,numscp
+              scalar_d (m,nx+i,j,k) = scalar_d (m,i,j,k)
 
-            scalar_d (1:numscp,1-i,j,k) = scalar_d (1:numscp,nx+1-i,j,k)
+              scalar_d (m,1-i,j,k) = scalar_d (m,nx+1-i,j,k)
+            enddo
           enddo
         endif
 
@@ -347,7 +361,7 @@
 
           
         if (faiPops) then
-          do l = 1, npops-1
+          do l = 1, npops_scp-1
             do m=1,numscp
               popsSCP_d(m,i,ny+1,k, l, flip) = popsSCP_d(m,i,1,k, l, flip)
             
@@ -374,7 +388,7 @@
     attributes(global) subroutine bc_per_y_svar(step,faiRho)
       integer, value :: step
       logical, value :: faiRho
-      integer :: i,j,k, l
+      integer :: i,j,k, l,m
   
       i = (blockIdx%x-1) * TILE_DIM + threadIdx%x
       k = (blockIdx%y-1) * TILE_DIM + threadIdx%y
@@ -386,9 +400,9 @@
 
         if (faiRho) then
           do j=1,nbuff
-            scalar_d (1:numscp,i,ny+j,k) = scalar_d (1:numscp,i,j,k)
+            scalar_d (m,i,ny+j,k) = scalar_d (m,i,j,k)
 
-            scalar_d (1:numscp,i,1-j,k) = scalar_d (1:numscp,i,ny+1-j,k)
+            scalar_d (m,i,1-j,k) = scalar_d (m,i,ny+1-j,k)
           enddo
         endif
         
@@ -410,7 +424,7 @@
 
       if (1<=j .and. j<=ny .and. 1<=i .and. i<=nx) then
         if (faiPops) then
-          do l = 1, npops-1   
+          do l = 1, npops_scp-1   
             do m=1,numscp     
               popsSCP_d(m,i,j,nz_d+1, l, flip) = popsSCP_d(m,i,j,1, l, flip)
           
@@ -432,7 +446,7 @@
     attributes(global) subroutine bc_per_z_svar(step,faiRho)
       integer, value :: step
       logical, value :: faiRho
-      integer :: i,j,k, l
+      integer :: i,j,k, l,m
   
       i = (blockIdx%x-1) * TILE_DIM + threadIdx%x
       j = (blockIdx%y-1) * TILE_DIM + threadIdx%y
@@ -442,9 +456,11 @@
 
         if (faiRho) then
           do k=1,nbuff
-            scalar_d (1:numscp,i,j,nz_d+k) = scalar_d (1:numscp,i,j,k)
+            do m=1,numscp
+              scalar_d (m,i,j,nz_d+k) = scalar_d (m,i,j,k)
 
-            scalar_d (1:numscp,i,j,1-k) = scalar_d (1:numscp,i,j,nz_d+1-k)
+              scalar_d (m,i,j,1-k) = scalar_d (m,i,j,nz_d+1-k)
+            enddo
           enddo
         endif
 
@@ -460,7 +476,7 @@
 
       if (0<=k .and. k<=nz_d+1) then
         if (faiPops) then
-          do l = 1, npops-1
+          do l = 1, npops_scp-1
             do m=1,numscp
               popsSCP_d(m,0,0,k, l, flip) = popsSCP_d(m,nx,ny,k, l, flip)
 
@@ -490,7 +506,7 @@
     attributes(global) subroutine bc_edge_z_svar(step,faiRho)
       integer, value :: step
       logical, value :: faiRho
-      integer :: k,i,j, l
+      integer :: k,i,j, l,m
   
       k = (blockIdx%x-1) * TILE_DIM + threadIdx%x  - nbuff
 
@@ -499,12 +515,14 @@
         if (faiRho) then
           do j=1,nbuff
             do i=1,nbuff
-               scalar_d(1:numscp,1-i,1-j,k) = scalar_d(1:numscp,nx+1-i,ny+1-j,k)
-               scalar_d(1:numscp,1-i,ny+j,k) = scalar_d(1:numscp,nx+1-i,j,k)
-               scalar_d(1:numscp,nx+i,1-j,k) = scalar_d(1:numscp, i,ny+1-j,k)
-               scalar_d(1:numscp,nx+i,ny+j,k) = scalar_d(1:numscp, i, j,k)
-             enddo
-           enddo
+              do m=1,numscp
+                scalar_d(m,1-i,1-j,k) = scalar_d(m,nx+1-i,ny+1-j,k)
+                scalar_d(m,1-i,ny+j,k) = scalar_d(m,nx+1-i,j,k)
+                scalar_d(m,nx+i,1-j,k) = scalar_d(m, i,ny+1-j,k)
+                scalar_d(m,nx+i,ny+j,k) = scalar_d(m, i, j,k)
+              enddo
+            enddo
+          enddo
         endif
 
       endif
@@ -519,7 +537,7 @@
 
       if (1<=j .and. j<=ny) then
         if (faiPops) then
-          do l = 1, npops-1
+          do l = 1, npops_scp-1
             do m=1,numscp
               popsSCP_d(m,0,j,0, l, flip) = popsSCP_d(m,nx,j,nz_d, l, flip)
 
@@ -549,7 +567,7 @@
     attributes(global) subroutine bc_edge_y_svar(step,faiRho)
       integer, value :: step
       logical, value :: faiRho
-      integer :: j,i,k, l
+      integer :: j,i,k, l,m
   
       j = (blockIdx%x-1) * TILE_DIM + threadIdx%x
 
@@ -558,10 +576,12 @@
         if (faiRho) then
           do k=1,nbuff
             do i=1,nbuff
-              scalar_d(1:numscp,1-i,j,1-k) = scalar_d(1:numscp,nx+1-i,j, nz_d+1-k)
-              scalar_d(1:numscp,1-i,j,nz_d+k) = scalar_d(1:numscp,nx+1-i,j,  k)
-              scalar_d(1:numscp,nx+i,j,1-k) = scalar_d(1:numscp, i,j, nz_d+1-k)
-              scalar_d(1:numscp,nx+i,j,nz_d+k) = scalar_d(1:numscp, i,j,  k)
+              do m=1,numscp
+                scalar_d(m,1-i,j,1-k) = scalar_d(m,nx+1-i,j, nz_d+1-k)
+                scalar_d(m,1-i,j,nz_d+k) = scalar_d(m,nx+1-i,j,  k)
+                scalar_d(m,nx+i,j,1-k) = scalar_d(m, i,j, nz_d+1-k)
+                scalar_d(m,nx+i,j,nz_d+k) = scalar_d(m, i,j,  k)
+              enddo
             enddo
           enddo
         endif
@@ -579,7 +599,7 @@
 
       if (1<=i .and. i<=nx) then
         if (faiPops) then
-          do l = 1, npops-1
+          do l = 1, npops_scp-1
             do m=1,numscp
               popsSCP_d(m,i,0,0, l, flip) = popsSCP_d(m,i,ny,nz_d, l, flip)
 
@@ -609,7 +629,7 @@
     attributes(global) subroutine bc_edge_x_svar(step,faiRho)
       integer, value :: step
       logical, value :: faiRho
-      integer :: i,j,k, l
+      integer :: i,j,k, l,m
   
       i = (blockIdx%x-1) * TILE_DIM + threadIdx%x
 
@@ -618,10 +638,12 @@
         if (faiRho) then
           do k=1,nbuff
             do j=1,nbuff
-              scalar_d(1:numscp,i,1-j,1-k) = scalar_d(1:numscp,i,ny+1-j,nz_d+1-k)
-              scalar_d(1:numscp,i,1-j,nz_d+k) = scalar_d(1:numscp,i,ny+1-j,k)
-              scalar_d(1:numscp,i,ny+j,1-k) = scalar_d(1:numscp,i,j,nz_d+1-k)
-              scalar_d(1:numscp,i,ny+j,nz_d+k) = scalar_d(1:numscp,i, j, k)
+              do m=1,numscp
+                scalar_d(m,i,1-j,1-k) = scalar_d(m,i,ny+1-j,nz_d+1-k)
+                scalar_d(m,i,1-j,nz_d+k) = scalar_d(m,i,ny+1-j,k)
+                scalar_d(m,i,ny+j,1-k) = scalar_d(m,i,j,nz_d+1-k)
+                scalar_d(m,i,ny+j,nz_d+k) = scalar_d(m,i, j, k)
+              enddo
             enddo
           enddo
         endif
@@ -640,7 +662,7 @@
     
     attributes(global) subroutine applybc_SCP(step, flip)
       integer, value :: step,flip
-      integer :: i,j,k, l, flop, lopp, itemp, mytype
+      integer :: i,j,k, l, flop, lopp, itemp, mytype,m
       integer :: i1,j1,k1
       real :: u,v,w,uv,rho(numscp)
 
@@ -657,8 +679,10 @@
         if(itemp>0)then
           mytype=bcscptype_d(itemp)
           if(mytype==1)then
-            rho(1:numscp) = bcscp_d(1:numscp,itemp)
-            do l = 1, npops-1
+            do m=1,numscp
+              rho(m) = bcscp_d(m,itemp)
+            enddo
+            do l = 1, npops_scp-1
               i1 = i + ex_d(l)
               j1 = j + ey_d(l)
               k1 = k + ez_d(l)
@@ -669,35 +693,40 @@
                 w = vel_d(3,i1,j1,k1)
                 
                 uv = (ONE/cssq) * (u*ex_d(lopp) + v*ey_d(lopp) + w*ez_d(lopp))
-               
-                popsSCP_d(1:numscp,i,j,k,l, flip) = -popsSCP_d(1:numscp,i1,j1,k1,lopp, flip) + &
-                 TWO* rho(1:numscp)*p_d(lopp)*(ONE+HALF*(uv*uv)-(HALF/cssq)*(u*u + v*v + w*w))
+                do m=1,numscp
+                  popsSCP_d(m,i,j,k,l, flip) = -popsSCP_d(m,i1,j1,k1,lopp, flip) + &
+                   TWO* rho(m)*p_d(lopp)*(ONE+HALF*(uv*uv)-(HALF/cssq)*(u*u + v*v + w*w))
+                enddo
               endif
             enddo
           elseif(mytype==2)then
             u = bcvel_d(1,itemp)
             v = bcvel_d(2,itemp)
             w = bcvel_d(3,itemp)
-            do l = 1, npops-1
+            do l = 1, npops_scp-1
               i1 = i + ex_d(l)
               j1 = j + ey_d(l)
               k1 = k + ez_d(l)
               if (myfluid_d(i1,j1,k1, flip) == fluid_fluid) then
                 lopp=opp_d(l)
-                rho(1:numscp) = scalar_d(1:numscp,i1,j1,k1)
-                
+                do m=1,numscp
+                  rho(m) = scalar_d(m,i1,j1,k1)
+                enddo
                 uv = (ONE/cssq) * (u*ex_d(lopp) + v*ey_d(lopp) + w*ez_d(lopp))
-               
-                popsSCP_d(1:numscp,i,j,k,l, flip) = popsSCP_d(1:numscp,i1,j1,k1,lopp, flip) - &
-                 TWO* rho(1:numscp)*p_d(lopp)*uv
+                do m=1,numscp
+                  popsSCP_d(m,i,j,k,l, flip) = popsSCP_d(m,i1,j1,k1,lopp, flip) - &
+                   TWO* rho(m)*p_d(lopp)*uv
+                enddo
               endif
             enddo
           elseif(mytype==3)then
-            rho(1:numscp) = bcscp_d(1:numscp,itemp)
+            do m=1,numscp
+              rho(m) = bcscp_d(m,itemp)
+            enddo
             u = bcvel_d(1,itemp)
             v = bcvel_d(2,itemp)
             w = bcvel_d(3,itemp)
-            do l = 1, npops-1
+            do l = 1, npops_scp-1
               i1 = i + ex_d(l)
               j1 = j + ey_d(l)
               k1 = k + ez_d(l)
@@ -705,43 +734,50 @@
                 lopp=opp_d(l)
                 
                 uv = (ONE/cssq) * (u*ex_d(lopp) + v*ey_d(lopp) + w*ez_d(lopp))
-               
-                popsSCP_d(1:numscp,i,j,k,l, flip) = popsSCP_d(1:numscp,i1,j1,k1,lopp, flip) - &
-                 TWO* rho(1:numscp)*p_d(lopp)*uv
+                do m=1,numscp
+                  popsSCP_d(m,i,j,k,l, flip) = popsSCP_d(m,i1,j1,k1,lopp, flip) - &
+                   TWO* rho(m)*p_d(lopp)*uv
+                enddo
               endif
             enddo
           else
-            do l = 1, npops-1
+            do l = 1, npops_scp-1
               i1 = i + ex_d(l)
               j1 = j + ey_d(l)
               k1 = k + ez_d(l)
               if (myfluid_d(i1,j1,k1, flip) == fluid_fluid) then
                 lopp=opp_d(l)
-                popsSCP_d(1:numscp,i,j,k,l, flip) = popsSCP_d(1:numscp,i1,j1,k1,lopp, flip)
+                do m=1,numscp
+                  popsSCP_d(m,i,j,k,l, flip) = popsSCP_d(m,i1,j1,k1,lopp, flip)
+                enddp
               endif
             enddo
           endif
         else
-          do l = 1, npops-1
+          do l = 1, npops_scp-1
             i1 = i + ex_d(l)
             j1 = j + ey_d(l)
             k1 = k + ez_d(l)
             if (myfluid_d(i1,j1,k1, flip) == fluid_fluid) then
               lopp=opp_d(l)
-              popsSCP_d(1:numscp,i,j,k,l, flip) = popsSCP_d(1:numscp,i1,j1,k1,lopp, flip)
+              do m=1,numscp
+                popsSCP_d(m,i,j,k,l, flip) = popsSCP_d(m,i1,j1,k1,lopp, flip)
+              enddo
             endif
           enddo
         endif
       endif  
 #else
       if (myfluid_d(i,j,k, flip) == fluid_wall) then
-        do l = 1, npops-1
+        do l = 1, npops_scp-1
             i1 = i + ex_d(l)
             j1 = j + ey_d(l)
             k1 = k + ez_d(l)
             if (myfluid_d(i1,j1,k1, flip) == fluid_fluid) then
               lopp=opp_d(l)
-              popsSCP_d(1:numscp,i,j,k,l, flip) = popsSCP_d(1:numscp,i1,j1,k1,lopp, flip)
+              do m=1,numscp
+                popsSCP_d(m,i,j,k,l, flip) = popsSCP_d(m,i1,j1,k1,lopp, flip)
+              enddo
             endif
           enddo
       endif
@@ -750,7 +786,7 @@
     
     attributes(global) subroutine applybchalo_SCP(step, flip)
       integer, value :: step,flip
-      integer :: i,j,k, l, flop, lopp, itemp, mytype
+      integer :: i,j,k, l, flop, lopp, itemp, mytype,m
       integer :: i1,j1,k1
       real :: u,v,w,uv,rho
 
@@ -766,7 +802,7 @@
       if (k>nz_d+1) return
  
       if (myfluid_d(i,j,k, flip) == fluid_wall) then
-        do l = 1, npops-1
+        do l = 1, npops_scp-1
             i1 = i + ex_d(l)
             j1 = j + ey_d(l)
             k1 = k + ez_d(l)
@@ -775,7 +811,9 @@
             if(k1<1 .or. k1>nz_d)cycle
             if (myfluid_d(i1,j1,k1, flip) == fluid_fluid) then
               lopp=opp_d(l)
-              popsSCP_d(1:numscp,i,j,k,l, flip) = popsSCP_d(1:numscp,i1,j1,k1,lopp, flip)
+              do m=1,numscp
+                popsSCP_d(m,i,j,k,l, flip) = popsSCP_d(m,i1,j1,k1,lopp, flip)
+              enddo
             endif
           enddo
       endif
@@ -784,7 +822,7 @@
 
     attributes(global) subroutine stream_SCP_x(step, flip)
       integer, value :: step,flip
-      integer :: i,j,k, l, flop
+      integer :: i,j,k, l, flop,m
       integer :: i1,j1,k1
   
       j = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
@@ -798,12 +836,14 @@
       ! Stream x=0
       i = 0
       if (myfluid_d(i,j,k, flip) < fluid_dead) then
-        do l = 1, npops-1
+        do l = 1, npops_scp-1
           i1 = i + ex_d(l)
           j1 = j + ey_d(l)
           k1 = k + ez_d(l)
           if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz_d) then
-            popsSCP_d(1:numscp,i1,j1,k1,l, flop) = popsSCP_d(1:numscp,i,j,k,l, flip)
+            do m=1,numscp
+              popsSCP_d(m,i1,j1,k1,l, flop) = popsSCP_d(m,i,j,k,l, flip)
+            enddo
           endif
         end do
       endif
@@ -811,12 +851,14 @@
       ! Stream x=nx+1
       i = nx+1
       if (myfluid_d(i,j,k, flip) < fluid_dead) then
-        do l = 1, npops-1
+        do l = 1, npops_scp-1
           i1 = i + ex_d(l)
           j1 = j + ey_d(l)
           k1 = k + ez_d(l)
           if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz_d) then
-            popsSCP_d(1:numscp,i1,j1,k1,l, flop) = popsSCP_d(1:numscp,i,j,k,l, flip)
+            do m=1,numscp
+              popsSCP_d(m,i1,j1,k1,l, flop) = popsSCP_d(m,i,j,k,l, flip)
+            enddo
           endif
         end do
       endif
@@ -824,7 +866,7 @@
 
     attributes(global) subroutine stream_SCP_y(step, flip)
     integer, value :: step,flip
-    integer :: i,j,k, l, flop
+    integer :: i,j,k, l, flop,m
     integer :: i1,j1,k1
 
     i = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
@@ -838,12 +880,14 @@
     ! Stream y=0
     j = 0
     if (myfluid_d(i,j,k, flip) < fluid_dead) then
-      do l = 1, npops-1
+      do l = 1, npops_scp-1
         i1 = i + ex_d(l)
         j1 = j + ey_d(l)
         k1 = k + ez_d(l)
         if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz_d) then
-          popsSCP_d(1:numscp,i1,j1,k1,l, flop) = popsSCP_d(1:numscp,i,j,k,l, flip)
+          do m=1,numscp
+            popsSCP_d(m,i1,j1,k1,l, flop) = popsSCP_d(m,i,j,k,l, flip)
+          enddo
         endif
       end do
     endif
@@ -851,12 +895,14 @@
     ! Stream y=ny+1
     j = ny+1
     if (myfluid_d(i,j,k, flip) < fluid_dead) then
-      do l = 1, npops-1
+      do l = 1, npops_scp-1
         i1 = i + ex_d(l)
         j1 = j + ey_d(l)
         k1 = k + ez_d(l)
         if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz_d) then
-          popsSCP_d(1:numscp,i1,j1,k1,l, flop) = popsSCP_d(1:numscp,i,j,k,l, flip)
+          do m=1,numscp
+            popsSCP_d(m,i1,j1,k1,l, flop) = popsSCP_d(m,i,j,k,l, flip)
+          enddo
         endif
       end do
     endif
@@ -864,7 +910,7 @@
 
   attributes(global) subroutine stream_SCP_z(step, flip)
     integer, value :: step,flip
-    integer :: i,j,k, l, flop
+    integer :: i,j,k, l, flop,m
     integer :: i1,j1,k1
 
     i = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
@@ -878,12 +924,14 @@
     ! Stream z=0
     k = 0
     if (myfluid_d(i,j,k, flip) < fluid_dead) then
-      do l = 1, npops-1
+      do l = 1, npops_scp-1
         i1 = i + ex_d(l)
         j1 = j + ey_d(l)
         k1 = k + ez_d(l)
         if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz_d) then
-          popsSCP_d(1:numscp,i1,j1,k1,l, flop) = popsSCP_d(1:numscp,i,j,k,l, flip)
+          do m=1,numscp
+            popsSCP_d(m,i1,j1,k1,l, flop) = popsSCP_d(m,i,j,k,l, flip)
+          enddo
         endif
       end do
     endif
@@ -891,12 +939,14 @@
     ! Stream z=nz_d+1
     k = nz_d+1
     if (myfluid_d(i,j,k, flip) < fluid_dead) then
-      do l = 1, npops-1
+      do l = 1, npops_scp-1
         i1 = i + ex_d(l)
         j1 = j + ey_d(l)
         k1 = k + ez_d(l)
         if (1<=i1 .and. i1<=nx .and. 1<=j1 .and. j1<=ny .and. 1<=k1 .and. k1<=nz_d) then
-          popsSCP_d(1:numscp,i1,j1,k1,l, flop) = popsSCP_d(1:numscp,i,j,k,l, flip)
+          do m=1,numscp
+            popsSCP_d(m,i1,j1,k1,l, flop) = popsSCP_d(m,i,j,k,l, flip)
+          enddo
         endif
       end do
     endif
@@ -904,7 +954,7 @@
   
   attributes(global) subroutine stream_SCP(step, flip)
       integer, value :: step,flip
-      integer :: i,j,k,flop
+      integer :: i,j,k,flop,m
 
       i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
       j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
@@ -915,65 +965,67 @@
 
       ! Streaming
       if (myfluid_d(i,j,k, flip) < fluid_dead) then
+        do m=1,numscp
 #ifdef SCPD3Q27
-          popsSCP_d(1:numscp,i  ,j  ,k  , 0, flop) = popsSCP_d(1:numscp,i,j,k, 0, flip)
-          popsSCP_d(1:numscp,i+1,j  ,k  , 1, flop) = popsSCP_d(1:numscp,i,j,k, 1,flip)
-          popsSCP_d(1:numscp,i-1,j  ,k  , 2, flop) = popsSCP_d(1:numscp,i,j,k, 2,flip)
-          popsSCP_d(1:numscp,i  ,j+1,k  , 3, flop) = popsSCP_d(1:numscp,i,j,k, 3,flip)
-          popsSCP_d(1:numscp,i  ,j-1,k  , 4, flop) = popsSCP_d(1:numscp,i,j,k, 4,flip)
-          popsSCP_d(1:numscp,i  ,j  ,k+1, 5, flop) = popsSCP_d(1:numscp,i,j,k, 5,flip)
-          popsSCP_d(1:numscp,i  ,j  ,k-1, 6, flop) = popsSCP_d(1:numscp,i,j,k, 6,flip)
-          popsSCP_d(1:numscp,i+1,j+1,k  , 7, flop) = popsSCP_d(1:numscp,i,j,k, 7,flip)
-          popsSCP_d(1:numscp,i-1,j-1,k  , 8, flop) = popsSCP_d(1:numscp,i,j,k, 8,flip)
-          popsSCP_d(1:numscp,i-1,j+1,k  , 9, flop) = popsSCP_d(1:numscp,i,j,k, 9,flip)
-          popsSCP_d(1:numscp,i+1,j-1,k  ,10, flop) = popsSCP_d(1:numscp,i,j,k,10,flip)
-          popsSCP_d(1:numscp,i+1,j  ,k+1,11, flop) = popsSCP_d(1:numscp,i,j,k,11,flip)
-          popsSCP_d(1:numscp,i-1,j  ,k-1,12, flop) = popsSCP_d(1:numscp,i,j,k,12,flip)
-          popsSCP_d(1:numscp,i-1,j  ,k+1,13, flop) = popsSCP_d(1:numscp,i,j,k,13,flip)
-          popsSCP_d(1:numscp,i+1,j  ,k-1,14, flop) = popsSCP_d(1:numscp,i,j,k,14,flip)
-          popsSCP_d(1:numscp,i  ,j+1,k+1,15, flop) = popsSCP_d(1:numscp,i,j,k,15,flip)
-          popsSCP_d(1:numscp,i  ,j-1,k-1,16, flop) = popsSCP_d(1:numscp,i,j,k,16,flip)
-          popsSCP_d(1:numscp,i  ,j-1,k+1,17, flop) = popsSCP_d(1:numscp,i,j,k,17,flip)
-          popsSCP_d(1:numscp,i  ,j+1,k-1,18, flop) = popsSCP_d(1:numscp,i,j,k,18,flip)
-          popsSCP_d(1:numscp,i+1,j+1,k+1,19, flop) = popsSCP_d(1:numscp,i,j,k,19,flip)
-          popsSCP_d(1:numscp,i-1,j-1,k-1,20, flop) = popsSCP_d(1:numscp,i,j,k,20,flip)
-          popsSCP_d(1:numscp,i+1,j+1,k-1,21, flop) = popsSCP_d(1:numscp,i,j,k,21,flip)
-          popsSCP_d(1:numscp,i-1,j-1,k+1,22, flop) = popsSCP_d(1:numscp,i,j,k,22,flip)
-          popsSCP_d(1:numscp,i-1,j+1,k+1,23, flop) = popsSCP_d(1:numscp,i,j,k,23,flip)
-          popsSCP_d(1:numscp,i+1,j-1,k-1,24, flop) = popsSCP_d(1:numscp,i,j,k,24,flip)
-          popsSCP_d(1:numscp,i+1,j-1,k+1,25, flop) = popsSCP_d(1:numscp,i,j,k,25,flip)
-          popsSCP_d(1:numscp,i-1,j+1,k-1,26, flop) = popsSCP_d(1:numscp,i,j,k,26,flip)
+          popsSCP_d(m,i  ,j  ,k  , 0, flop) = popsSCP_d(m,i,j,k, 0, flip)
+          popsSCP_d(m,i+1,j  ,k  , 1, flop) = popsSCP_d(m,i,j,k, 1,flip)
+          popsSCP_d(m,i-1,j  ,k  , 2, flop) = popsSCP_d(m,i,j,k, 2,flip)
+          popsSCP_d(m,i  ,j+1,k  , 3, flop) = popsSCP_d(m,i,j,k, 3,flip)
+          popsSCP_d(m,i  ,j-1,k  , 4, flop) = popsSCP_d(m,i,j,k, 4,flip)
+          popsSCP_d(m,i  ,j  ,k+1, 5, flop) = popsSCP_d(m,i,j,k, 5,flip)
+          popsSCP_d(m,i  ,j  ,k-1, 6, flop) = popsSCP_d(m,i,j,k, 6,flip)
+          popsSCP_d(m,i+1,j+1,k  , 7, flop) = popsSCP_d(m,i,j,k, 7,flip)
+          popsSCP_d(m,i-1,j-1,k  , 8, flop) = popsSCP_d(m,i,j,k, 8,flip)
+          popsSCP_d(m,i-1,j+1,k  , 9, flop) = popsSCP_d(m,i,j,k, 9,flip)
+          popsSCP_d(m,i+1,j-1,k  ,10, flop) = popsSCP_d(m,i,j,k,10,flip)
+          popsSCP_d(m,i+1,j  ,k+1,11, flop) = popsSCP_d(m,i,j,k,11,flip)
+          popsSCP_d(m,i-1,j  ,k-1,12, flop) = popsSCP_d(m,i,j,k,12,flip)
+          popsSCP_d(m,i-1,j  ,k+1,13, flop) = popsSCP_d(m,i,j,k,13,flip)
+          popsSCP_d(m,i+1,j  ,k-1,14, flop) = popsSCP_d(m,i,j,k,14,flip)
+          popsSCP_d(m,i  ,j+1,k+1,15, flop) = popsSCP_d(m,i,j,k,15,flip)
+          popsSCP_d(m,i  ,j-1,k-1,16, flop) = popsSCP_d(m,i,j,k,16,flip)
+          popsSCP_d(m,i  ,j-1,k+1,17, flop) = popsSCP_d(m,i,j,k,17,flip)
+          popsSCP_d(m,i  ,j+1,k-1,18, flop) = popsSCP_d(m,i,j,k,18,flip)
+          popsSCP_d(m,i+1,j+1,k+1,19, flop) = popsSCP_d(m,i,j,k,19,flip)
+          popsSCP_d(m,i-1,j-1,k-1,20, flop) = popsSCP_d(m,i,j,k,20,flip)
+          popsSCP_d(m,i+1,j+1,k-1,21, flop) = popsSCP_d(m,i,j,k,21,flip)
+          popsSCP_d(m,i-1,j-1,k+1,22, flop) = popsSCP_d(m,i,j,k,22,flip)
+          popsSCP_d(m,i-1,j+1,k+1,23, flop) = popsSCP_d(m,i,j,k,23,flip)
+          popsSCP_d(m,i+1,j-1,k-1,24, flop) = popsSCP_d(m,i,j,k,24,flip)
+          popsSCP_d(m,i+1,j-1,k+1,25, flop) = popsSCP_d(m,i,j,k,25,flip)
+          popsSCP_d(m,i-1,j+1,k-1,26, flop) = popsSCP_d(m,i,j,k,26,flip)
 #elif defined SCPD3Q19
-          popsSCP_d(1:numscp,i  ,j  ,k  , 0, flop) = popsSCP_d(1:numscp,i,j,k, 0, flip)
-          popsSCP_d(1:numscp,i+1,j  ,k  , 1, flop) = popsSCP_d(1:numscp,i,j,k, 1,flip)
-          popsSCP_d(1:numscp,i-1,j  ,k  , 2, flop) = popsSCP_d(1:numscp,i,j,k, 2,flip)
-          popsSCP_d(1:numscp,i  ,j+1,k  , 3, flop) = popsSCP_d(1:numscp,i,j,k, 3,flip)
-          popsSCP_d(1:numscp,i  ,j-1,k  , 4, flop) = popsSCP_d(1:numscp,i,j,k, 4,flip)
-          popsSCP_d(1:numscp,i  ,j  ,k+1, 5, flop) = popsSCP_d(1:numscp,i,j,k, 5,flip)
-          popsSCP_d(1:numscp,i  ,j  ,k-1, 6, flop) = popsSCP_d(1:numscp,i,j,k, 6,flip)
-          popsSCP_d(1:numscp,i+1,j+1,k  , 7, flop) = popsSCP_d(1:numscp,i,j,k, 7,flip)
-          popsSCP_d(1:numscp,i-1,j-1,k  , 8, flop) = popsSCP_d(1:numscp,i,j,k, 8,flip)
-          popsSCP_d(1:numscp,i-1,j+1,k  , 9, flop) = popsSCP_d(1:numscp,i,j,k, 9,flip)
-          popsSCP_d(1:numscp,i+1,j-1,k  ,10, flop) = popsSCP_d(1:numscp,i,j,k,10,flip)
-          popsSCP_d(1:numscp,i+1,j  ,k+1,11, flop) = popsSCP_d(1:numscp,i,j,k,11,flip)
-          popsSCP_d(1:numscp,i-1,j  ,k-1,12, flop) = popsSCP_d(1:numscp,i,j,k,12,flip)
-          popsSCP_d(1:numscp,i-1,j  ,k+1,13, flop) = popsSCP_d(1:numscp,i,j,k,13,flip)
-          popsSCP_d(1:numscp,i+1,j  ,k-1,14, flop) = popsSCP_d(1:numscp,i,j,k,14,flip)
-          popsSCP_d(1:numscp,i  ,j+1,k+1,15, flop) = popsSCP_d(1:numscp,i,j,k,15,flip)
-          popsSCP_d(1:numscp,i  ,j-1,k-1,16, flop) = popsSCP_d(1:numscp,i,j,k,16,flip)
-          popsSCP_d(1:numscp,i  ,j-1,k+1,17, flop) = popsSCP_d(1:numscp,i,j,k,17,flip)
-          popsSCP_d(1:numscp,i  ,j+1,k-1,18, flop) = popsSCP_d(1:numscp,i,j,k,18,flip)
+          popsSCP_d(m,i  ,j  ,k  , 0, flop) = popsSCP_d(m,i,j,k, 0, flip)
+          popsSCP_d(m,i+1,j  ,k  , 1, flop) = popsSCP_d(m,i,j,k, 1,flip)
+          popsSCP_d(m,i-1,j  ,k  , 2, flop) = popsSCP_d(m,i,j,k, 2,flip)
+          popsSCP_d(m,i  ,j+1,k  , 3, flop) = popsSCP_d(m,i,j,k, 3,flip)
+          popsSCP_d(m,i  ,j-1,k  , 4, flop) = popsSCP_d(m,i,j,k, 4,flip)
+          popsSCP_d(m,i  ,j  ,k+1, 5, flop) = popsSCP_d(m,i,j,k, 5,flip)
+          popsSCP_d(m,i  ,j  ,k-1, 6, flop) = popsSCP_d(m,i,j,k, 6,flip)
+          popsSCP_d(m,i+1,j+1,k  , 7, flop) = popsSCP_d(m,i,j,k, 7,flip)
+          popsSCP_d(m,i-1,j-1,k  , 8, flop) = popsSCP_d(m,i,j,k, 8,flip)
+          popsSCP_d(m,i-1,j+1,k  , 9, flop) = popsSCP_d(m,i,j,k, 9,flip)
+          popsSCP_d(m,i+1,j-1,k  ,10, flop) = popsSCP_d(m,i,j,k,10,flip)
+          popsSCP_d(m,i+1,j  ,k+1,11, flop) = popsSCP_d(m,i,j,k,11,flip)
+          popsSCP_d(m,i-1,j  ,k-1,12, flop) = popsSCP_d(m,i,j,k,12,flip)
+          popsSCP_d(m,i-1,j  ,k+1,13, flop) = popsSCP_d(m,i,j,k,13,flip)
+          popsSCP_d(m,i+1,j  ,k-1,14, flop) = popsSCP_d(m,i,j,k,14,flip)
+          popsSCP_d(m,i  ,j+1,k+1,15, flop) = popsSCP_d(m,i,j,k,15,flip)
+          popsSCP_d(m,i  ,j-1,k-1,16, flop) = popsSCP_d(m,i,j,k,16,flip)
+          popsSCP_d(m,i  ,j-1,k+1,17, flop) = popsSCP_d(m,i,j,k,17,flip)
+          popsSCP_d(m,i  ,j+1,k-1,18, flop) = popsSCP_d(m,i,j,k,18,flip)
 #else
-          popsSCP_d(1:numscp,i  ,j  ,k  , 0, flop) = popsSCP_d(1:numscp,i,j,k, 0, flip)
-          popsSCP_d(1:numscp,i+1,j  ,k  , 1, flop) = popsSCP_d(1:numscp,i,j,k, 1,flip)
-          popsSCP_d(1:numscp,i-1,j  ,k  , 2, flop) = popsSCP_d(1:numscp,i,j,k, 2,flip)
-          popsSCP_d(1:numscp,i  ,j+1,k  , 3, flop) = popsSCP_d(1:numscp,i,j,k, 3,flip)
-          popsSCP_d(1:numscp,i  ,j-1,k  , 4, flop) = popsSCP_d(1:numscp,i,j,k, 4,flip)
-          popsSCP_d(1:numscp,i  ,j  ,k+1, 5, flop) = popsSCP_d(1:numscp,i,j,k, 5,flip)
-          popsSCP_d(1:numscp,i  ,j  ,k-1, 6, flop) = popsSCP_d(1:numscp,i,j,k, 6,flip)
+          popsSCP_d(m,i  ,j  ,k  , 0, flop) = popsSCP_d(m,i,j,k, 0, flip)
+          popsSCP_d(m,i+1,j  ,k  , 1, flop) = popsSCP_d(m,i,j,k, 1,flip)
+          popsSCP_d(m,i-1,j  ,k  , 2, flop) = popsSCP_d(m,i,j,k, 2,flip)
+          popsSCP_d(m,i  ,j+1,k  , 3, flop) = popsSCP_d(m,i,j,k, 3,flip)
+          popsSCP_d(m,i  ,j-1,k  , 4, flop) = popsSCP_d(m,i,j,k, 4,flip)
+          popsSCP_d(m,i  ,j  ,k+1, 5, flop) = popsSCP_d(m,i,j,k, 5,flip)
+          popsSCP_d(m,i  ,j  ,k-1, 6, flop) = popsSCP_d(m,i,j,k, 6,flip)
 #endif
+        enddo
       endif
     end subroutine stream_SCP 
     
 
-  end module kernels_scalar
+  end module kernels_scp

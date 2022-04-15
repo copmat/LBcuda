@@ -83,6 +83,66 @@
       u = vx
       v = vy
       w = vz
+      
+      if(store_vel_d)then
+        vel_d(1,i,j,k) = u
+        vel_d(2,i,j,k) = v
+        vel_d(3,i,j,k) = w
+      endif
+      
+      ! write(*,*) 'CUDA setup',rho,i,j,k
+  
+      rhoR_d(i,j,k) = rho
+      do l = 0, npops-1
+        eq = equil(rho, u,v,w, l)
+        popsR_d(i,j,k, l, 1) = eq
+      end do
+#ifndef APPLYBC
+      myfluid_d(i,j,k, 1) = fluid_fluid
+      myfluid_d(i,j,k, 2) = fluid_fluid
+#endif
+    end subroutine setup
+    
+    attributes(global) subroutine setup_taylorgreen(vx,vy,vz)
+      real, value :: vx,vy,vz
+      integer :: i,j,k, l,gli,glj,glk
+      real    :: rho, u,v,w, eq, x,y,z, xs,ys,zs
+      real, parameter :: fact=1.0/sqrt(3.0)
+  
+      i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
+      j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
+      k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
+
+      ! if (k>nz/2) then
+      !   rho = 1.01
+      ! else
+      !   rho = 0.99
+      ! endif
+
+      x = 3.14159265358979 / nx * i
+      y = 3.14159265358979 / ny * j
+      z = 3.14159265358979 / nz_d * k
+      rho = densR_d !1 + 0.1*sin(x)*sin(x) * sin(y)*sin(y) * sin(z)*sin(z)
+      
+      gli = i + offset_d(1)
+      glj = j + offset_d(2)
+      glk = k + offset_d(3)
+      
+      xs = real(gli)/real(glx)*2.0*Pi
+      ys = real(glj)/real(gly)*2.0*Pi
+      zs = real(glk)/real(glz)*2.0*Pi
+      
+      
+      u = -fact*sin(xs)*cos(ys)*cos(zs)*0.1
+      v = -fact*cos(xs)*sin(ys)*cos(zs)*0.1
+      w = 2.0*fact*cos(xs)*cos(ys)*sin(zs)*0.1
+      
+      if(store_vel_d)then
+        vel_d(1,i,j,k) = u
+        vel_d(2,i,j,k) = v
+        vel_d(3,i,j,k) = w
+      endif
+      
       ! write(*,*) 'CUDA setup',rho,i,j,k
   
       rhoR_d(i,j,k) = rho
@@ -93,7 +153,7 @@
 
       myfluid_d(i,j,k, 1) = fluid_fluid
       myfluid_d(i,j,k, 2) = fluid_fluid
-    end subroutine setup
+    end subroutine setup_taylorgreen
     
     attributes(global) subroutine setup_p(vx,vy,vz)
       real, value :: vx,vy,vz
@@ -126,6 +186,13 @@
       u = vx
       v = vy
       w = vz
+      
+      if(store_vel_d)then
+        vel_d(1,i,j,k) = u
+        vel_d(2,i,j,k) = v
+        vel_d(3,i,j,k) = w
+      endif
+      
       ! write(*,*) 'CUDA setup',rho,i,j,k
   
       rhoR_d(i,j,k) = rho
@@ -426,7 +493,7 @@
     attributes(global) subroutine bc_per_x_hvar(step,faiRho,faiRhoB,faiVel)
       integer, value :: step
       logical, value :: faiRho,faiRhoB,faiVel
-      integer :: i,j,k, l
+      integer :: i,j,k, l,m
   
       j = (blockIdx%x-1) * TILE_DIM + threadIdx%x
       k = (blockIdx%y-1) * TILE_DIM + threadIdx%y
@@ -450,9 +517,11 @@
         endif
         if (faiVel) then
           do i=1,nbuff
-            vel_d (1:3,nx+i,j,k) = vel_d (1:3,i,j,k)
+            do m=1,3
+              vel_d (m,nx+i,j,k) = vel_d (m,i,j,k)
 
-            vel_d (1:3,1-i,j,k) = vel_d (1:3,nx+1-i,j,k)
+              vel_d (m,1-i,j,k) = vel_d (m,nx+1-i,j,k)
+            enddo
           enddo
         endif
 
@@ -464,7 +533,7 @@
     attributes(global) subroutine bc_per_x_backf(step,faiF)
       integer, value :: step
       logical, value :: faiF
-      integer :: j,k, l
+      integer :: j,k, l,m
   
       j = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
       k = (blockIdx%y-1) * TILE_DIM + threadIdx%y - 1
@@ -473,10 +542,11 @@
       if (1<=j .and. j<=ny .and. 1<=k .and. k<=nz_d) then
         
         if (faiF) then
-          force_d (1:3,1,j,k) = force_d (1:3,nx+1,j,k) + force_d (1:3,1,j,k)
+          do m=1,3
+            force_d (m,1,j,k) = force_d (m,nx+1,j,k) + force_d (m,1,j,k)
 
-          force_d (1:3,nx,j,k) = force_d (1:3,0,j,k) + force_d (1:3,nx,j,k)
-
+            force_d (m,nx,j,k) = force_d (m,0,j,k) + force_d (m,nx,j,k)
+          enddo
         endif
 
       endif
@@ -519,7 +589,7 @@
     attributes(global) subroutine bc_per_y_hvar(step,faiRho,faiRhoB,faiVel)
       integer, value :: step
       logical, value :: faiRho,faiRhoB,faiVel
-      integer :: i,j,k, l
+      integer :: i,j,k, l,m
   
       i = (blockIdx%x-1) * TILE_DIM + threadIdx%x
       k = (blockIdx%y-1) * TILE_DIM + threadIdx%y
@@ -545,9 +615,11 @@
         endif
         if (faiVel) then
           do j=1,nbuff
-            vel_d(1:3,i,ny+j,k) = vel_d(1:3,i,j,k)
+            do m=1,3
+              vel_d(m,i,ny+j,k) = vel_d(m,i,j,k)
 
-            vel_d(1:3,i,1-j,k) = vel_d(1:3,i,ny+1-j,k)
+              vel_d(m,i,1-j,k) = vel_d(m,i,ny+1-j,k)
+            enddo
           enddo
         endif
         
@@ -561,7 +633,7 @@
     attributes(global) subroutine bc_per_y_backf(step,faiF)
       integer, value :: step
       logical, value :: faiF
-      integer :: i,k, l
+      integer :: i,k, l,m
   
       i = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
       k = (blockIdx%y-1) * TILE_DIM + threadIdx%y - 1
@@ -570,9 +642,11 @@
       if (1<=i .and. i<=nx .and. 1<=k .and. k<=nz_d) then
         
         if (faiF) then
-          force_d(1:3,i,1,k) = force_d(1:3,i,ny+1,k) + force_d(1:3,i,1,k)
+          do m=1,3
+            force_d(m,i,1,k) = force_d(m,i,ny+1,k) + force_d(m,i,1,k)
 
-          force_d(1:3,i,ny,k) = force_d(1:3,i,0,k) + force_d(1:3,i,ny,k)
+            force_d(m,i,ny,k) = force_d(m,i,0,k) + force_d(m,i,ny,k)
+          enddo
         endif
         
       endif
@@ -611,7 +685,7 @@
     attributes(global) subroutine bc_per_z_hvar(step,faiRho,faiRhoB,faiVel)
       integer, value :: step
       logical, value :: faiRho,faiRhoB,faiVel
-      integer :: i,j,k, l
+      integer :: i,j,k, l,m
   
       i = (blockIdx%x-1) * TILE_DIM + threadIdx%x
       j = (blockIdx%y-1) * TILE_DIM + threadIdx%y
@@ -635,9 +709,11 @@
         endif
         if (faiVel) then
           do k=1,nbuff
-            vel_d(1:3,i,j,nz_d+k) = vel_d(1:3,i,j,k)
+            do m=1,3
+              vel_d(m,i,j,nz_d+k) = vel_d(m,i,j,k)
 
-            vel_d(1:3,i,j,1-k) = vel_d(1:3,i,j,nz_d+1-k)
+              vel_d(m,i,j,1-k) = vel_d(m,i,j,nz_d+1-k)
+            enddo
           enddo
         endif
       endif
@@ -646,7 +722,7 @@
     attributes(global) subroutine bc_per_z_backf(step,faiF)
       integer, value :: step
       logical, value :: faiF
-      integer :: i,j, l
+      integer :: i,j, l,m
   
       i = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
       j = (blockIdx%y-1) * TILE_DIM + threadIdx%y - 1
@@ -655,9 +731,11 @@
       if (1<=j .and. j<=ny .and. 1<=i .and. i<=nx) then
         
         if (faiF) then
-          force_d(1:3,i,j,1) = force_d(1:3,i,j,nz_d+1) + force_d(1:3,i,j,1)
+          do m=1,3
+            force_d(m,i,j,1) = force_d(m,i,j,nz_d+1) + force_d(m,i,j,1)
 
-          force_d(1:3,i,j,nz_d) = force_d(1:3,i,j,0) + force_d(1:3,i,j,nz_d)
+            force_d(m,i,j,nz_d) = force_d(m,i,j,0) + force_d(m,i,j,nz_d)
+          enddo
         endif
       endif
     end subroutine bc_per_z_backf
@@ -665,7 +743,7 @@
     attributes(global) subroutine merge_per_z_backf(step,faiF)
       integer, value :: step
       logical, value :: faiF
-      integer :: i,j, l,ii
+      integer :: i,j, l,ii,m
   
       i = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
       j = (blockIdx%y-1) * TILE_DIM + threadIdx%y - 1
@@ -674,9 +752,11 @@
       if (0<=j .and. j<=ny+1 .and. 0<=i .and. i<=nx+1) then
         
         if (faiF) then
-          force_d(1:3,i,j,1) = force_buf_up_d(1:3,i,j,1) + force_d(1:3,i,j,1)
+          do m=1,3
+            force_d(m,i,j,1) = force_buf_up_d(m,i,j,1) + force_d(m,i,j,1)
 
-          force_d(1:3,i,j,nz_d) = force_buf_down_d(1:3,i,j,1) + force_d(1:3,i,j,nz_d)
+            force_d(m,i,j,nz_d) = force_buf_down_d(m,i,j,1) + force_d(m,i,j,nz_d)
+          enddo
         endif
         
       endif
@@ -717,7 +797,7 @@
     attributes(global) subroutine bc_edge_z_hvar(step,faiRho,faiRhoB,faiVel)
       integer, value :: step
       logical, value :: faiRho,faiRhoB,faiVel
-      integer :: k,i,j, l
+      integer :: k,i,j, l,m
   
       k = (blockIdx%x-1) * TILE_DIM + threadIdx%x  - nbuff
 
@@ -746,12 +826,14 @@
         if (faiVel) then
           do j=1,nbuff
             do i=1,nbuff
-               vel_d(1:3,1-i,1-j,k) = vel_d(1:3,nx+1-i,ny+1-j,k)
-               vel_d(1:3,1-i,ny+j,k) = vel_d(1:3,nx+1-i,j,k)
-               vel_d(1:3,nx+i,1-j,k) = vel_d(1:3, i,ny+1-j,k)
-               vel_d(1:3,nx+i,ny+j,k) = vel_d(1:3, i, j,k)
-             enddo
-           enddo
+              do m=1,3
+                vel_d(m,1-i,1-j,k) = vel_d(m,nx+1-i,ny+1-j,k)
+                vel_d(m,1-i,ny+j,k) = vel_d(m,nx+1-i,j,k)
+                vel_d(m,nx+i,1-j,k) = vel_d(m, i,ny+1-j,k)
+                vel_d(m,nx+i,ny+j,k) = vel_d(m, i, j,k)
+              enddo
+            enddo
+          enddo
         endif
       endif
     end subroutine bc_edge_z_hvar
@@ -759,20 +841,22 @@
     attributes(global) subroutine bc_edge_z_backf(step,faiF)
       integer, value :: step
       logical, value :: faiF
-      integer :: k, l
+      integer :: k, l,m
   
       k = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
 
       if (0<=k .and. k<=nz_d+1) then
 
         if (faiF) then
-          force_d (1:3,nx,ny,k) = force_d (1:3,0,0,k) + force_d (1:3,nx,ny,k)
+          do m=1,3
+            force_d(m,nx,ny,k) = force_d(m,0,0,k) + force_d(m,nx,ny,k)
 
-          force_d (1:3,nx,1,k) = force_d (1:3,0,ny+1,k) + force_d (1:3,nx,1,k)
+            force_d(m,nx,1,k) = force_d(m,0,ny+1,k) + force_d(m,nx,1,k)
 
-          force_d (1:3,1,ny,k) = force_d (1:3,nx+1,0,k) + force_d (1:3,1,ny,k)
+            force_d(m,1,ny,k) = force_d(m,nx+1,0,k) + force_d(m,1,ny,k)
 
-          force_d (1:3,1,1,k) = force_d (1:3,nx+1,ny+1,k) + force_d (1:3,1,1,k)
+            force_d(m,1,1,k) = force_d(m,nx+1,ny+1,k) + force_d(m,1,1,k)
+          enddo
         endif
       endif
     end subroutine bc_edge_z_backf
@@ -812,7 +896,7 @@
     attributes(global) subroutine bc_edge_y_hvar(step,faiRho,faiRhoB,faiVel)
       integer, value :: step
       logical, value :: faiRho,faiRhoB,faiVel
-      integer :: j,i,k, l
+      integer :: j,i,k, l,m
   
       j = (blockIdx%x-1) * TILE_DIM + threadIdx%x
 
@@ -841,10 +925,12 @@
         if (faiVel) then
           do k=1,nbuff
             do i=1,nbuff
-              vel_d(1:3,1-i,j,1-k) = vel_d(1:3,nx+1-i,j, nz_d+1-k)
-              vel_d(1:3,1-i,j,nz_d+k) = vel_d(1:3,nx+1-i,j,  k)
-              vel_d(1:3,nx+i,j,1-k) = vel_d(1:3, i,j, nz_d+1-k)
-              vel_d(1:3,nx+i,j,nz_d+k) = vel_d(1:3, i,j,  k)
+              do m=1,3
+                vel_d(m,1-i,j,1-k) = vel_d(m,nx+1-i,j, nz_d+1-k)
+                vel_d(m,1-i,j,nz_d+k) = vel_d(m,nx+1-i,j,  k)
+                vel_d(m,nx+i,j,1-k) = vel_d(m, i,j, nz_d+1-k)
+                vel_d(m,nx+i,j,nz_d+k) = vel_d(m, i,j,  k)
+              enddo
             enddo
           enddo
         endif
@@ -854,20 +940,22 @@
     attributes(global) subroutine bc_edge_y_backf(step,faiF)
       integer, value :: step
       logical, value :: faiF
-      integer :: j, l
+      integer :: j, l,m
   
       j = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
 
       if (1<=j .and. j<=ny) then
 
         if (faiF) then
-          force_d (1:3,nx,j,nz_d) = force_d (1:3,0,j,0) + force_d (1:3,nx,j,nz_d)
+          do m=1,3
+            force_d(m,nx,j,nz_d) = force_d(m,0,j,0) + force_d(m,nx,j,nz_d)
 
-          force_d (1:3,nx,j,1) = force_d (1:3,0,j,nz_d+1) + force_d (1:3,nx,j,1)
+            force_d(m,nx,j,1) = force_d(m,0,j,nz_d+1) + force_d(m,nx,j,1)
 
-          force_d (1:3,1,j,nz_d) = force_d (1:3,nx+1,j,0) + force_d (1:3,1,j,nz_d)
+            force_d(m,1,j,nz_d) = force_d(m,nx+1,j,0) + force_d(m,1,j,nz_d)
 
-          force_d (1:3,1,j,1) = force_d (1:3,nx+1,j,nz_d+1) + force_d (1:3,1,j,1)
+            force_d(m,1,j,1) = force_d(m,nx+1,j,nz_d+1) + force_d(m,1,j,1)
+          enddo
         endif
       endif
     end subroutine bc_edge_y_backf
@@ -907,7 +995,7 @@
     attributes(global) subroutine bc_edge_x_hvar(step,faiRho,faiRhoB,faiVel)
       integer, value :: step
       logical, value :: faiRho,faiRhoB,faiVel
-      integer :: i,j,k, l
+      integer :: i,j,k, l,m
   
       i = (blockIdx%x-1) * TILE_DIM + threadIdx%x
 
@@ -936,10 +1024,12 @@
         if (faiVel) then
           do k=1,nbuff
             do j=1,nbuff
-              vel_d(1:3,i,1-j,1-k) = vel_d(1:3,i,ny+1-j,nz_d+1-k)
-              vel_d(1:3,i,1-j,nz_d+k) = vel_d(1:3,i,ny+1-j,k)
-              vel_d(1:3,i,ny+j,1-k) = vel_d(1:3,i,j,nz_d+1-k)
-              vel_d(1:3,i,ny+j,nz_d+k) = vel_d(1:3,i, j, k)
+              do m=1,3
+                vel_d(m,i,1-j,1-k) = vel_d(m,i,ny+1-j,nz_d+1-k)
+                vel_d(m,i,1-j,nz_d+k) = vel_d(m,i,ny+1-j,k)
+                vel_d(m,i,ny+j,1-k) = vel_d(m,i,j,nz_d+1-k)
+                vel_d(m,i,ny+j,nz_d+k) = vel_d(m,i, j, k)
+              enddo
             enddo
           enddo
         endif
@@ -949,20 +1039,22 @@
      attributes(global) subroutine bc_edge_x_backf(step,faiF)
       integer, value :: step
       logical, value :: faiF
-      integer :: i, l
+      integer :: i, l,m
   
       i = (blockIdx%x-1) * TILE_DIM + threadIdx%x - 1
 
       if (1<=i .and. i<=nx) then
         
         if (faiF) then
-          force_d (1:3,i,ny,nz_d) = force_d (1:3,i,0,0) + force_d (1:3,i,ny,nz_d)
+          do m=1,3
+            force_d(m,i,ny,nz_d) = force_d(m,i,0,0) + force_d(m,i,ny,nz_d)
 
-          force_d (1:3,i,ny,1) = force_d (1:3,i,0,nz_d+1) + force_d (1:3,i,ny,1)
+            force_d(m,i,ny,1) = force_d(m,i,0,nz_d+1) + force_d(m,i,ny,1)
 
-          force_d (1:3,i,1,nz_d) = force_d (1:3,i,ny+1,0) + force_d (1:3,i,1,nz_d)
+            force_d(m,i,1,nz_d) = force_d(m,i,ny+1,0) + force_d(m,i,1,nz_d)
 
-          force_d (1:3,i,1,1) = force_d (1:3,i,ny+1,nz_d+1) + force_d (1:3,i,1,1)
+            force_d(m,i,1,1) = force_d(m,i,ny+1,nz_d+1) + force_d(m,i,1,1)
+          enddo
         endif
       endif
     end subroutine bc_edge_x_backf
@@ -1071,7 +1163,7 @@
         endif
       endif  
 #else
-      if (myfluid_d(i,j,k, flip) == fluid_wall) then
+      if (myfluid_d(i,j,k, flip) <= fluid_wall) then
         do l = 1, npops-1
             i1 = i + ex_d(l)
             j1 = j + ey_d(l)
@@ -1101,8 +1193,91 @@
       if (i>nx+1) return
       if (j>ny+1) return
       if (k>nz_d+1) return
- 
-      if (myfluid_d(i,j,k, flip) == fluid_wall) then
+#if 1
+      ! Streaming      
+      if (myfluid_d(i,j,k, flip) <= fluid_wall) then
+        itemp=-int(myfluid_d(i,j,k, flip))
+        if(itemp>0)then
+          mytype=bctype_d(itemp)
+          if(mytype==1)then
+            rho = bcrho_d(1,itemp)
+            do l = 1, npops-1
+              i1 = i + ex_d(l)
+              j1 = j + ey_d(l)
+              k1 = k + ez_d(l)
+              if (myfluid_d(i1,j1,k1, flip) == fluid_fluid) then
+                lopp=opp_d(l)
+                u = vel_d(1,i1,j1,k1)
+                v = vel_d(2,i1,j1,k1)
+                w = vel_d(3,i1,j1,k1)
+                
+                uv = (ONE/cssq) * (u*ex_d(lopp) + v*ey_d(lopp) + w*ez_d(lopp))
+               
+                popsR_d(i,j,k,l, flip) = -popsR_d(i1,j1,k1,lopp, flip) + &
+                 TWO* rho*p_d(lopp)*(ONE+HALF*(uv*uv)-(HALF/cssq)*(u*u + v*v + w*w))
+              endif
+            enddo
+          elseif(mytype==2)then
+            u = bcvel_d(1,itemp)
+            v = bcvel_d(2,itemp)
+            w = bcvel_d(3,itemp)
+            do l = 1, npops-1
+              i1 = i + ex_d(l)
+              j1 = j + ey_d(l)
+              k1 = k + ez_d(l)
+              if (myfluid_d(i1,j1,k1, flip) == fluid_fluid) then
+                lopp=opp_d(l)
+                rho = rhoR_d(i1,j1,k1)
+                
+                uv = (ONE/cssq) * (u*ex_d(lopp) + v*ey_d(lopp) + w*ez_d(lopp))
+               
+                popsR_d(i,j,k,l, flip) = popsR_d(i1,j1,k1,lopp, flip) - &
+                 TWO* rho*p_d(lopp)*uv
+              endif
+            enddo
+          elseif(mytype==3)then
+            rho = bcrho_d(1,itemp)
+            u = bcvel_d(1,itemp)
+            v = bcvel_d(2,itemp)
+            w = bcvel_d(3,itemp)
+            do l = 1, npops-1
+              i1 = i + ex_d(l)
+              j1 = j + ey_d(l)
+              k1 = k + ez_d(l)
+              if (myfluid_d(i1,j1,k1, flip) == fluid_fluid) then
+                lopp=opp_d(l)
+                
+                uv = (ONE/cssq) * (u*ex_d(lopp) + v*ey_d(lopp) + w*ez_d(lopp))
+               
+                popsR_d(i,j,k,l, flip) = popsR_d(i1,j1,k1,lopp, flip) - &
+                 TWO* rho*p_d(lopp)*uv
+              endif
+            enddo
+          else
+            do l = 1, npops-1
+              i1 = i + ex_d(l)
+              j1 = j + ey_d(l)
+              k1 = k + ez_d(l)
+              if (myfluid_d(i1,j1,k1, flip) == fluid_fluid) then
+                lopp=opp_d(l)
+                popsR_d(i,j,k,l, flip) = popsR_d(i1,j1,k1,lopp, flip)
+              endif
+            enddo
+          endif
+        else
+          do l = 1, npops-1
+            i1 = i + ex_d(l)
+            j1 = j + ey_d(l)
+            k1 = k + ez_d(l)
+            if (myfluid_d(i1,j1,k1, flip) == fluid_fluid) then
+              lopp=opp_d(l)
+              popsR_d(i,j,k,l, flip) = popsR_d(i1,j1,k1,lopp, flip)
+            endif
+          enddo
+        endif
+      endif  
+#else 
+      if (myfluid_d(i,j,k, flip) <= fluid_wall) then
         do l = 1, npops-1
             i1 = i + ex_d(l)
             j1 = j + ey_d(l)
@@ -1116,7 +1291,7 @@
             endif
           enddo
       endif
- 
+#endif 
     end subroutine applybchalo_BGK
 
     attributes(global) subroutine stream_BGK_old(step, flip)
