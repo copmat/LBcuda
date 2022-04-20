@@ -7,7 +7,7 @@
     ! integer(4), parameter :: glx = 128, gly = glx, glz = glx
     integer(4), parameter :: nx = glx, ny = gly
     !integer(4) :: nz
-    integer, parameter :: nbuff=1
+    integer, parameter :: nbuff=2
     logical, parameter :: lraw=.true.
     
     logical, save :: diagnostic=.true.
@@ -31,8 +31,7 @@
     integer:: gsizes(3),lsizes(3),start_idx(3)
     integer:: offset(3)
     integer, save :: numbc=0
-    integer, allocatable :: bctype(:)
-    real, allocatable :: bcvec(:,:)
+    integer, allocatable :: bctype(:,:)
     real, allocatable :: bcvel(:,:)
     real, allocatable :: bcrho(:,:)
     
@@ -387,8 +386,7 @@
     integer, constant  :: offset_d(3)
     
     !BC
-    integer, allocatable, device :: bctype_d(:)
-    real, allocatable, device :: bcvec_d(:,:)
+    integer, allocatable, device :: bctype_d(:,:)
     real, allocatable, device :: bcvel_d(:,:)
     real, allocatable, device :: bcrho_d(:,:)
     

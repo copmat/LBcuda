@@ -264,7 +264,6 @@ program TestLB
 
 
       ! Boundary Conditions with new flipflop
-      !call doBoundary
       if (debug1) call OutputVTK("bb_",step, flipflop)
       
 ! 
@@ -332,11 +331,16 @@ program TestLB
       call fixPeriodic(.true., .false., "time_step_CG")
       if(ldiagnostic)call end_timing2("LB","fixPpop")
 
-      
+#ifdef APPLYBC  
+      if(ldiagnostic)call start_timing2("LB","applybc")
+      call fixPeriodic_hvar(.false.,.false.,.true.,"applybchalo_BGK")
+      call applybchalo_CG_R<<<dimGridhalo,dimBlockhalo >>>(step, flipflop) 
+      call applybchalo_CG_B<<<dimGridhalo,dimBlockhalo >>>(step, flipflop) 
+      if(ldiagnostic)call end_timing2("LB","applybc")
+#endif      
 
 
       ! Boundary Conditions with new flipflop
-      !call doBoundary
       if (debug1) call OutputVTK("bb_",step, flipflop)
       
 ! 
@@ -369,7 +373,6 @@ program TestLB
       
       
       
-      ! call doBoundary
       ! call OutputVTK("bb_",step, flipflop)
       
 #ifdef MOMBGK      
@@ -418,7 +421,7 @@ program TestLB
         
 #ifdef APPLYBC  
       if(ldiagnostic)call start_timing2("LB","applybc")
-      call fixPeriodic_hvar(.false.,.false.,.true.,"applybc_BGK")
+      call fixPeriodic_hvar(.false.,.false.,.true.,"applybchalo_BGK")
       call applybchalo_BGK<<<dimGridhalo,dimBlockhalo >>>(step, flipflop) 
       if(ldiagnostic)call end_timing2("LB","applybc")
 #endif
@@ -532,7 +535,7 @@ program TestLB
       namelist /simulation/ nIter,nIterOut,nIterVTK,initType, &
        lreadisfluid,lwriteisf,store_vel,numbc,lwriteisf_every,diagnostic   !,numscp
       namelist /fluid/ vx,vy,vz,densR,densB,tauR,tauB,f_cost,const_forced,forced,&
-       bctype,bcvec,bcvel,bcrho
+       bctype,bcvel,bcrho
       namelist /passive/ bcscptype,bcscp
       namelist /particle/ withParticles,numAtoms,lrotate,ext_fxx,ext_fyy,&
       ext_fzz,ext_tqx,ext_tqy,ext_tqz,max_vel
@@ -595,28 +598,30 @@ program TestLB
       open(unit=inputio,file=trim(inipFile),status='old')
       read(inputio,nml=simulation)
       if(numbc>0)then
-        allocate(bctype(numbc), STAT=istat)
-        if (istat /= 0) then
-          write(*,*) 'Allocation of particle bctype failed'
-        endif
-        bctype(1:numbc) = 0
-        allocate(bcvec(3,numbc), STAT=istat)
-        if (istat /= 0) then
-          write(*,*) 'Allocation of particle bcvec failed'
-        endif
-        bcvec(1:3,1:numbc) = 0.0
         allocate(bcvel(3,numbc), STAT=istat)
         if (istat /= 0) then
           write(*,*) 'Allocation of particle bcvel failed'
         endif
         bcvel(1:3,1:numbc) = 0.0
         if(withCG)then
+          allocate(bctype(2,numbc), STAT=istat)
+          if (istat /= 0) then
+            write(*,*) 'Allocation of particle bctype failed'
+          endif
+          bctype(1:2,1:numbc) = 0
+          
           allocate(bcrho(2,numbc), STAT=istat)
           if (istat /= 0) then
             write(*,*) 'Allocation of particle bcrho failed'
           endif
           bcrho(1:2,1:numbc) = 0.0
         else
+          allocate(bctype(1,numbc), STAT=istat)
+          if (istat /= 0) then
+            write(*,*) 'Allocation of particle bctype failed'
+          endif
+          bctype(1,1:numbc) = 0
+        
           allocate(bcrho(1,numbc), STAT=istat)
           if (istat /= 0) then
             write(*,*) 'Allocation of particle bcrho failed'
@@ -648,13 +653,6 @@ program TestLB
           write (*,*) 'when numbc>0 store_vel should be true'
           write (*,*) 'now store_vel = ',store_vel
           call mystop
-        else
-          do i=1,numbc
-            mydist=sqrt(bcvec(1,i)**2.0+bcvec(2,i)**2.0+bcvec(3,i)**2.0)
-            if(mydist.ne.ZERO)then
-              bcvec(1:3,i)=bcvec(1:3,i)/mydist
-            endif
-          enddo
         endif
       endif
       
@@ -2188,7 +2186,6 @@ program TestLB
               call bc_edge_z_backf<<<(nz+2+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step,faiF)
           endif
 
-          !call bc_corners<<<dimGridz, dimBlock2>>>(step, flipflop)
 
       
     end subroutine fixPeriodic_back_force
@@ -2644,11 +2641,11 @@ program TestLB
       write(*,fmt=100) 'numbc', numbc 
       if(numbc>0)then
         do i=1,numbc
-          write(*,'(a,i4,a,i4)')'bc number: ',i,'   type: ',bctype(i)
-          write(*,'(a,3f8.4)')'bc dir: ',bcvec(1:3,i)
           if(withCG)then
+            write(*,'(a,i4,a,2i4)')'bc number: ',i,'   type: ',bctype(1:2,i)
             write(*,'(a,2f8.4)')'bc rho: ',bcrho(1:2,i)
           else
+            write(*,'(a,i4,a,i4)')'bc number: ',i,'   type: ',bctype(1,i)
             write(*,'(a,1f8.4)')'bc rho: ',bcrho(1:1,i)
           endif
           write(*,'(a,3f8.4)')'bc vel: ',bcvel(1:3,i)
@@ -3562,17 +3559,6 @@ program TestLB
     numbc_d = numbc
     
     if(numbc>0)then
-      allocate(bctype_d(numbc), STAT=istat)
-      if (istat /= 0) then
-        write(*,*) 'Allocation of particle bctype_d failed'
-      end if
-      bctype_d = bctype
-      
-      allocate(bcvec_d(3,numbc), STAT=istat)
-      if (istat /= 0) then
-        write(*,*) 'Allocation of particle bcvec_d failed'
-      endif
-      bcvec_d = bcvec
       
       allocate(bcvel_d(3,numbc), STAT=istat)
       if (istat /= 0) then
@@ -3581,11 +3567,23 @@ program TestLB
       bcvel_d = bcvel
       
       if(withCG)then
+        allocate(bctype_d(2,numbc), STAT=istat)
+        if (istat /= 0) then
+          write(*,*) 'Allocation of particle bctype_d failed'
+        end if
+        bctype_d = bctype
+      
         allocate(bcrho_d(2,numbc), STAT=istat)
         if (istat /= 0) then
           write(*,*) 'Allocation of particle bcrho_d failed'
         endif
       else
+        allocate(bctype_d(1,numbc), STAT=istat)
+        if (istat /= 0) then
+          write(*,*) 'Allocation of particle bctype_d failed'
+        end if
+        bctype_d = bctype
+        
         allocate(bcrho_d(1,numbc), STAT=istat)
         if (istat /= 0) then
           write(*,*) 'Allocation of particle bcrho_d failed'
@@ -3953,7 +3951,8 @@ program TestLB
         if (istat/=0) write(*,*) 'status after sync rho B',istat
 
         call setupPops<<<dimGrid, dimBlock>>>(vx,vy,vz)
-
+      else if (initType == 7) then 
+        call setup2_xplanes<<<dimGrid, dimBlock>>>(vx,vy,vz)
       else
         write(*,*) 'Wront init type=', initType
         call mystop

@@ -1067,116 +1067,6 @@
       k = (blockIdx%y-1) * TILE_DIM + threadIdx%y - 1
     end subroutine bc_BGK_corners
     
-    attributes(global) subroutine applybc_BGK(step, flip)
-      integer, value :: step,flip
-      integer :: i,j,k, l, flop, lopp, itemp, mytype
-      integer :: i1,j1,k1
-      real :: u,v,w,uv,rho
-
-      i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
-      j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
-      k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
-      ! if (step==1 .and. 1==i*j*k) write(*,*) 'CUDA stream_BGK] i,k:',i,j,k
-
-      flop = 3 - flip
-#if 0
-      ! Streaming      
-      if (myfluid_d(i,j,k, flip) <= fluid_wall) then
-        itemp=-int(myfluid_d(i,j,k, flip))
-        if(itemp>0)then
-          mytype=bctype_d(itemp)
-          if(mytype==1)then
-            rho = bcrho_d(1,itemp)
-            do l = 1, npops-1
-              i1 = i + ex_d(l)
-              j1 = j + ey_d(l)
-              k1 = k + ez_d(l)
-              if (myfluid_d(i1,j1,k1, flip) == fluid_fluid) then
-                lopp=opp_d(l)
-                u = vel_d(1,i1,j1,k1)
-                v = vel_d(2,i1,j1,k1)
-                w = vel_d(3,i1,j1,k1)
-                
-                uv = (ONE/cssq) * (u*ex_d(lopp) + v*ey_d(lopp) + w*ez_d(lopp))
-               
-                popsR_d(i,j,k,l, flip) = -popsR_d(i1,j1,k1,lopp, flip) + &
-                 TWO* rho*p_d(lopp)*(ONE+HALF*(uv*uv)-(HALF/cssq)*(u*u + v*v + w*w))
-              endif
-            enddo
-          elseif(mytype==2)then
-            u = bcvel_d(1,itemp)
-            v = bcvel_d(2,itemp)
-            w = bcvel_d(3,itemp)
-            do l = 1, npops-1
-              i1 = i + ex_d(l)
-              j1 = j + ey_d(l)
-              k1 = k + ez_d(l)
-              if (myfluid_d(i1,j1,k1, flip) == fluid_fluid) then
-                lopp=opp_d(l)
-                rho = rhoR_d(i1,j1,k1)
-                
-                uv = (ONE/cssq) * (u*ex_d(lopp) + v*ey_d(lopp) + w*ez_d(lopp))
-               
-                popsR_d(i,j,k,l, flip) = popsR_d(i1,j1,k1,lopp, flip) - &
-                 TWO* rho*p_d(lopp)*uv
-              endif
-            enddo
-          elseif(mytype==3)then
-            rho = bcrho_d(1,itemp)
-            u = bcvel_d(1,itemp)
-            v = bcvel_d(2,itemp)
-            w = bcvel_d(3,itemp)
-            do l = 1, npops-1
-              i1 = i + ex_d(l)
-              j1 = j + ey_d(l)
-              k1 = k + ez_d(l)
-              if (myfluid_d(i1,j1,k1, flip) == fluid_fluid) then
-                lopp=opp_d(l)
-                
-                uv = (ONE/cssq) * (u*ex_d(lopp) + v*ey_d(lopp) + w*ez_d(lopp))
-               
-                popsR_d(i,j,k,l, flip) = popsR_d(i1,j1,k1,lopp, flip) - &
-                 TWO* rho*p_d(lopp)*uv
-              endif
-            enddo
-          else
-            do l = 1, npops-1
-              i1 = i + ex_d(l)
-              j1 = j + ey_d(l)
-              k1 = k + ez_d(l)
-              if (myfluid_d(i1,j1,k1, flip) == fluid_fluid) then
-                lopp=opp_d(l)
-                popsR_d(i,j,k,l, flip) = popsR_d(i1,j1,k1,lopp, flip)
-              endif
-            enddo
-          endif
-        else
-          do l = 1, npops-1
-            i1 = i + ex_d(l)
-            j1 = j + ey_d(l)
-            k1 = k + ez_d(l)
-            if (myfluid_d(i1,j1,k1, flip) == fluid_fluid) then
-              lopp=opp_d(l)
-              popsR_d(i,j,k,l, flip) = popsR_d(i1,j1,k1,lopp, flip)
-            endif
-          enddo
-        endif
-      endif  
-#else
-      if (myfluid_d(i,j,k, flip) <= fluid_wall) then
-        do l = 1, npops-1
-            i1 = i + ex_d(l)
-            j1 = j + ey_d(l)
-            k1 = k + ez_d(l)
-            if (myfluid_d(i1,j1,k1, flip) == fluid_fluid) then
-              lopp=opp_d(l)
-              popsR_d(i,j,k,l, flip) = popsR_d(i1,j1,k1,lopp, flip)
-            endif
-          enddo
-      endif
-#endif  
-    end subroutine applybc_BGK
-    
     attributes(global) subroutine applybchalo_BGK(step, flip)
       integer, value :: step,flip
       integer :: i,j,k, l, flop, lopp, itemp, mytype
@@ -1193,12 +1083,12 @@
       if (i>nx+1) return
       if (j>ny+1) return
       if (k>nz_d+1) return
-#if 1
+      
       ! Streaming      
       if (myfluid_d(i,j,k, flip) <= fluid_wall) then
         itemp=-int(myfluid_d(i,j,k, flip))
         if(itemp>0)then
-          mytype=bctype_d(itemp)
+          mytype=bctype_d(1,itemp)
           if(mytype==1)then
             rho = bcrho_d(1,itemp)
             do l = 1, npops-1
@@ -1276,22 +1166,7 @@
           enddo
         endif
       endif  
-#else 
-      if (myfluid_d(i,j,k, flip) <= fluid_wall) then
-        do l = 1, npops-1
-            i1 = i + ex_d(l)
-            j1 = j + ey_d(l)
-            k1 = k + ez_d(l)
-            if(i1<1 .or. i1>nx)cycle
-            if(j1<1 .or. j1>ny)cycle
-            if(k1<1 .or. k1>nz_d)cycle
-            if (myfluid_d(i1,j1,k1, flip) == fluid_fluid) then
-              lopp=opp_d(l)
-              popsR_d(i,j,k,l, flip) = popsR_d(i1,j1,k1,lopp, flip)
-            endif
-          enddo
-      endif
-#endif 
+       
     end subroutine applybchalo_BGK
 
     attributes(global) subroutine stream_BGK_old(step, flip)
