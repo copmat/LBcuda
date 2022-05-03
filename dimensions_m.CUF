@@ -18,6 +18,12 @@
     logical, save :: diagnostic=.true.
     integer, save :: tdiagnostic=1
     
+    logical, save :: lnozzlemove=.false.
+    real, save :: xnozzle,ynozzle
+    real, save :: A_lsj=0.0,B_lsj=0.0,at_lsj=0.0,bt_lsj=0.0
+    real, save :: d_lsj=0.0
+    real, save :: t_lsj=1.0
+    
 !
 ! mpi stuff
     integer:: nprocs, myrank, ierr
@@ -385,6 +391,10 @@
     
     real, dimension(3), constant :: f_cost_d 
     real, constant    :: A_rep_d
+    
+    logical, constant :: lnozzlemove_d
+    real, device :: xnozzle_d,ynozzle_d,A_lsj_d,B_lsj_d,at_lsj_d,bt_lsj_d
+    real, device :: d_lsj_d,t_lsj_d
 
     real, constant    :: ext_fxx_d, ext_fyy_d, ext_fzz_d
     real, constant    :: ext_tqx_d, ext_tqy_d, ext_tqz_d

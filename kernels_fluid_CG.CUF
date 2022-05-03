@@ -575,6 +575,14 @@
       k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
 
       if (step==1 .and. 1==i*j*k+offset_d(3)) write(*,*) 'CUDA init_rho_CG]'
+      
+      if(lnozzlemove_d)then
+        if(i==1 .and. j==1 .and. k==1)then
+          !Eq. of Lissajous curve
+          xnozzle_d = A_lsj_d*sin(at_lsj_d*real(step)*t_lsj_d+d_lsj_d*Pi)
+          ynozzle_d = B_lsj_d*sin(bt_lsj_d*real(step)*t_lsj_d)
+        endif
+      endif
 
       ! Only on fluid nodes
       if (myfluid_d(i,j,k, flip) == fluid_fluid) then

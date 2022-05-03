@@ -584,7 +584,8 @@ program TestLB
       real :: mydist
 #ifdef NEWINPUT      
       namelist /simulation/ nIter,nIterOut,nIterVTK,initType, &
-       lreadisfluid,lwriteisf,store_vel,numbc,lwriteisf_every,diagnostic   !,numscp
+       lreadisfluid,lwriteisf,store_vel,numbc,lwriteisf_every,diagnostic, &
+       lnozzlemove,A_lsj,B_lsj,at_lsj,bt_lsj,d_lsj,t_lsj
       namelist /fluid/ vx,vy,vz,densR,densB,tauR,tauB,f_cost,const_forced,forced,&
        bctype,bcvel,bcrho,denswallR,denswallB,A_rep,sigma_CG,beta_CG
       namelist /passive/ bcscptype,bcscp
@@ -2425,6 +2426,14 @@ program TestLB
       
       f_cost_d = f_cost
       A_rep_d = A_rep
+      
+      lnozzlemove_d = lnozzlemove
+      A_lsj_d = A_lsj
+      B_lsj_d = B_lsj
+      at_lsj_d = at_lsj
+      bt_lsj_d = bt_lsj
+      d_lsj_d = d_lsj
+      t_lsj_d = t_lsj
 
       numscp_d = numscp
       
@@ -2769,7 +2778,15 @@ program TestLB
 #ifdef NEARCONTACT
         write(*,fmt=105) 'Near contact'
         write(*,fmt=101) 'Near contact A_rep', A_rep
-#endif
+#endif  
+        
+        if(lnozzlemove)then
+          write(*,fmt=105) 'Nozzle moving with Lissajous curve'
+          write(*,fmt=109) 'Set Lissajous A and B ',A_lsj,B_lsj
+          write(*,fmt=109) 'Set Lissajous at and bt ',at_lsj,bt_lsj
+          write(*,fmt=109) 'Set Lissajous d and t ',d_lsj,t_lsj
+        endif
+        
         if (withParticles) then
           write(*,fmt=103) 'With Particles'
           write(*,fmt=104) 'External force', ext_fxx,ext_fyy,ext_fzz
