@@ -11,6 +11,8 @@
 #define APPLYBC
 #define noPBC
 #define SCPD3Q19GRAD
+#define FIXDENSWALL
+#define NEARCONTACT
 
 #ifndef MYDIMESION
 #define MYDIMESION 64

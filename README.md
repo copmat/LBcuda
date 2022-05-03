@@ -12,6 +12,7 @@ with contributions from:
                                                                         
 Giorgio Amati         CINECA-CED, Rome                     Italy        
 Massimo Bernaschi        IAC-CNR, Rome                     Italy        
+Filippo Spiga             NVIDIA, Cambridge        United Kindom        
 Sauro Succi              IAC-CNR, Rome                     Italy        
                                                                         
 The software development process has received funding from the          

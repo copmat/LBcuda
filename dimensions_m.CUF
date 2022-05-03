@@ -7,8 +7,13 @@
     ! integer(4), parameter :: glx = 128, gly = glx, glz = glx
     integer(4), parameter :: nx = glx, ny = gly
     !integer(4) :: nz
+#ifdef NEARCONTACT
+    integer, parameter :: nbuff=4
+#else
     integer, parameter :: nbuff=2
+#endif
     logical, parameter :: lraw=.true.
+    logical, parameter :: lpoptransf=.false.
     
     logical, save :: diagnostic=.true.
     integer, save :: tdiagnostic=1
@@ -34,7 +39,11 @@
     integer, allocatable :: bctype(:,:)
     real, allocatable :: bcvel(:,:)
     real, allocatable :: bcrho(:,:)
-    
+#ifdef FIXDENSWALL    
+    logical, parameter :: fixdenswall=.true.
+#else
+    logical, parameter :: fixdenswall=.false.
+#endif    
     integer, allocatable :: bcscptype(:)
     real, allocatable :: bcscp(:,:)
     
@@ -53,12 +62,13 @@
     logical, parameter :: textVTK = .false.
     logical, save :: forced = .false.
     logical, save :: const_forced = .false.
-    logical, save :: store_vel = .false.
+    logical, save :: store_vel = .true.
     logical, save :: lreadisfluid=.false.
     logical, save :: lwriteisf=.false.
     logical, save :: lwriteisf_every=.false.
     logical, save :: lbcforce=.false.
     real, dimension(3), save :: f_cost = (/ 0.0, 0.0, 0.0 /)
+    real, save    :: A_rep=0.0
 
     ! Moving boundaries..
     real, dimension(3), parameter :: wall_x0 = (/ 0.0, 0.0, 0.0 /), wall_x1 = (/ 0.0, 0.0, 0.0 /)
@@ -73,7 +83,7 @@
     logical, parameter :: withCG = .false.
 #endif
 
-    real, parameter :: sigma_CG = 0.1, beta_CG = 0.999
+    real, save :: sigma_CG = 0.1, beta_CG = 0.999
 
     ! Particles
     logical :: withParticles = .false.
@@ -89,6 +99,7 @@
     real               :: max_vel = 0.0
     
     real    :: densR,densB
+    real    :: denswallR,denswallB
     
     ! External particle forces
     real    :: ext_fxx, ext_fyy, ext_fzz
@@ -344,7 +355,7 @@
     integer, parameter :: fluid_particleCM = 5
 
   
-    ! Particles PBC
+    ! center PBC
     real, parameter :: cx=real(nx+1) * HALF
     real, parameter :: cy=real(ny+1) * HALF
     real, parameter :: cz=real(glz+1) * HALF
@@ -359,6 +370,7 @@
     real, constant :: fx_d,fy_d,fz_d, buz_d
     real, constant :: viscR_d,viscB_d
     real, constant :: densR_d,densB_d
+    real, constant :: denswallR_d,denswallB_d
     real, dimension(3), constant :: wall_x0_d, wall_x1_d
     real, dimension(3), constant :: wall_y0_d, wall_y1_d
     real, dimension(3), constant :: wall_z0_d, wall_z1_d
@@ -370,6 +382,9 @@
     real, dimension(0:npops-1), constant :: rec_fact_d
     
     real, dimension(1:3,1:3,0:npops-1), constant :: cmat_d
+    
+    real, dimension(3), constant :: f_cost_d 
+    real, constant    :: A_rep_d
 
     real, constant    :: ext_fxx_d, ext_fyy_d, ext_fzz_d
     real, constant    :: ext_tqx_d, ext_tqy_d, ext_tqz_d

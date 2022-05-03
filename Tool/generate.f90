@@ -89,7 +89,7 @@
  
  typedig=0
  
- write(6,*)'dig'
+ write(6,*)'dig',typedig
  if(typedig==1)then
    do k=1,nz
      do j=1,ny
@@ -165,7 +165,7 @@
  write(16)isfluid(inx:nx,iny:ny,inz:nz)
  close(16)
  
- write(6,*)'Everything is ok',iuno,izero,itre
+ write(6,*)'Everything is ok uno zero tre',iuno,izero,itre
  
  contains
  

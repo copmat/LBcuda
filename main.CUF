@@ -42,6 +42,7 @@ program TestLB
   real(4), allocatable :: forceAtoms(:,:,:)
   integer(1), allocatable :: myfluid(:,:,:,:)
   integer(1) :: prova1
+  integer, allocatable, dimension(:) :: inidom,findom
   integer :: nsphere=0,nspheredead=0, totSphere
   integer, allocatable :: spherelist(:,:),spherelistdead(:,:)
 
@@ -97,6 +98,11 @@ program TestLB
   call MPI_comm_size(MPI_COMM_WORLD, nprocs, ierr)
   call MPI_comm_rank(MPI_COMM_WORLD, myrank, ierr)
   nz = glz / nprocs
+  if(mod(glz,nprocs).ne.0)then
+    write (*,*) 'Global gnz is not divisible for the number of MPI tasks'
+    write (*,*) 'mod(glz,nprocs) = ',mod(glz,nprocs)
+    call mystop
+  endif
   call setupMPI(nz)
   nz_d = glz / nprocs
 #endif
@@ -106,6 +112,17 @@ program TestLB
   start_idx(1)=1
   start_idx(2)=1
   start_idx(3)=offset(3)+1
+  
+  allocate(inidom(0:nprocs-1))
+  allocate(findom(0:nprocs-1))
+  inidom(:)=0
+  findom(:)=-1
+  inidom(0)=1
+  findom(0)=nz+inidom(0)-1
+  do i=1,nprocs-1
+    inidom(i)=findom(i-1)+1
+    findom(i)=inidom(i)+nz-1
+  enddo
   
   
   call readParameters
@@ -316,9 +333,23 @@ program TestLB
       call fixPeriodic_hvar(.true.,.true.,.false.,"init_rho_CG")
       if(ldiagnostic)call end_timing2("LB","fixPhvar")
       
+#ifdef NEARCONTACT
+      if(ldiagnostic)call start_timing2("LB","nearsel")
+      call init_gradnearsel_CG<<<dimGrid, dimBlock>>>(step, flipflop)
+      call fixPeriodic_nearsel("nearsel_CG")
+      if(ldiagnostic)call end_timing2("LB","nearsel")
+#endif      
+      
+      
       if (debug1) call OutputVTK("rho_isfluid_",step, flipflop)
 
-
+#ifdef APPLYBC 
+      if(.not. fixdenswall)then
+        if(ldiagnostic)call start_timing2("LB","fixWall")
+        call compute_meandenswall("fixWall")
+        if(ldiagnostic)call end_timing2("LB","fixWall")
+      endif
+#endif 
 
 
       if(ldiagnostic)call start_timing2("LB","time_step")
@@ -333,9 +364,10 @@ program TestLB
 
 #ifdef APPLYBC  
       if(ldiagnostic)call start_timing2("LB","applybc")
-      call fixPeriodic_hvar(.false.,.false.,.true.,"applybchalo_BGK")
-      call applybchalo_CG_R<<<dimGridhalo,dimBlockhalo >>>(step, flipflop) 
-      call applybchalo_CG_B<<<dimGridhalo,dimBlockhalo >>>(step, flipflop) 
+      call fixPeriodic_hvar(.false.,.false.,.true.,"applybchalo")
+      !call applybchalo_CG_R<<<dimGridhalo,dimBlockhalo >>>(step, flipflop) 
+      !call applybchalo_CG_B<<<dimGridhalo,dimBlockhalo >>>(step, flipflop) 
+      call compute_applybc("applybchalo") 
       if(ldiagnostic)call end_timing2("LB","applybc")
 #endif      
 
@@ -507,6 +539,25 @@ program TestLB
 #endif
 
   contains
+  
+   function GET_RANK_POINT(ii,jj,kk)
+     
+      implicit none
+
+      integer, intent(in) :: ii,jj,kk
+     
+      integer :: k
+      integer :: GET_RANK_POINT
+  
+        do k=0,nprocs-1
+          if(kk<=findom(i))then
+            GET_RANK_POINT=k
+            exit
+          endif
+        enddo   
+      
+    end function GET_RANK_POINT
+  
     pure function viscosity_to_omega(visc)
       use dimensions_m
       implicit none
@@ -535,7 +586,7 @@ program TestLB
       namelist /simulation/ nIter,nIterOut,nIterVTK,initType, &
        lreadisfluid,lwriteisf,store_vel,numbc,lwriteisf_every,diagnostic   !,numscp
       namelist /fluid/ vx,vy,vz,densR,densB,tauR,tauB,f_cost,const_forced,forced,&
-       bctype,bcvel,bcrho
+       bctype,bcvel,bcrho,denswallR,denswallB,A_rep,sigma_CG,beta_CG
       namelist /passive/ bcscptype,bcscp
       namelist /particle/ withParticles,numAtoms,lrotate,ext_fxx,ext_fyy,&
       ext_fzz,ext_tqx,ext_tqy,ext_tqz,max_vel
@@ -600,31 +651,31 @@ program TestLB
       if(numbc>0)then
         allocate(bcvel(3,numbc), STAT=istat)
         if (istat /= 0) then
-          write(*,*) 'Allocation of particle bcvel failed'
+          write(*,*) 'Allocation of bcvel failed'
         endif
         bcvel(1:3,1:numbc) = 0.0
         if(withCG)then
           allocate(bctype(2,numbc), STAT=istat)
           if (istat /= 0) then
-            write(*,*) 'Allocation of particle bctype failed'
+            write(*,*) 'Allocation of bctype failed'
           endif
           bctype(1:2,1:numbc) = 0
           
           allocate(bcrho(2,numbc), STAT=istat)
           if (istat /= 0) then
-            write(*,*) 'Allocation of particle bcrho failed'
+            write(*,*) 'Allocation of bcrho failed'
           endif
           bcrho(1:2,1:numbc) = 0.0
         else
           allocate(bctype(1,numbc), STAT=istat)
           if (istat /= 0) then
-            write(*,*) 'Allocation of particle bctype failed'
+            write(*,*) 'Allocation of bctype failed'
           endif
           bctype(1,1:numbc) = 0
         
           allocate(bcrho(1,numbc), STAT=istat)
           if (istat /= 0) then
-            write(*,*) 'Allocation of particle bcrho failed'
+            write(*,*) 'Allocation of bcrho failed'
           endif
           bcrho(1,1:numbc) = 0.0
         endif
@@ -655,7 +706,14 @@ program TestLB
           call mystop
         endif
       endif
-      
+#ifndef PBC
+      if(.not. lreadisfluid)then
+        write (*,*) 'when PBC is false lreadisfluid should be true'
+        write (*,*) 'lreadisfluid = ',lreadisfluid
+        call mystop
+      endif
+#endif
+
       if(withSCP)then
         if(.not. store_vel)then
           write (*,*) 'when withSCP is true store_vel should be true'
@@ -666,7 +724,7 @@ program TestLB
       
 #ifdef APPLYBC
       if(nbuff<2)then
-        write (*,*) 'when APPLYBC is true nbuff should be true at least 2'
+        write (*,*) 'when APPLYBC is true nbuff should be at least 2'
         write (*,*) 'now nbuff = ',nbuff
         call mystop
       endif
@@ -850,6 +908,120 @@ program TestLB
       
 #endif      
     end subroutine fixPeriodic_isfluid
+    
+    
+    subroutine compute_meandenswall(msg)
+
+      
+      implicit none
+      character(len=*), intent(in) :: msg
+
+      call applybc_meandenswall<<<dimGrid,dimBlock>>>(step, flipflop)
+      call applybc_meandenswall_x<<<dimGridx, dimBlock2>>>(step, flipflop)
+      call applybc_meandenswall_y<<<dimGridy, dimBlock2>>>(step, flipflop)
+      call applybc_meandenswall_z<<<dimGridz, dimBlock2>>>(step, flipflop)
+      
+    end subroutine compute_meandenswall
+    
+    subroutine compute_applybc(msg)
+
+      
+      implicit none
+      
+      character(len=*), intent(in) :: msg
+      
+      call applybc_CG_R<<<dimGrid,dimBlock>>>(step, flipflop) 
+      call applybc_CG_B<<<dimGrid,dimBlock>>>(step, flipflop) 
+      
+      call applybc_CG_R_x<<<dimGridx, dimBlock2>>>(step, flipflop)
+      call applybc_CG_R_y<<<dimGridy, dimBlock2>>>(step, flipflop)
+      call applybc_CG_R_z<<<dimGridz, dimBlock2>>>(step, flipflop)
+      
+      call applybc_CG_B_x<<<dimGridx, dimBlock2>>>(step, flipflop)
+      call applybc_CG_B_y<<<dimGridy, dimBlock2>>>(step, flipflop)
+      call applybc_CG_B_z<<<dimGridz, dimBlock2>>>(step, flipflop)
+      
+    end subroutine compute_applybc
+    
+    subroutine fixPeriodic_nearsel(msg)
+#ifdef SERIAL
+      implicit none
+      character(len=*), intent(in) :: msg
+
+      
+        if(xperiodic)&
+         call nearsel_per_x<<<dimGridsidex, dimBlock2>>>(step, flipflop)
+        if(yperiodic)&
+         call nearsel_per_y<<<dimGridsidey, dimBlock2>>>(step, flipflop)
+        if(zperiodic)&
+         call nearsel_per_z<<<dimGridsidez, dimBlock2>>>(step, flipflop)
+
+        if(xperiodic)&
+         call nearsel_edge_x<<<(nx+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
+        if(yperiodic)&
+         call nearsel_edge_y<<<(ny+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
+        if(zperiodic)&
+         call nearsel_edge_z<<<(nz+2*nbuff+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
+    
+#else
+      use mpi
+      implicit none
+      character(len=*), intent(in) :: msg
+
+      integer      :: reqs_right(5)
+      integer      :: status_up(MPI_STATUS_SIZE)
+      integer      :: reqs_up(5)
+      integer      :: status_down(MPI_STATUS_SIZE)
+      integer      :: reqs_down(5)
+      integer      :: tag
+
+        if(.not. (xperiodic .or. yperiodic .or. zperiodic))return
+        
+        call nearsel_per_x<<<dimGridsidex, dimBlock2>>>(step, flipflop)
+        call nearsel_per_y<<<dimGridsidey, dimBlock2>>>(step, flipflop)
+
+        call abortOnLastErrorAndSync(msg,step, flipflop)
+
+        ! if it is the same task, there's no need to send/recv data
+        if(up(2) == myrank) then
+          call nearsel_per_z<<<dimGridsidez, dimBlock2>>>(step, flipflop)
+        else
+          ! 1) isend to up task 
+          tag = 405
+          call mpi_isend(nearsel_d(1-nbuff,1-nbuff,nz+1-nbuff), 1, xyplane_int1, up(2), tag, &
+                            lbecomm, reqs_up(1), ierr)
+          !
+          ! 2) recv from down task
+          tag = 405
+          call  mpi_recv(nearsel_d(1-nbuff,1-nbuff,1-nbuff), 1, xyplane_int1, down(2), tag, &
+                            lbecomm, status_up, ierr)
+          !
+          ! 3) isend to down task
+          tag = 406
+          call mpi_isend(nearsel_d(1-nbuff,1-nbuff, 1), 1, xyplane_int1, down(2), tag, &
+                            lbecomm, reqs_down(1), ierr)
+          !
+          ! 4) recv from up task
+          tag = 406
+          call  mpi_recv(nearsel_d(1-nbuff,1-nbuff,nz+1), 1, xyplane_int1, up(2), tag, &
+                            lbecomm, status_down, ierr)
+          !
+          ! 5) syncronize
+          call mpi_wait(reqs_up(1), status_up, ierr)
+          call mpi_wait(reqs_down(1), status_down, ierr)
+        endif
+
+        ! if it is the same task, there's no need to send/recv data
+        if(up(2) == myrank) then
+          call nearsel_edge_x<<<(nx+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
+          call nearsel_edge_y<<<(ny+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
+          call nearsel_edge_z<<<(nz+2*nbuff+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
+        else
+          call nearsel_edge_z<<<(nz+2*nbuff+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
+        endif
+      
+#endif      
+    end subroutine fixPeriodic_nearsel
 
     subroutine fixPeriodic(faiPops,faiRho, msg)
 #ifdef SERIAL
@@ -2190,28 +2362,6 @@ program TestLB
       
     end subroutine fixPeriodic_back_force
 
-    subroutine doBoundary
-      implicit none
-      if (withCG) then
-          
-      else
-        if (xperiodic) then
-            call bc_per_x<<<dimGridx, dimBlock2>>>(step, flipflop)
-        else
-            call bc_bb_x<<<dimGridx, dimBlock2>>>(step, flipflop)
-        endif
-        if (yperiodic) then
-            call bc_per_y<<<dimGridy, dimBlock2>>>(step, flipflop)
-        else
-            call bc_bb_y<<<dimGridy, dimBlock2>>>(step, flipflop)
-        endif
-        if (zperiodic) then
-            call bc_per_z<<<dimGridz, dimBlock2>>>(step, flipflop)
-        else
-            call bc_bb_z<<<dimGridz, dimBlock2>>>(step, flipflop)
-        endif
-      endif
-    end subroutine doBoundary
 
 
     subroutine setVirtualNodes
@@ -2257,7 +2407,10 @@ program TestLB
       densB = ONE
       densR_d = densR
       densB_d = densB
-#endif      
+#endif  
+      denswallR_d = denswallR
+      denswallB_d = denswallB    
+      
       viscR = cssq*(tauR-HALF)
       viscB = cssq*(tauB-HALF)
       omega = ONE / tauR
@@ -2265,8 +2418,14 @@ program TestLB
       viscR_d = viscR
       viscB_d = viscB
       
+      sigma_CG_d = sigma_CG
+      beta_CG_d = beta_CG
+      
       nbuff_d = nbuff
       
+      f_cost_d = f_cost
+      A_rep_d = A_rep
+
       numscp_d = numscp
       
       store_vel_d = store_vel
@@ -2602,8 +2761,15 @@ program TestLB
         write(*,fmt=105) 'Color gradient'
         write(*,fmt=101) 'Color gradient sigma', sigma_CG
         write(*,fmt=101) 'Color gradient beta', beta_CG
-        write(*,fmt=107) 'Initial fluid vel and density',vx,vy,vz,densR,densB
+        
+        write(*,fmt=109) 'Initial density ',densR,densB
+        write(*,fmt=109) 'Set fluid wall density',denswallR,denswallB
+        write(*,fmt=104) 'Initial velocity ',vx,vy,vz
 
+#ifdef NEARCONTACT
+        write(*,fmt=105) 'Near contact'
+        write(*,fmt=101) 'Near contact A_rep', A_rep
+#endif
         if (withParticles) then
           write(*,fmt=103) 'With Particles'
           write(*,fmt=104) 'External force', ext_fxx,ext_fyy,ext_fzz
@@ -2682,6 +2848,7 @@ program TestLB
 106    format(a20, ':', F20.2)
 107    format(a20, ':', 5F20.8)
 108    format('             Lattice:', a5)
+109    format(a20, ':', 2F20.8)
     end subroutine printParams
 
 
@@ -3048,43 +3215,55 @@ program TestLB
       ! if (fname(1:5) /= 'step_' .and. fname(1:4)/= 'stop') return
       
       call system_clock(c_start)
-      istat = cudaMemcpy(pop_pinned, popsR_d(:,:,:,:,flip), (nx+2)*(ny+2)*(nz+2)*npops )
-      if (istat/=0) write(*,*) 'status after copy R:',istat, 'flipflop',flipflop
-      istat = cudaDeviceSynchronize
-      if (istat/=0) write(*,*) 'status after deviceSync',istat
-
+      if(lpoptransf)then
+        istat = cudaMemcpy(pop_pinned, popsR_d(:,:,:,:,flip), (nx+2)*(ny+2)*(nz+2)*npops )
+        if (istat/=0) write(*,*) 'status after copy R:',istat, 'flipflop',flipflop
+        istat = cudaDeviceSynchronize
+        if (istat/=0) write(*,*) 'status after deviceSync',istat
+      endif
+      if (.not. withCG) then
+        if(lpoptransf)then
+          call moments1Fl(nz, pop_pinned,rhoR, vel, myfluid, flip)
+        else
+          istat = cudaMemcpy(rhoR, rhoR_d, (nx+2*nbuff)*(ny+2*nbuff)*(nz+2*nbuff) )
+          if (istat/=0) write(*,*) 'status after rho R:',istat
+          istat = cudaDeviceSynchronize
+          if (istat/=0) write(*,*) 'status after rho R',istat
+          
+          istat = cudaMemcpy(vel, vel_d, (nx+2*nbuff)*(ny+2*nbuff)*(nz+2*nbuff)*3 )
+          if (istat/=0) write(*,*) 'status after vel:',istat
+          istat = cudaDeviceSynchronize
+          if (istat/=0) write(*,*) 'status after vel',istat
+        endif
+      endif
       call system_clock(c_stop)
       diff_xfer = c_stop-c_start
-
-      if (.not. withCG) then
-        call moments1Fl(nz, pop_pinned,rhoR, vel, myfluid, flip)
-        
-!        istat = cudaMemcpy(rhoR, rhoR_d(:,:,:), (nx+2*nbuff)*(ny+2*nbuff)*(nz+2*nbuff) )
-!        if (istat/=0) write(*,*) 'status after rho R:',istat
-!        istat = cudaDeviceSynchronize
-!        if (istat/=0) write(*,*) 'status after rho R',istat
-      endif
-
+      
       if (withCG) then
         call system_clock(c_start2)
+        if(lpoptransf)then
+          istat = cudaMemcpy(popB_pinned, popsB_d(:,:,:,:,flip), (nx+2)*(ny+2)*(nz+2)*npops )
+          if (istat/=0) write(*,*) 'status after copy B:',istat, 'flipflop',flipflop
+          istat = cudaDeviceSynchronize
+          if (istat/=0) write(*,*) 'status after deviceSync B',istat
          
-        istat = cudaMemcpy(popB_pinned, popsB_d(:,:,:,:,flip), (nx+2)*(ny+2)*(nz+2)*npops )
-        if (istat/=0) write(*,*) 'status after copy B:',istat, 'flipflop',flipflop
-        istat = cudaDeviceSynchronize
-        if (istat/=0) write(*,*) 'status after deviceSync B',istat
-         
-         call moments2Fl(nz, pop_pinned,rhoR, popB_pinned,rhoB, vel, phase, myfluid, flip)
+          call moments2Fl(nz, pop_pinned,rhoR, popB_pinned,rhoB, vel, phase, myfluid, flip)
+        else
+          istat = cudaMemcpy(rhoR, rhoR_d, (nx+2*nbuff)*(ny+2*nbuff)*(nz+2*nbuff) )
+          if (istat/=0) write(*,*) 'status after rho R:',istat
+          istat = cudaDeviceSynchronize
+          if (istat/=0) write(*,*) 'status after rho R',istat
 
-!         istat = cudaMemcpy(rhoR, rhoR_d(:,:,:), (nx+2*nbuff)*(ny+2*nbuff)*(nz+2*nbuff) )
-!         if (istat/=0) write(*,*) 'status after rho R:',istat
-!         istat = cudaDeviceSynchronize
-!         if (istat/=0) write(*,*) 'status after rho R',istat
-
-!         istat = cudaMemcpy(rhoB, rhoB_d(:,:,:), (nx+2*nbuff)*(ny+2*nbuff)*(nz+2*nbuff) )
-!         if (istat/=0) write(*,*) 'status after rho B:',istat
-!         istat = cudaDeviceSynchronize
-!         if (istat/=0) write(*,*) 'status after rho B',istat
-
+          istat = cudaMemcpy(rhoB, rhoB_d, (nx+2*nbuff)*(ny+2*nbuff)*(nz+2*nbuff) )
+          if (istat/=0) write(*,*) 'status after rho B:',istat
+          istat = cudaDeviceSynchronize
+          if (istat/=0) write(*,*) 'status after rho B',istat
+          
+          istat = cudaMemcpy(vel, vel_d, (nx+2*nbuff)*(ny+2*nbuff)*(nz+2*nbuff)*3 )
+          if (istat/=0) write(*,*) 'status after vel:',istat
+          istat = cudaDeviceSynchronize
+          if (istat/=0) write(*,*) 'status after vel',istat
+        endif
          call system_clock(c_stop)
          diff_xfer = diff_xfer + c_stop-c_start2
 
@@ -3562,31 +3741,31 @@ program TestLB
       
       allocate(bcvel_d(3,numbc), STAT=istat)
       if (istat /= 0) then
-        write(*,*) 'Allocation of particle bcvel_d failed'
+        write(*,*) 'Allocation of bcvel_d failed'
       endif
       bcvel_d = bcvel
       
       if(withCG)then
         allocate(bctype_d(2,numbc), STAT=istat)
         if (istat /= 0) then
-          write(*,*) 'Allocation of particle bctype_d failed'
+          write(*,*) 'Allocation of bctype_d failed'
         end if
         bctype_d = bctype
       
         allocate(bcrho_d(2,numbc), STAT=istat)
         if (istat /= 0) then
-          write(*,*) 'Allocation of particle bcrho_d failed'
+          write(*,*) 'Allocation of bcrho_d failed'
         endif
       else
         allocate(bctype_d(1,numbc), STAT=istat)
         if (istat /= 0) then
-          write(*,*) 'Allocation of particle bctype_d failed'
+          write(*,*) 'Allocation of bctype_d failed'
         end if
         bctype_d = bctype
         
         allocate(bcrho_d(1,numbc), STAT=istat)
         if (istat /= 0) then
-          write(*,*) 'Allocation of particle bcrho_d failed'
+          write(*,*) 'Allocation of bcrho_d failed'
         endif
       endif
       bcrho_d = bcrho
@@ -3608,11 +3787,11 @@ program TestLB
 
     allocate(myfluid_d(1-nbuff:nx+nbuff,1-nbuff:ny+nbuff,1-nbuff:nz+nbuff,2), STAT=istat)
     if (istat /= 0) then
-      write(*,*) 'Allocation of particle myfluid_d failed'
+      write(*,*) 'Allocation of myfluid_d failed'
     end if
     allocate(debugfluid_d(1-nbuff:nx+nbuff,1-nbuff:ny+nbuff,1-nbuff:nz+nbuff), STAT=istat)
     if (istat /= 0) then
-      write(*,*) 'Allocation of particle debugfluid_d failed'
+      write(*,*) 'Allocation of debugfluid_d failed'
     end if
     
   
@@ -3641,12 +3820,18 @@ program TestLB
         write(*,*) 'Allocation of popsB_d failed'
         call mystop
       end if
-      popB_pinned = 0.0
+      popsB_d = 0.0
   
       allocate(rhoB_d(1-nbuff:nx+nbuff,1-nbuff:ny+nbuff,1-nbuff:nz+nbuff), STAT=istat)
       if (istat /= 0) then
         write(*,*) 'Allocation of rhoB_d failed'
       end if
+      
+      allocate(nearsel_d(1-nbuff:nx+nbuff,1-nbuff:ny+nbuff,1-nbuff:nz+nbuff), STAT=istat)
+      if (istat /= 0) then
+        write(*,*) 'Allocation of nearsel_d failed'
+      endif
+      nearsel_d = 0
 
       if (withParticles) then
         if (myrank== 0) write(*,fmt=16) numAtoms
@@ -3740,7 +3925,8 @@ program TestLB
         end if
         
       endif
-    end if
+    endif
+ 
   
     ! output device info and transfer size
     istat = cudaGetDeviceProperties(prop, 0)
@@ -3953,6 +4139,10 @@ program TestLB
         call setupPops<<<dimGrid, dimBlock>>>(vx,vy,vz)
       else if (initType == 7) then 
         call setup2_xplanes<<<dimGrid, dimBlock>>>(vx,vy,vz)
+      else if (initType == 8) then 
+        call setup2_collid<<<dimGrid, dimBlock>>>(vx,vy,vz)
+      else if (initType == 9) then
+        call setup2_sphere<<<dimGrid, dimBlock>>>(vx,vy,vz,64.0,64.0,16.0,10.0)
       else
         write(*,*) 'Wront init type=', initType
         call mystop
@@ -3990,6 +4180,7 @@ program TestLB
     endif
       
     if(lreadisfluid)then
+      if(myrank==0)write(6,'(a)')'Reading isfluid.init.bin'
       allocate(myis(glx,gly,glz))
       inquire(file='isfluid.init.bin',exist=lexist)
       if(.not. lexist)then

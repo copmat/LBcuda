@@ -11,6 +11,7 @@
     real(4), allocatable, device :: popsSCP_d(:,:,:,:,:,:)
     real(4), allocatable, device :: force_d(:,:,:,:)
     real(4), allocatable, device :: rhoR_d(:,:,:),rhoB_d(:,:,:)
+    integer(1), allocatable, device :: nearsel_d(:,:,:)
     real(4), allocatable, device :: vel_d(:,:,:,:)
     
     real(4), allocatable, device :: scalar_d(:,:,:,:)
