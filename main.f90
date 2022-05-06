@@ -60,7 +60,10 @@ program TestLB
   type (dim3) :: dimGridSubd, dimBlockSubd
   type (cudaDeviceProp) :: prop
   real(4) :: mytime,mymemory,totmemory,myramhost
-  integer :: istat, flipflop, nIter,nIterOut,nIterVTK, step
+  integer :: istat, flipflop, nIter,nIterOut,nIterVTK,step,nIterVTKmin
+  integer :: nIterVTK2d=0
+  integer :: numVTK2d=0
+  integer, allocatable, dimension(:) :: ivecVTK2d,iselVTK2d
   integer :: i,j,k
   logical :: pinnedFlag = .true.
 
@@ -171,7 +174,11 @@ program TestLB
 !    enddo
 !  enddo
   
-  ! if (wantOut) call DumpBorderPlanez("step_", 0, 1)  
+  istat = cudaMemcpy(myfluid,myfluid_d, (nx+2*nbuff)*(ny+2*nbuff)*(nz+2*nbuff)*2 )
+  if (istat/=0) write(*,*) 'status after myfluid:',istat
+  istat = cudaDeviceSynchronize
+  if (istat/=0) write(*,*) 'status after myfluid',istat
+
   if (wantOut) call OutputVTK("step_", 0, 1)
 !  istat = cudaDeviceSynchronize
 !  if (myrank== 0) write(*,*) 'ciaone'
@@ -365,8 +372,6 @@ program TestLB
 #ifdef APPLYBC  
       if(ldiagnostic)call start_timing2("LB","applybc")
       call fixPeriodic_hvar(.false.,.false.,.true.,"applybchalo")
-      !call applybchalo_CG_R<<<dimGridhalo,dimBlockhalo >>>(step, flipflop) 
-      !call applybchalo_CG_B<<<dimGridhalo,dimBlockhalo >>>(step, flipflop) 
       call compute_applybc("applybchalo") 
       if(ldiagnostic)call end_timing2("LB","applybc")
 #endif      
@@ -377,10 +382,7 @@ program TestLB
       
 ! 
       if(ldiagnostic)call start_timing2("LB","streaming")
-      !call flipflopRPop0_CG<<<dimGrid, dimBlock>>>(step, flipflop)
       call streamR_CG<<<dimGrid, dimBlock >>>(step, flipflop)
-
-      !call flipflopBPop0_CG<<<dimGrid, dimBlock>>>(step, flipflop)
       call streamB_CG<<<dimGrid, dimBlock >>>(step, flipflop) 
 ! 
 
@@ -509,7 +511,7 @@ program TestLB
 
     if (wantOut) then
       ! if (mod(step,niterVTK)==0) call DumpBorderPlanez("step_",step, flipflop)      
-      if (mod(step,niterVTK)==0)then
+      if (mod(step,nIterVTKmin)==0)then
         if(ldiagnostic)call start_timing2("IO","OutVTK")
         call OutputVTK("step_",step, flipflop)
         if(ldiagnostic)call end_timing2("IO","OutVTK")  
@@ -584,12 +586,15 @@ program TestLB
       real :: mydist
 #ifdef NEWINPUT      
       namelist /simulation/ nIter,nIterOut,nIterVTK,initType, &
-       lreadisfluid,lwriteisf,store_vel,numbc,lwriteisf_every,diagnostic   !,numscp
+       lreadisfluid,lwriteisf,store_vel,numbc,lwriteisf_every,diagnostic, &
+       nIterVTK2d,numVTK2d      !,numscp
       namelist /fluid/ vx,vy,vz,densR,densB,tauR,tauB,f_cost,const_forced,forced,&
        bctype,bcvel,bcrho,denswallR,denswallB,A_rep,sigma_CG,beta_CG
       namelist /passive/ bcscptype,bcscp
       namelist /particle/ withParticles,numAtoms,lrotate,ext_fxx,ext_fyy,&
-      ext_fzz,ext_tqx,ext_tqy,ext_tqz,max_vel
+      ext_fzz,ext_tqx,ext_tqy,ext_tqz,max_vel, &
+       ivecVTK2d,iselVTK2d
+     
 #endif      
       nIter = 0.2*1000*1000*1000 / lup * 10
       nIterOut = nIter / 10
@@ -604,7 +609,7 @@ program TestLB
 #ifdef NEWINPUT
       lcheck=.false.
       count = command_argument_count()
-      if(count==1)then
+      if(count>=1)then
         i=1
         arg=repeat(' ',maxlen)
         call getarg(i, arg)
@@ -647,7 +652,9 @@ program TestLB
         call mystop
       endif
       open(unit=inputio,file=trim(inipFile),status='old')
+      
       read(inputio,nml=simulation)
+      
       if(numbc>0)then
         allocate(bcvel(3,numbc), STAT=istat)
         if (istat /= 0) then
@@ -679,6 +686,7 @@ program TestLB
           endif
           bcrho(1,1:numbc) = 0.0
         endif
+      endif
         if(withSCP)then
           allocate(bcscptype(numbc), STAT=istat)
           if (istat /= 0) then
@@ -692,12 +700,36 @@ program TestLB
           endif
           bcscp(1:numscp,1:numbc) = 0.0
         endif
+
+      if(numVTK2d>0)then
+        allocate(ivecVTK2d(numVTK2d), STAT=istat)
+	    if (istat /= 0) then
+          write(*,*) 'Allocation of ivecVTK2d failed'
+        endif
+        ivecVTK2d=0
+        
+        allocate(iselVTK2d(numVTK2d), STAT=istat)
+	    if (istat /= 0) then
+          write(*,*) 'Allocation of iselVTK2d failed'
+        endif
+        
       endif
       
       read(inputio,nml=fluid)
       read(inputio,nml=passive)
       read(inputio,nml=particle)
       close(inputio)
+      
+      if(numVTK2d>0)then
+        nIterVTKmin=min(nIterVTK,nIterVTK2d)
+        if(any(ivecVTK2d>3) .or. any(ivecVTK2d<1))then
+          write (*,*) 'when ivecVTK2d should be from 1 to 3'
+          write (*,*) 'now ivecVTK2d = ',ivecVTK2d
+          call mystop
+        endif
+      else
+        nIterVTKmin=nIterVTK
+      endif
       
       if(numbc>0)then
         if(.not. store_vel)then
@@ -861,15 +893,17 @@ program TestLB
       integer      :: reqs_down(5)
       integer      :: tag
 
-        if(.not. (xperiodic .or. yperiodic .or. zperiodic))return
         
+       if(xperiodic)& 
         call isfluid_per_x<<<dimGridsidex, dimBlock2>>>(step, flipflop)
+       if(yperiodic)&
         call isfluid_per_y<<<dimGridsidey, dimBlock2>>>(step, flipflop)
 
         call abortOnLastErrorAndSync(msg,step, flipflop)
 
         ! if it is the same task, there's no need to send/recv data
         if(up(2) == myrank) then
+         if(zperiodic)&
           call isfluid_per_z<<<dimGridsidez, dimBlock2>>>(step, flipflop)
         else
           ! 1) isend to up task 
@@ -899,10 +933,14 @@ program TestLB
 
         ! if it is the same task, there's no need to send/recv data
         if(up(2) == myrank) then
+         if(xperiodic)&
           call isfluid_edge_x<<<(nx+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
+         if(yperiodic)&
           call isfluid_edge_y<<<(ny+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
+         if(zperiodic)&
           call isfluid_edge_z<<<(nz+2*nbuff+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
         else
+         if(zperiodic)&
           call isfluid_edge_z<<<(nz+2*nbuff+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
         endif
       
@@ -975,15 +1013,17 @@ program TestLB
       integer      :: reqs_down(5)
       integer      :: tag
 
-        if(.not. (xperiodic .or. yperiodic .or. zperiodic))return
         
+       if(xperiodic)& 
         call nearsel_per_x<<<dimGridsidex, dimBlock2>>>(step, flipflop)
+       if(yperiodic)&
         call nearsel_per_y<<<dimGridsidey, dimBlock2>>>(step, flipflop)
 
         call abortOnLastErrorAndSync(msg,step, flipflop)
 
         ! if it is the same task, there's no need to send/recv data
         if(up(2) == myrank) then
+         if(zperiodic)&
           call nearsel_per_z<<<dimGridsidez, dimBlock2>>>(step, flipflop)
         else
           ! 1) isend to up task 
@@ -1013,10 +1053,14 @@ program TestLB
 
         ! if it is the same task, there's no need to send/recv data
         if(up(2) == myrank) then
+         if(xperiodic)&
           call nearsel_edge_x<<<(nx+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
+         if(yperiodic)&
           call nearsel_edge_y<<<(ny+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
+         if(zperiodic)&
           call nearsel_edge_z<<<(nz+2*nbuff+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
         else
+         if(zperiodic)&
           call nearsel_edge_z<<<(nz+2*nbuff+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step, flipflop)
         endif
       
@@ -1727,12 +1771,13 @@ program TestLB
       logical :: faiRho,faiRhoB,faiVelsub
       logical :: faivel
           
-          if(.not. (xperiodic .or. yperiodic .or. zperiodic))return
+          
           
           faivel = (faivelsub .and. store_vel)
           
-
+         if(xperiodic)&
           call bc_per_x_hvar<<<dimGridsidex, dimBlock2>>>(step,faiRho,faiRhoB,faiVel)
+         if(yperiodic)&
           call bc_per_y_hvar<<<dimGridsidey, dimBlock2>>>(step,faiRho,faiRhoB,faiVel)
           
           
@@ -1740,6 +1785,7 @@ program TestLB
 
 ! if it is the same task, there's no need to send/recv data
           if(up(2) == myrank) then
+           if(zperiodic)&
              call bc_per_z_hvar<<<dimGridsidez, dimBlock2>>>(step,faiRho,faiRhoB,faiVel)
           else 
             if (faiRho) then
@@ -1834,14 +1880,18 @@ program TestLB
           endif
 
           if(up(2) == myrank) then
+           if(xperiodic)&
             call bc_edge_x_hvar<<<(nx+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step,faiRho,faiRhoB,faiVel)
-            call bc_edge_y_hvar<<<(ny+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step,faiRho,faiRhoB,faiVel)  
+           if(yperiodic)&
+            call bc_edge_y_hvar<<<(ny+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step,faiRho,faiRhoB,faiVel)
+           if(zperiodic)&
             call bc_edge_z_hvar<<<(nz+2*nbuff+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step,faiRho,faiRhoB,faiVel)
           else
             ! NON VA FATTO
               !call abortOnLastErrorAndSync(msg,step, flipflop)
               
 !             mpi rho+pop myrank <--> up(2)
+            if(zperiodic)&
              call bc_edge_z_hvar<<<(nz+2*nbuff+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step,faiRho,faiRhoB,faiVel)
           endif
 
@@ -2205,12 +2255,13 @@ program TestLB
       logical :: faiRho
 
           
-          if(.not. (xperiodic .or. yperiodic .or. zperiodic))return
+          
           
   
           
-
+         if(xperiodic)&
           call bc_per_x_svar<<<dimGridsidex, dimBlock2>>>(step,faiRho)
+         if(yperiodic)&
           call bc_per_y_svar<<<dimGridsidey, dimBlock2>>>(step,faiRho)
           
           
@@ -2218,6 +2269,7 @@ program TestLB
 
 ! if it is the same task, there's no need to send/recv data
           if(up(2) == myrank) then
+            if(zperiodic)&
              call bc_per_z_svar<<<dimGridsidez, dimBlock2>>>(step,faiRho)
           else 
             if (faiRho) then
@@ -2254,14 +2306,18 @@ program TestLB
           endif
 
           if(up(2) == myrank) then
+           if(xperiodic)&
             call bc_edge_x_svar<<<(nx+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step,faiRho)
+           if(yperiodic)&
             call bc_edge_y_svar<<<(ny+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step,faiRho)  
+           if(zperiodic)&
             call bc_edge_z_svar<<<(nz+2*nbuff+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step,faiRho)
           else
             ! NON VA FATTO
               !call abortOnLastErrorAndSync(msg,step, flipflop)
               
 !             mpi rho+pop myrank <--> up(2)
+            if(zperiodic)&
              call bc_edge_z_svar<<<(nz+2*nbuff+TILE_DIM-1)/TILE_DIM, TILE_DIM>>>(step,faiRho)
           endif
 
@@ -2429,6 +2485,14 @@ program TestLB
       numscp_d = numscp
       
       store_vel_d = store_vel
+      
+      totrho = 0.0
+      totrho_d = totrho
+      totrhobuff_d = totrho
+      
+      
+      
+      niterVTK_d = nIterVTKmin
       
       if(densR.eq.1.0)then
         alphaCG(1)=p(0)
@@ -2836,7 +2900,26 @@ program TestLB
         volatms = 4.0/3.0 * Pi * rdim**THREE
         write(*,fmt=106) 'Vol. fraction (%)', 100*volatms*numAtoms / real(glx*gly*glz)
       endif
+      if(numVTK2d>0)then
+        
+        write(*,fmt=100) '2D VTK every', nIterVTK2d 
+        write(*,fmt=100)'numVTK2d',numVTK2d 
+        do i=1,numVTK2d
+          select case(ivecVTK2d(i))
+          case(1)
+	        write(*,'(a)')'VTK2d plane: YZ'
+	        write(*,'(a,8i)')'VTK2d at X : ',iselVTK2d(i)
+	      case(2)
+	        write(*,'(a)')'VTK2d plane: XZ'
+	        write(*,'(a,8i)')'VTK2d at Y : ',iselVTK2d(i)
+	      case(3)
+	        write(*,'(a)')'VTK2d plane: XY'
+	        write(*,'(a,8i)')'VTK2d at Z : ',iselVTK2d(i)
+	      end select
+        enddo
+      endif
       write(*,*) '************************'
+
       write(*,*)
 
 100    format(a20, ':', I8)
@@ -3207,6 +3290,19 @@ program TestLB
       integer(8) :: c_start,c_stop,diff_xfer,c_start2, pops_time
       character(len=120) :: mynamefile, mynamefile0, mynamefile1
       real(4)     :: plane0(nx+2,ny+2), plane1(nx+2,ny+2)
+      logical, save :: lfirst=.true.
+      integer, parameter :: myunit=865
+      integer :: isel,i,mydest
+      character(len=13) :: string13a
+      character(len=14) :: string14a
+      
+      if(lfirst)then
+        lfirst=.false.
+        if(myrank== 0)then
+          open(unit=myunit,file='bcvalue.dat',status='replace',action='write')
+          write(myunit,'(a)')'# totrho'
+        endif
+      endif
       
       myfluid = myfluid_d
       istat = cudaDeviceSynchronize
@@ -3229,11 +3325,12 @@ program TestLB
           if (istat/=0) write(*,*) 'status after rho R:',istat
           istat = cudaDeviceSynchronize
           if (istat/=0) write(*,*) 'status after rho R',istat
-          
-          istat = cudaMemcpy(vel, vel_d, (nx+2*nbuff)*(ny+2*nbuff)*(nz+2*nbuff)*3 )
-          if (istat/=0) write(*,*) 'status after vel:',istat
-          istat = cudaDeviceSynchronize
-          if (istat/=0) write(*,*) 'status after vel',istat
+          if(lprintvel)then
+            istat = cudaMemcpy(vel, vel_d, (nx+2*nbuff)*(ny+2*nbuff)*(nz+2*nbuff)*3 )
+            if (istat/=0) write(*,*) 'status after vel:',istat
+            istat = cudaDeviceSynchronize
+            if (istat/=0) write(*,*) 'status after vel',istat
+          endif
         endif
       endif
       call system_clock(c_stop)
@@ -3258,11 +3355,12 @@ program TestLB
           if (istat/=0) write(*,*) 'status after rho B:',istat
           istat = cudaDeviceSynchronize
           if (istat/=0) write(*,*) 'status after rho B',istat
-          
-          istat = cudaMemcpy(vel, vel_d, (nx+2*nbuff)*(ny+2*nbuff)*(nz+2*nbuff)*3 )
-          if (istat/=0) write(*,*) 'status after vel:',istat
-          istat = cudaDeviceSynchronize
-          if (istat/=0) write(*,*) 'status after vel',istat
+          if(lprintvel)then
+            istat = cudaMemcpy(vel, vel_d, (nx+2*nbuff)*(ny+2*nbuff)*(nz+2*nbuff)*3 )
+            if (istat/=0) write(*,*) 'status after vel:',istat
+            istat = cudaDeviceSynchronize
+            if (istat/=0) write(*,*) 'status after vel',istat
+          endif
         endif
          call system_clock(c_stop)
          diff_xfer = diff_xfer + c_stop-c_start2
@@ -3279,19 +3377,31 @@ program TestLB
           mynamefile = trim(fname)//'rhoB'
          endif
          
-         do k=1,nz
-           do j=1,ny
-             do i=1,nx
-               if(myfluid(i,j,k,flip) /= fluid_fluid )then
-                 rhoB(i,j,k) = ZERO
-                 phase(i,j,k) = ZERO
-               endif
+         if(lprintrhoB)then
+           do k=1,nz
+             do j=1,ny
+               do i=1,nx
+                 if(myfluid(i,j,k,flip) /= fluid_fluid )then
+                   rhoB(i,j,k) = ZERO
+                 endif
+               enddo
              enddo
            enddo
-         enddo
-
-         call writeImageDataVTI(nz, mynamefile,step, 'rho2', rhoB, textVTK, myfluid, flip)
-         call writeImageDataVTI(nz, "phase",step, 'phase', phase, textVTK, myfluid, flip)
+         endif
+         if(lprintphase)then
+           do k=1,nz
+             do j=1,ny
+               do i=1,nx
+                 if(myfluid(i,j,k,flip) == fluid_fluid )then
+                   phase(i,j,k) = (rhoR(i,j,k)-rhoB(i,j,k))/(rhoR(i,j,k)+rhoB(i,j,k))
+                 else
+                   phase(i,j,k) = ZERO
+                 endif
+               enddo
+             enddo
+           enddo
+         endif
+         
       endif
       
       do k=1,nz
@@ -3299,20 +3409,25 @@ program TestLB
            do i=1,nx
              if(myfluid(i,j,k,flip) /= fluid_fluid )then
                rhoR(i,j,k) = ZERO
-               vel(1:3,i,j,k) = ZERO
              endif
            enddo
          enddo
        enddo
       
-      mynamefile = repeat(' ',120)
-      if (fname(1:5) == 'step_') then
-        mynamefile = 'rho'
-      else
-        mynamefile = trim(fname)//'rho'
+      if(lprintvel)then
+        do k=1,nz
+          do j=1,ny
+            do i=1,nx
+              if(myfluid(i,j,k,flip) /= fluid_fluid )then
+                vel(1:3,i,j,k) = ZERO
+              endif
+            enddo
+          enddo
+        enddo
       endif
-      call writeImageDataVTI(nz, mynamefile,step, 'rho1', rhoR, textVTK, myfluid, flip)
-      call writeImageDataVTI_3d(nz, "vel",step, vel, textVTK, myfluid, flip)
+      
+      
+      
       if(lwriteisf .and. (lwriteisf_every .or. step==0))then
         mynamefile = repeat(' ',120)
         if (fname(1:5) == 'step_') then
@@ -3321,7 +3436,141 @@ program TestLB
            mynamefile = trim(fname)//'_isfluid'
         endif
         call writeImageDataVTI_isfluid_nopart(nz, mynamefile,step, myfluid, flip, textVTK)
+        if(numVTK2d>0)then
+          do i=1,numVTK2d
+            isel=iselVTK2d(i)
+            string13a='isf2d_'//write_fmtnumb(i)//'_'
+            select case(ivecVTK2d(i))
+            case(1)
+              call writeImageDataVTI_YZ(isel,nz,string13a,step, 'isfluid', rhoR, &
+               textVTK, myfluid, flip,.true.)
+            case(2)
+              call writeImageDataVTI_XZ(isel,nz,string13a,step, 'isfluid', rhoR, &
+               textVTK, myfluid, flip,.true.)
+            case(3)
+              mydest=GET_RANK_POINT(nx/2,ny/2,isel)
+              call writeImageDataVTI_XY(isel,mydest,nz,string13a,step,'isfluid', rhoR, &
+               textVTK, myfluid, flip,.true.)
+            end select
+          enddo
+        endif
       endif
+
+
+      
+      if (myrank== 0) then
+
+          
+          if(lcompute_totrho)then
+            istat = cudaMemcpy(totrho,totrho_d,1)
+            if (istat/=0) write(*,*) 'status after copy totrho:',istat, &
+             'flipflop',flipflop
+            istat = cudaDeviceSynchronize
+            if (istat/=0) write(*,*) 'status after deviceSync',istat
+          endif
+          
+          write(myunit,'(f20.10)')totrho
+        
+      endif
+      
+      if(numVTK2d>0)then
+        if(mod(step,niterVTK2d).eq.0)then
+          do i=1,numVTK2d
+            isel=iselVTK2d(i)
+            string13a='rho2d_'//write_fmtnumb(i)//'_'
+            select case(ivecVTK2d(i))
+            case(1)
+              call writeImageDataVTI_YZ(isel,nz,string13a,step, 'densR', rhoR, &
+               textVTK, myfluid, flip,.false.)
+               
+              if(lprintrhoB)then
+               string14a='rhoB2d_'//write_fmtnumb(i)//'_'
+               call writeImageDataVTI_YZ(isel,nz,string14a,step, 'densB', &
+               rhoB, textVTK, myfluid, flip,.false.)
+              endif
+               
+              if(lprintphase)then
+               string14a='phas2d_'//write_fmtnumb(i)//'_'
+               call writeImageDataVTI_YZ(isel,nz,string14a,step, 'phase', &
+               phase, textVTK, myfluid, flip,.false.)
+              endif
+              
+              if(lprintvel)then
+                string13a='vel2d_'//write_fmtnumb(i)//'_'
+                call writeImageDataVTI_YZ_3d(isel,nz,string13a,step, 'vel', &
+                 vel, textVTK, myfluid, flip)
+              endif
+               
+            case(2)
+              call writeImageDataVTI_XZ(isel,nz,string13a,step, 'densR', rhoR, &
+               textVTK, myfluid, flip,.false.)
+               
+              if(lprintrhoB)then
+               string14a='rhoB2d_'//write_fmtnumb(i)//'_'
+               call writeImageDataVTI_XZ(isel,nz,string14a,step, 'densB', &
+               rhoB, textVTK, myfluid, flip,.false.)
+              endif
+               
+              if(lprintphase)then
+               string14a='phas2d_'//write_fmtnumb(i)//'_'
+               call writeImageDataVTI_XZ(isel,nz,string14a,step, 'phase', &
+               phase, textVTK, myfluid, flip,.false.)
+              endif
+              
+              if(lprintvel)then
+                string13a='vel2d_'//write_fmtnumb(i)//'_'
+                call writeImageDataVTI_XZ_3d(isel,nz,string13a,step, 'vel', &
+                 vel, textVTK, myfluid, flip)
+              endif
+               
+            case(3)
+              mydest=GET_RANK_POINT(nx/2,ny/2,isel)
+              call writeImageDataVTI_XY(isel,mydest,nz,string13a,step, 'densR', &
+               rhoR, textVTK, myfluid, flip,.false.)
+               
+              if(lprintrhoB)then
+               string14a='rhoB2d_'//write_fmtnumb(i)//'_'
+               call writeImageDataVTI_XY(isel,mydest,nz,string14a,step, 'densB', &
+               rhoB, textVTK, myfluid, flip,.false.)
+              endif
+               
+              if(lprintphase)then
+               string14a='phas2d_'//write_fmtnumb(i)//'_'
+               call writeImageDataVTI_XY(isel,mydest,nz,string14a,step, 'phase', &
+               phase, textVTK, myfluid, flip,.false.)
+              endif
+               
+              if(lprintvel)then
+                string13a='vel2d_'//write_fmtnumb(i)//'_'
+                call writeImageDataVTI_XY_3d(isel,mydest,nz,string13a,step, 'vel', &
+                 vel, textVTK, myfluid, flip)
+              endif
+               
+            end select
+          enddo
+          call system_clock(c_stop)
+          if (myrank== 0) then
+            write(*,fmt=201) (c_stop-c_start)/real(clock_rate), diff_xfer/real(clock_rate), pops_time/real(clock_rate)
+201         format('Time for 2DVTK:', G10.2, ' secs (tranfer time:', G10.2, ' secs, pops:',G10.2, ')')
+          endif
+        endif
+      endif
+      
+      
+      if(mod(step,niterVTK).ne.0)return
+      
+      call writeImageDataVTI(nz,'rho',step, 'densR', rhoR, textVTK, myfluid, flip)
+      if (withCG) then
+        if(lprintrhoB)then
+          call writeImageDataVTI(nz,'rhoB',step, 'rhoB', rhoB, textVTK, myfluid, flip)
+        endif
+        if(lprintphase)then
+          call writeImageDataVTI(nz, "phase",step, 'phase', phase, textVTK, myfluid, flip)
+        endif
+      endif
+      if(lprintvel)call writeImageDataVTI_3d(nz, "vel",step,"velocity",vel, textVTK, myfluid, flip)
+      
+
       if (withParticles) then
         call system_clock(c_start2)
 
@@ -3356,10 +3605,10 @@ program TestLB
 
       call system_clock(c_stop)
       if (myrank== 0) then
-        write(*,fmt=201) (c_stop-c_start)/real(clock_rate), diff_xfer/real(clock_rate), pops_time/real(clock_rate)
-201     format('Time for VTK:', G10.2, ' secs (tranfer time:', G10.2, ' secs, pops:',G10.2, ')')
+        write(*,fmt=301) (c_stop-c_start)/real(clock_rate), diff_xfer/real(clock_rate), pops_time/real(clock_rate)
+301     format('Time for 3DVTK:', G10.2, ' secs (tranfer time:', G10.2, ' secs, pops:',G10.2, ')')
       endif
-
+      
    end subroutine OutputVTK
 
 
@@ -4086,7 +4335,7 @@ program TestLB
     integer(kind=1), allocatable, dimension(:,:,:) :: myis
     
     logical :: lexist
-    integer :: i,ii,j,jj,k,kk,itemp
+    integer :: i,ii,j,jj,k,kk,itemp,mytype
     
     if (myrank== 0) write(*,*) 'Initial setup...'
     rhoR = 0
@@ -4143,6 +4392,9 @@ program TestLB
         call setup2_collid<<<dimGrid, dimBlock>>>(vx,vy,vz)
       else if (initType == 9) then
         call setup2_sphere<<<dimGrid, dimBlock>>>(vx,vy,vz,64.0,64.0,16.0,10.0)
+      else if (initType == 10) then
+        call setup2_cylinder<<<dimGrid, dimBlock>>>(vx,vy,vz,&
+         152.0,16.0,25.0,20.0,2)
       else
         write(*,*) 'Wront init type=', initType
         call mystop

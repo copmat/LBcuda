@@ -12,11 +12,16 @@
 #else
     integer, parameter :: nbuff=2
 #endif
-    logical, parameter :: lraw=.true.
+    logical, parameter :: lprintraw=.false.
+    logical, parameter :: lprintvel=.true.
+    logical, parameter :: lprintrhoB=.false.
+    logical, parameter :: lprintphase=.false.
     logical, parameter :: lpoptransf=.false.
+    logical, parameter :: lcompute_totrho=.true.
     
     logical, save :: diagnostic=.true.
     integer, save :: tdiagnostic=1
+    real, save :: totrho(1)
     
 !
 ! mpi stuff
@@ -63,8 +68,13 @@
     logical, save :: forced = .false.
     logical, save :: const_forced = .false.
     logical, save :: store_vel = .true.
+#ifdef APPLYBC
+    logical, save :: lreadisfluid=.true.
+    logical, save :: lwriteisf=.true.
+#else
     logical, save :: lreadisfluid=.false.
     logical, save :: lwriteisf=.false.
+#endif
     logical, save :: lwriteisf_every=.false.
     logical, save :: lbcforce=.false.
     real, dimension(3), save :: f_cost = (/ 0.0, 0.0, 0.0 /)
@@ -404,6 +414,9 @@
     integer, allocatable, device :: bctype_d(:,:)
     real, allocatable, device :: bcvel_d(:,:)
     real, allocatable, device :: bcrho_d(:,:)
+    real, device :: totrho_d(1)
+    real, device :: totrhobuff_d(1)
+    integer, constant :: niterVTK_d
     
     integer, allocatable, device :: bcscptype_d(:)
     real, allocatable, device :: bcscp_d(:,:)

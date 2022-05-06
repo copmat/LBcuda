@@ -123,6 +123,101 @@
       write(6,*) 'MPI-DEBUG',myrank,':down  task ', down(2)
 #endif
       end subroutine setupMPI
+      
+      subroutine MY_CART_SHIFT(mycomm_cart,myndims,mydims,myperiods, &
+      mycoords,myshift,getfrom,giveto,lfromdo,ltodo,lfromloc,ltoloc, &
+      ldoipdc)
+      
+      use dimensions_m
+      use mpi
+      
+      implicit none
+
+      integer, intent(in) :: mycomm_cart,myndims
+      integer, intent(in), dimension(myndims) :: mydims,mycoords,myshift
+      logical, intent(in), dimension(myndims) :: myperiods
+      integer, intent(out) :: getfrom,giveto
+      logical, intent(out) :: lfromdo,ltodo
+      !if true the bounce back condition should be treated in the same rank
+      logical, intent(out) :: lfromloc,ltoloc
+      !if true the periodic condition should be treated in the same rank
+      logical, intent(out) :: ldoipdc
+      
+      integer :: i,ierrs
+      integer, dimension(myndims) :: cordfrom,cordto
+      logical, dimension(myndims) :: mytoshift,myfromshift
+      logical :: ldoto,ldofrom, lfromipdc,ltoipdc
+      
+      mytoshift(1:myndims)=.true.
+      myfromshift(1:myndims)=.true.
+      cordto(1:myndims)=mycoords(1:myndims)+myshift(1:myndims)
+      cordfrom(1:myndims)=mycoords(1:myndims)-myshift(1:myndims)
+      do i=1,3
+        !if I am moving and I am not periodic
+        if(myshift(i)/=0 .and. (.not. myperiods(i)))then
+          !If I am going out do not nothing
+          if(cordto(i)>=mydims(i) .or. cordto(i)<0)then
+            mytoshift(i)=.false.
+          endif
+          !If I am going out do not nothing
+          if(cordfrom(i)>=mydims(i) .or. cordfrom(i)<0)then
+            myfromshift(i)=.false.
+          endif
+        endif
+      enddo
+      
+      ldoto=.false.
+      if(all(mytoshift))ldoto=.true.
+      
+      ldofrom=.false.
+      if(all(myfromshift))ldofrom=.true.
+      
+      !write(6,*)'ldoto ',ldoto
+      !write(6,*)'ldofrom ',ldofrom
+      lfromloc=.false.
+      ltoloc=.false.
+      lfromdo=.false.
+      ltodo=.false.
+      lfromipdc=.false.
+      ltoipdc=.false.
+      if(ldoto)then
+        call MPI_Cart_rank(mycomm_cart,cordto,giveto,ierrs)
+        if(myrank.ne.giveto)then
+          ltodo=.true.
+        else
+          !if I should send to me so the problem is internal periodic
+          ltoipdc=.true.
+        endif
+      else
+        giveto=myrank
+        ltoloc=.true.
+      endif
+      
+      if(ldofrom)then
+        call MPI_Cart_rank(mycomm_cart,cordfrom,getfrom,ierrs)
+        if(myrank.ne.getfrom)then
+          lfromdo=.true.
+        else
+          !if I should send to me so the problem is internal periodic
+          lfromipdc=.true.
+        endif
+      else
+        getfrom=myrank
+        lfromloc=.true.
+      endif
+      
+      ldoipdc=.false.
+      if(ltoipdc)then
+        if(lfromipdc)then
+          ldoipdc=.true.
+        else
+          write(6,*)'WARNING in MY_CART_SHIFT ',ltoipdc,lfromipdc
+        endif
+      endif
+        
+      
+      
+     end subroutine
 
       subroutine mystop
        use mpi

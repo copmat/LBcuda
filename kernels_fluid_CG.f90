@@ -275,6 +275,75 @@
       countp2n2_d = 0
     end subroutine setup2_sphere
     
+    attributes(global) subroutine setup2_cylinder(vx,vy,vz,cx,cy,cz, &
+     radius,isel)
+      real, value :: vx,vy,vz,cx,cy,cz,radius
+      integer, value :: isel
+      integer :: i,j,k, l
+      integer :: gli,glj,glk
+      real    :: rhoR,rhoB, u,v,w, eqR,eqB, distx,disty,distz, rdist,tempr
+  
+      i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
+      j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
+      k = (blockIdx%z-1) * TILE_DIMz + threadIdx%z
+      
+      gli = i + offset_d(1)
+      glj = j + offset_d(2)
+      glk = k + offset_d(3)
+
+
+      distx = gli - cx
+      disty = glj - cy
+      distz = glk - cz
+      select case(isel)
+      case(1)
+        rdist = sqrt(disty*disty + distz*distz)
+      case(2)
+        rdist = sqrt(distx*distx + distz*distz)
+      case(3)
+        rdist = sqrt(distx*distx + disty*disty)
+      end select
+      
+      tempr = fcut(rdist, radius, radius+0.1)
+#ifdef DIFFDENS
+      rhoR = tempr*densR_d
+      rhoB = (1.0 - tempr)*densB_d
+#else
+      rhoR = tempr
+      rhoB = (1.0 - tempr)
+#endif
+      u = vx
+      v = vy
+      w = vz
+  
+      rhoR_d(i,j,k) = rhoR
+      rhoB_d(i,j,k) = rhoB
+      do l = 0, npops-1
+#ifdef DIFFDENS
+	      eqR = equilCG(rhoR, u,v,w, 1, l)
+	      eqB = equilCG(rhoB, u,v,w, 2, l)
+#else
+          eqR = equil(rhoR, u,v,w, l)
+	      eqB = equil(rhoB, u,v,w, l)
+#endif
+        popsR_d(i,j,k, l, 1) = eqR
+        popsB_d(i,j,k, l, 1) = eqB
+
+        ! Clears other stuff
+        popsR_d(i,j,k, l, 2) = 0.0
+        popsB_d(i,j,k, l, 2) = 0.0
+      end do
+
+      myfluid_d(i,j,k, 1) = fluid_fluid
+      myfluid_d(i,j,k, 2) = fluid_fluid
+      debugfluid_d(i,j,k) = 0
+
+      countmk_d = 0
+      countrm_d = 0
+      countn2p_d = 0
+      countp2n1_d = 0
+      countp2n2_d = 0
+    end subroutine setup2_cylinder
     
     attributes(global) subroutine setup2_collid(vx,vy,vz)
       real, value :: vx,vy,vz
@@ -1487,7 +1556,7 @@
       integer :: i,j,k, i1,j1,k1,l
       integer :: li,lj,lk
       integer :: gli,glj,glk
-      integer :: inx,iny,inz,llx,lly,llz,ss
+      integer :: inx,iny,inz,llx,lly,llz,ss,istatR,istatB
 
       i = (blockIdx%x-1) * TILE_DIMx + threadIdx%x
       j = (blockIdx%y-1) * TILE_DIMy + threadIdx%y
@@ -1618,6 +1687,12 @@
         rhoR = loc_rhoR(li,lj,lk)
         rhoB = loc_rhoB(li,lj,lk)
         rhosum = rhoR + rhoB
+
+        if(lcompute_totrho)then
+          if(mod(step,niterVTK_d)==0)then
+            istatR=atomicadd(totrhobuff_d(1),rhoR_d(i,j,k)+rhoB_d(i,j,k))
+          endif
+        endif
 #ifdef DIFFDENS
         phase_field = (rhoR/densR_d - rhoB/densB_d) / &
            (rhoR/densR_d + rhoB/densB_d)
@@ -1923,6 +1998,9 @@
       if (step==1 .and. 1==i*j*k+offset_d(3)) write(*,*) 'CUDA streamR_CG]'
 
       flop = 3 - flip
+      if(lcompute_totrho)then
+        if(i==1 .and. j==1 .and. k==1)totrhobuff_d(1)=0.0
+      endif
 
       ! Streaming
       if (myfluid_d(i,j,k, flip) < fluid_dead) then
@@ -2679,11 +2757,11 @@
                 w = vel_d(3,i1,j1,k1)
                 
                 uv = (ONE/cssq) * (u*ex_d(lopp) + v*ey_d(lopp) + w*ez_d(lopp))
-#ifdef DIFFDENS
+#ifdef DIFFDENS 
                 popsR_d(i,j,k,l, flip) = -popsR_d(i1,j1,k1,lopp, flip) + &
                  TWO* rho*(phi_d(lopp) + varphi_d(lopp)*alphaCG_d(1)+ &
-                 p_d(lopp)*(HALF*(uv*uv)-(HALF/cssq)*(u*u + v*v + w*w)))
-#else
+                 p_d(lopp)*(HALF*(uv*uv)-(HALF/cssq)*(u*u + v*v + w*w)))           
+#else               
                 popsR_d(i,j,k,l, flip) = -popsR_d(i1,j1,k1,lopp, flip) + &
                  TWO* rho*p_d(lopp)*(ONE+HALF*(uv*uv)-(HALF/cssq)*(u*u + v*v + w*w))
 #endif
@@ -2776,11 +2854,11 @@
                 w = vel_d(3,i1,j1,k1)
                 
                 uv = (ONE/cssq) * (u*ex_d(lopp) + v*ey_d(lopp) + w*ez_d(lopp))
-#ifdef DIFFDENS
+#ifdef DIFFDENS 
                 popsB_d(i,j,k,l, flip) = -popsB_d(i1,j1,k1,lopp, flip) + &
                  TWO* rho*(phi_d(lopp) + varphi_d(lopp)*alphaCG_d(2)+ &
-                 p_d(lopp)*(HALF*(uv*uv)-(HALF/cssq)*(u*u + v*v + w*w)))
-#else
+                 p_d(lopp)*(HALF*(uv*uv)-(HALF/cssq)*(u*u + v*v + w*w)))           
+#else                  
                 popsB_d(i,j,k,l, flip) = -popsB_d(i1,j1,k1,lopp, flip) + &
                  TWO* rho*p_d(lopp)*(ONE+HALF*(uv*uv)-(HALF/cssq)*(u*u + v*v + w*w))
 #endif

@@ -141,6 +141,8 @@
    enddo
  enddo
  
+ call write_isfluid_VTI(0)
+ 
  izero=0
  iuno=0
  itre=0
@@ -168,6 +170,155 @@
  write(6,*)'Everything is ok uno zero tre',iuno,izero,itre
  
  contains
+ 
+ subroutine write_isfluid_VTI(myframe)
+  implicit none
+  
+  integer, intent(in) :: myframe
+  real(4),allocatable, save :: rho4(:,:,:)
+  logical, parameter :: textual=.false.
+  character(len=120) :: fnameFull,extent
+  integer i,j,k, iotest,iotest2
+  integer(4)         :: length
+  logical,save :: lfirst=.true.
+  
+  character(len=*), parameter :: fname='genisf'
+  
+  
+  
+  if(lfirst)then
+    lfirst=.false.
+    allocate(rho4(nx,ny,nz))
+  endif
+  
+  
+  
+  rho4(1:nx,1:ny,1:nz)=real(isfluid(1:nx,1:ny,1:nz),kind=4)
+
+  iotest = 55
+  fnameFull = trim(fname) // '_' // trim(write_fmtnumb(myframe)) // '.vti'
+  open(unit=iotest,file=trim(fnameFull),status='replace',action='write')
+
+  extent =  trim(write_fmtnumb(1)) // ' ' // trim(write_fmtnumb(nx)) // ' ' &
+        // trim(write_fmtnumb(1)) // ' ' // trim(write_fmtnumb(ny)) // ' ' &
+        // trim(write_fmtnumb(1)) // ' ' // trim(write_fmtnumb(nz))
+
+  write(iotest,*) '<VTKFile type="ImageData" version="1.0" byte_order="LittleEndian" >'
+  write(iotest,*) ' <ImageData WholeExtent="' // trim(extent) // '" >'
+  write(iotest,*) ' <Piece Extent="' // trim(extent) // '">'
+  write(iotest,*) '   <PointData>'
+
+  if (textual) then
+    write(iotest,*) '    <DataArray type="Float32" Name="',trim(fname),'" format="ascii" >'
+
+    do k=1,nz
+      do j=1,ny
+        do i=1,nx
+          write(iotest,fmt='("     ", F20.8)') rho4(i,j,k)
+        enddo
+      enddo
+    enddo
+
+    write(iotest,*) '    </DataArray>'
+    write(iotest,*) '   </PointData>'
+    write(iotest,*) ' </Piece>'
+    write(iotest,*) ' </ImageData>'
+  else
+    write(iotest,*) '    <DataArray type="Float32" Name="',trim(fname),'" format="appended" offset="0" />'
+    write(iotest,*) '   </PointData>'
+    write(iotest,*) ' </Piece>'
+    write(iotest,*) ' </ImageData>'
+    write(iotest,*) ' <AppendedData encoding="raw">'
+    close(iotest)
+
+    open(unit=iotest,file=trim(fnameFull),status='old',position='append', &
+                access='stream',form='unformatted',action='write')
+    write(iotest) '_'
+    length = 4*nx*ny*nz
+    write(iotest) length, rho4(1:nx,1:ny,1:nz)
+    close(iotest)
+
+    open(unit=iotest,file=trim(fnameFull),status='old',position='append', &
+                action='write')
+    write(iotest,*) ''
+    write(iotest,*) ' </AppendedData>'
+  endif
+
+  write(iotest,*) '</VTKFile >'
+  close(iotest)
+  
+  
+  
+ end subroutine write_isfluid_VTI
+ 
+ function dimenumb(inum)
+ 
+    !***********************************************************************
+    !    
+    !     LBsoft function for returning the number of digits
+    !     of an integer number
+    !     originally written in JETSPIN by M. Lauricella et al.
+    !    
+    !     licensed under the 3-Clause BSD License (BSD-3-Clause)
+    !     author: M. Lauricella
+    !     last modification July 2018
+    !    
+    !***********************************************************************
+
+      implicit none
+
+      integer,intent(in) :: inum
+      integer :: dimenumb
+      integer :: i
+      real*8 :: tmp
+
+      i=1
+      tmp=real(inum,kind=8)
+      do
+      if(tmp< 10.d0 )exit
+        i=i+1
+        tmp=tmp/ 10.0d0
+      enddo
+
+      dimenumb=i
+
+      return
+
+     end function dimenumb
+
+    function write_fmtnumb(inum)
+ 
+    !***********************************************************************
+    !    
+    !     LBsoft function for returning the string of six characters
+    !     with integer digits and leading zeros to the left
+    !     originally written in JETSPIN by M. Lauricella et al.
+    !    
+    !     licensed under the 3-Clause BSD License (BSD-3-Clause)
+    !     author: M. Lauricella
+    !     last modification July 2018
+    !    
+    !***********************************************************************
+ 
+    implicit none
+
+    integer,intent(in) :: inum
+    character(len=6) :: write_fmtnumb
+    integer :: numdigit,irest
+    !real*8 :: tmp
+    character(len=22) :: cnumberlabel
+    numdigit=dimenumb(inum)
+    irest=6-numdigit
+    if(irest>0)then
+        write(cnumberlabel,"(a,i8,a,i8,a)")"(a",irest,",i",numdigit,")"
+        write(write_fmtnumb,fmt=cnumberlabel)repeat('0',irest),inum
+    else
+        write(cnumberlabel,"(a,i8,a)")"(i",numdigit,")"
+        write(write_fmtnumb,fmt=cnumberlabel)inum
+    endif
+ 
+    return
+    end function write_fmtnumb
  
   subroutine pbc_images_onevec(imcons,cells, dists)
   implicit none
