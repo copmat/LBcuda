@@ -58,11 +58,11 @@
       endif
 #endif
 
-      call MPI_type_contiguous((ny+2*nbuff)*(nx+2*nbuff), MPI_INTEGER1, xyplane_int1, ierr)
+      call MPI_type_contiguous((ny+2*nbuff)*(nx+2*nbuff)*nbuff, MPI_INTEGER1, xyplane_int1, ierr)
       call MPI_type_commit(xyplane_int1,ierr)
 #ifdef MPI_DEBUG
       if(myrank.eq.0) then
-         write(6,*) 'MPI-DEBUG) INFO: xyplane_int1 (KB)-->', (ny+2*nbuff)*(nx+2*nbuff) / 1024
+         write(6,*) 'MPI-DEBUG) INFO: xyplane_int1 (KB)-->', (ny+2*nbuff)*(nx+2*nbuff)*nbuff / 1024
       endif
 #endif
 
