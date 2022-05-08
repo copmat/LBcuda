@@ -70,8 +70,22 @@
 
     end function tensor_product
     
+    attributes(device) pure function tensor_contraction(v,w)
 
+    implicit none
 
+    real, intent(in),dimension(3,3) :: v,w
+    real :: tensor_contraction
+  
+
+  
+    tensor_contraction=v(1,1)*w(1,1)+v(1,2)*w(1,2)+v(1,3)*w(1,3)+ &
+     v(2,1)*w(2,1)+v(2,2)*w(2,2)+v(2,3)*w(2,3)+ &
+     v(3,1)*w(3,1)+v(3,2)*w(3,2)+v(3,3)*w(3,3)
+  
+    return
+
+    end function tensor_contraction
 
     attributes(device) function fcut(r, r1, r2)
      real, intent(in) :: r, r1, r2
@@ -1835,18 +1849,20 @@
         
         !bgk step
         do l = 0, npops-1
-            tens_contr = myG_R(1,1)*cmat_d(1,1,l)+ &
-             myG_R(2,2)*cmat_d(2,2,l)+myG_R(3,3)*cmat_d(3,3,l)
-            loc_tempR(l) = loc_tempR(l)*oneminusomega + &
-             (viscavg*(psi_d(l)*v_psi_R_dot + xi_d(l)*tens_contr) )*omega - &
-             equilCG(rhoR,u,v,w,1,l)*oneminusomega + equilCG(rhoR,ushR,vshR,wshR,1,l)
+          tens_contr=myG_R(1,1)*cmat_d(1,1,l)+myG_R(1,2)*cmat_d(1,2,l)+myG_R(1,3)*cmat_d(1,3,l)+ &
+           myG_R(2,1)*cmat_d(2,1,l)+myG_R(2,2)*cmat_d(2,2,l)+myG_R(2,3)*cmat_d(2,3,l)+ &
+           myG_R(3,1)*cmat_d(3,1,l)+myG_R(3,2)*cmat_d(3,2,l)+myG_R(3,3)*cmat_d(3,3,l)
+          loc_tempR(l) = loc_tempR(l)*oneminusomega + &
+           (viscavg*(psi_d(l)*v_psi_R_dot + xi_d(l)*tens_contr) )*omega - &
+           equilCG(rhoR,u,v,w,1,l)*oneminusomega + equilCG(rhoR,ushR,vshR,wshR,1,l)
         enddo
         do l = 0, npops-1
-            tens_contr = myG_B(1,1)*cmat_d(1,1,l)+ &
-             myG_B(2,2)*cmat_d(2,2,l)+myG_B(3,3)*cmat_d(3,3,l)
-            loc_tempB(l) = loc_tempB(l)*oneminusomega + &
-             (viscavg*(psi_d(l)*v_psi_B_dot + xi_d(l)*tens_contr) )*omega - &
-             equilCG(rhoB,u,v,w,2,l)*oneminusomega + equilCG(rhoB,ushB,vshB,wshB,2,l)
+          tens_contr=myG_B(1,1)*cmat_d(1,1,l)+myG_B(1,2)*cmat_d(1,2,l)+myG_B(1,3)*cmat_d(1,3,l)+ &
+           myG_B(2,1)*cmat_d(2,1,l)+myG_B(2,2)*cmat_d(2,2,l)+myG_B(2,3)*cmat_d(2,3,l)+ &
+           myG_B(3,1)*cmat_d(3,1,l)+myG_B(3,2)*cmat_d(3,2,l)+myG_B(3,3)*cmat_d(3,3,l)
+          loc_tempB(l) = loc_tempB(l)*oneminusomega + &
+           (viscavg*(psi_d(l)*v_psi_B_dot + xi_d(l)*tens_contr) )*omega - &
+           equilCG(rhoB,u,v,w,2,l)*oneminusomega + equilCG(rhoB,ushB,vshB,wshB,2,l)
         enddo
 #else
         !bgk step

@@ -12,7 +12,7 @@
 #else
     integer, parameter :: nbuff=2
 #endif
-    logical, parameter :: lprintraw=.false.
+    logical, parameter :: lprintraw=.true.
     logical, parameter :: lprintvel=.true.
     logical, parameter :: lprintrhoB=.false.
     logical, parameter :: lprintphase=.false.

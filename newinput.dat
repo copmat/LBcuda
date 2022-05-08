@@ -1,24 +1,17 @@
 &simulation
 nIter=5000    !niter  number of iterations
 nIterOut=100  !stat print on screen every n
-nIterVTK=500  !vtk print every n
-initType=8    ! init TYPE 1=droplet, 2=planez, 3=read Rho, 4=read all, 5=cylinder, 6=RandomR+ b=1-R
-lwriteisf=.true.
-lreadisfluid=.true.
+nIterVTK=1000  !vtk print every n
+initType=1    ! init TYPE 1=droplet, 2=planez, 3=read Rho, 4=read all, 5=cylinder, 6=RandomR+ b=1-R
 &end
 &fluid
 densR=1.0
 densB=1.0
-denswallR=0.0
-denswallB=1.0
-vx=0.05
+vx=0.0
 vy=0.0
 vz=0.0
 tauR=1.0
 tauB=1.0
-sigma_CG=0.05
-beta_CG=0.90
-A_rep=0.1
 &end
 &passive
 

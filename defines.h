@@ -4,15 +4,15 @@
 #define CG
 #define noPARTICLES
 #define FLUIDSPLIT
-#define noHIGHGRAD
+#define HIGHGRAD
 #define noDIFFDENS
 #define NEWINPUT
 #define noD3Q27
-#define APPLYBC
-#define noPBC
+#define noAPPLYBC
+#define PBC
 #define SCPD3Q19GRAD
-#define FIXDENSWALL
-#define NEARCONTACT
+#define noFIXDENSWALL
+#define noNEARCONTACT
 
 #ifndef MYDIMESION
 #define MYDIMESION 64

@@ -2528,7 +2528,7 @@ program TestLB
 		v1(2) = ey(l)
 		v1(3) = ez(l)
 	   	v2(1:3) = v1(1:3)
-        cmat_d(1:3,1:3,l) = transpose(tensor_product(v1,v2))
+        cmat_d(1:3,1:3,l) = tensor_product(v1,v2)
       enddo
       
       do l=0,linksd3q27
